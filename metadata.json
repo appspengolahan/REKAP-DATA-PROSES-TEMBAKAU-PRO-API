@@ -1,0 +1,6 @@
+{
+  "name": "Monitoring Board — Rekap Data Proses Tembakau",
+  "description": "Dashboard dan rekapitulasi data kesusutan proses tembakau (SKT & SKM) Divisi Produksi I PT Batu Karang.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Monitoring Board — Rekap Data Proses Tembakau</title>
+    <meta name="description" content="Dashboard dan rekapitulasi data kesusutan proses tembakau (SKT & SKM) Divisi Produksi I PT Batu Karang." />
+    <meta property="og:title" content="Monitoring Board — Rekap Data Proses Tembakau" />
+    <meta property="og:description" content="Dashboard dan rekapitulasi data kesusutan proses tembakau (SKT & SKM) Divisi Produksi I PT Batu Karang." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+      @media print {
+        .no-print, header, nav, aside, .sidebar-rail, .gas-center-btn, .help-modal, .switchboard-modal {
+          display: none !important;
+        }
+        body {
+          background: #ffffff !important;
+          color: #0f172a !important;
+          font-size: 11pt !important;
+          padding: 0 !important;
+          margin: 0 !important;
+        }
+        .main-content {
+          margin: 0 !important;
+          padding: 0 !important;
+          width: 100% !important;
+        }
+        .pdf-print-footer {
+          display: block !important;
+          position: fixed;
+          bottom: 0;
+          left: 0;
+          right: 0;
+          text-align: center;
+          font-size: 10pt;
+          font-weight: 600;
+          color: #475569;
+          border-top: 1px solid #cbd5e1;
+          padding: 8px 0;
+          background: #ffffff;
+        }
+      }
+      .pdf-print-footer {
+        display: none;
+      }
+    </style>
+  </head>
+  <body class="font-sans antialiased bg-slate-50 text-slate-800">
+    <div id="root"></div>
+    <div class="pdf-print-footer">Divisi Produksi I - All Rights Reserved</div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+
