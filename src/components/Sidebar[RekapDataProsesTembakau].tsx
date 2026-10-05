@@ -7,11 +7,8 @@ import {
   Database,
   Cpu,
   ChevronLeft,
-  ChevronRight,
-  TrendingDown,
-  Scale
+  ChevronRight
 } from 'lucide-react';
-import { formatKg, formatPct } from '../api[RekapDataProsesTembakau]';
 
 export type ActiveTabType = 'dashboard' | 'rekap-bulan' | 'rekap-jenis' | 'matriks-skt-skm' | 'data-explorer';
 
@@ -21,8 +18,6 @@ interface SidebarProps {
   isCollapsed: boolean;
   onToggleCollapse: () => void;
   onOpenGasCenter: () => void;
-  totalBaku: number;
-  avgSusutPct: number;
 }
 
 export const SidebarRekapDataProsesTembakau: React.FC<SidebarProps> = ({
@@ -30,9 +25,7 @@ export const SidebarRekapDataProsesTembakau: React.FC<SidebarProps> = ({
   onTabChange,
   isCollapsed,
   onToggleCollapse,
-  onOpenGasCenter,
-  totalBaku,
-  avgSusutPct
+  onOpenGasCenter
 }) => {
   const menuItems = [
     {
@@ -69,7 +62,7 @@ export const SidebarRekapDataProsesTembakau: React.FC<SidebarProps> = ({
 
   return (
     <aside
-      className={`no-print bg-slate-900 border-r border-slate-800 text-slate-300 flex flex-col transition-all duration-300 relative select-none z-20 ${
+      className={`no-print bg-slate-900 border-r border-slate-800 text-slate-300 flex flex-col transition-all duration-300 relative select-none z-20 flex-shrink-0 h-full ${
         isCollapsed ? 'w-16' : 'w-64'
       }`}
     >
@@ -136,29 +129,6 @@ export const SidebarRekapDataProsesTembakau: React.FC<SidebarProps> = ({
           </button>
         </div>
       </nav>
-
-      {/* Production Mini Counter (only shown when expanded) */}
-      {!isCollapsed && (
-        <div className="p-3 mx-2 mb-3 bg-slate-800/60 rounded-xl border border-slate-700/60 text-xs">
-          <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-            <Scale className="w-3.5 h-3.5 text-amber-400" />
-            <span>Volume Terproses</span>
-          </div>
-          <div className="space-y-1.5">
-            <div className="flex justify-between items-center text-slate-300">
-              <span className="text-[11px]">Total Netto:</span>
-              <span className="font-mono font-bold text-slate-100">{formatKg(totalBaku)}</span>
-            </div>
-            <div className="flex justify-between items-center text-slate-300">
-              <span className="text-[11px]">Rata² Susut:</span>
-              <span className="font-mono font-bold text-amber-400 flex items-center gap-0.5">
-                <TrendingDown className="w-3 h-3" />
-                {formatPct(avgSusutPct)}
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Rail Mode Tooltip Footer */}
       {isCollapsed && (

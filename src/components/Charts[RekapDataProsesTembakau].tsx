@@ -17,8 +17,8 @@ export const MonthlyLossLineChart: React.FC<{ data: GroupSummary[]; isExpanded?:
 
   const width = isExpanded ? 960 : 600;
   const height = isExpanded ? 360 : 220;
-  const paddingX = isExpanded ? 60 : 40;
-  const paddingY = isExpanded ? 40 : 30;
+  const paddingX = isExpanded ? 60 : 45;
+  const paddingY = isExpanded ? 46 : 36;
   const chartW = width - paddingX * 2;
   const chartH = height - paddingY * 2;
 
@@ -60,7 +60,7 @@ export const MonthlyLossLineChart: React.FC<{ data: GroupSummary[]; isExpanded?:
         {/* The line */}
         <path d={pathD} fill="none" stroke="#2563eb" strokeWidth={isExpanded ? 3.5 : 2.5} strokeLinecap="round" strokeLinejoin="round" />
 
-        {/* Points & interactive hovers */}
+        {/* Points, Data Indicator Labels, & interactive hovers */}
         {points.map((p, i) => (
           <g key={i}>
             <circle
@@ -69,17 +69,28 @@ export const MonthlyLossLineChart: React.FC<{ data: GroupSummary[]; isExpanded?:
               r={hoveredIdx === i ? (isExpanded ? 8 : 6) : (isExpanded ? 5.5 : 4)}
               className={`transition-all ${hoveredIdx === i ? 'fill-blue-700 stroke-white stroke-2' : 'fill-white stroke-blue-600 stroke-2'}`}
             />
-            {/* Number on point when expanded */}
-            {isExpanded && (
+            {/* Number indicator pill badge on each point (always visible) */}
+            <g className="pointer-events-none">
+              <rect
+                x={p.x - (isExpanded ? 28 : 23)}
+                y={p.y - (isExpanded ? 28 : 24)}
+                width={isExpanded ? 56 : 46}
+                height={isExpanded ? 20 : 17}
+                rx={5}
+                fill="#ffffff"
+                stroke="#2563eb"
+                strokeWidth={1.5}
+                className="shadow-sm filter drop-shadow-sm"
+              />
               <text
                 x={p.x}
-                y={p.y - 12}
+                y={p.y - (isExpanded ? 14 : 12)}
                 textAnchor="middle"
-                className="text-[11px] font-mono font-bold fill-blue-700 select-none"
+                className={`${isExpanded ? 'text-xs' : 'text-[10px]'} font-mono font-bold fill-blue-700 select-none`}
               >
                 {formatPct(p.data.susutPct)}
               </text>
-            )}
+            </g>
             {/* Transparent touch area */}
             <circle
               cx={p.x}
@@ -131,28 +142,33 @@ export const BakuVsHasilBarChart: React.FC<{ data: GroupSummary[]; isExpanded?: 
     return <div className="p-8 text-center text-xs text-slate-400">Tidak ada data untuk grafik volume</div>;
   }
 
-  const maxVal = Math.max(...data.map(d => Math.max(d.baku, d.hasil))) * 1.15 || 1000;
+  const maxVal = Math.max(...data.map(d => Math.max(d.baku, d.hasil))) * 1.25 || 1000;
   const width = isExpanded ? 960 : 600;
-  const height = isExpanded ? 360 : 220;
+  const height = isExpanded ? 360 : 230;
   const paddingX = isExpanded ? 70 : 50;
-  const paddingY = isExpanded ? 35 : 25;
+  const paddingY = isExpanded ? 45 : 36;
   const chartW = width - paddingX * 2;
   const chartH = height - paddingY * 2;
 
   const barGroupWidth = chartW / data.length;
-  const barWidth = Math.min(isExpanded ? 24 : 18, barGroupWidth * 0.38);
+  const barWidth = Math.min(isExpanded ? 26 : 18, barGroupWidth * 0.36);
 
   return (
     <div className="w-full relative select-none">
-      <div className="flex items-center justify-end gap-4 text-xs mb-2">
-        <span className="flex items-center gap-1.5 text-slate-700 font-medium">
-          <span className="w-3 h-3 rounded bg-blue-600"></span>
-          Bahan Baku (Kg)
+      <div className="flex items-center justify-between text-xs mb-2">
+        <span className="text-[11px] text-slate-400 italic">
+          *Angka di atas batang menunjukkan volume dalam Kilogram (Kg)
         </span>
-        <span className="flex items-center gap-1.5 text-slate-700 font-medium">
-          <span className="w-3 h-3 rounded bg-emerald-600"></span>
-          Hasil Jadi (Kg)
-        </span>
+        <div className="flex items-center gap-4">
+          <span className="flex items-center gap-1.5 text-slate-700 font-medium">
+            <span className="w-3 h-3 rounded bg-blue-600"></span>
+            Bahan Baku (Kg)
+          </span>
+          <span className="flex items-center gap-1.5 text-slate-700 font-medium">
+            <span className="w-3 h-3 rounded bg-emerald-600"></span>
+            Hasil Jadi (Kg)
+          </span>
+        </div>
       </div>
 
       <svg viewBox={`0 0 ${width} ${height}`} className={`w-full ${isExpanded ? 'h-72 sm:h-96' : 'h-56'} overflow-visible`}>
@@ -170,7 +186,7 @@ export const BakuVsHasilBarChart: React.FC<{ data: GroupSummary[]; isExpanded?: 
           );
         })}
 
-        {/* Bars */}
+        {/* Bars and Exact Data Indicator Numbers */}
         {data.map((d, i) => {
           const groupCenter = paddingX + i * barGroupWidth + barGroupWidth / 2;
           const hBaku = (d.baku / maxVal) * chartH;
@@ -178,6 +194,24 @@ export const BakuVsHasilBarChart: React.FC<{ data: GroupSummary[]; isExpanded?: 
 
           const yBaku = paddingY + chartH - hBaku;
           const yHasil = paddingY + chartH - hHasil;
+
+          const xBaku = groupCenter - barWidth - 1;
+          const xHasil = groupCenter + 1;
+          const centerBaku = xBaku + barWidth / 2;
+          const centerHasil = xHasil + barWidth / 2;
+
+          // Format labels: show full integer with thousand separator if <= 7 months, compact 'k' if cramped
+          const labelBaku = isExpanded 
+            ? `${Math.round(d.baku).toLocaleString('id-ID')} Kg` 
+            : data.length <= 6 
+              ? Math.round(d.baku).toLocaleString('id-ID')
+              : `${(d.baku / 1000).toFixed(1)}k`;
+
+          const labelHasil = isExpanded 
+            ? `${Math.round(d.hasil).toLocaleString('id-ID')} Kg` 
+            : data.length <= 6 
+              ? Math.round(d.hasil).toLocaleString('id-ID')
+              : `${(d.hasil / 1000).toFixed(1)}k`;
 
           return (
             <g 
@@ -188,22 +222,44 @@ export const BakuVsHasilBarChart: React.FC<{ data: GroupSummary[]; isExpanded?: 
             >
               {/* Baku Bar */}
               <rect
-                x={groupCenter - barWidth - 1}
+                x={xBaku}
                 y={yBaku}
                 width={barWidth}
                 height={hBaku}
                 rx={isExpanded ? 4 : 3}
                 className="fill-blue-600 hover:fill-blue-700 transition-colors"
               />
+              {/* Number indicator on top of Baku bar */}
+              <text
+                x={centerBaku}
+                y={yBaku - 5}
+                textAnchor="middle"
+                className={`${isExpanded ? 'text-[11px]' : 'text-[9.5px]'} font-mono font-bold fill-blue-700 select-none`}
+                style={{ paintOrder: 'stroke', stroke: '#ffffff', strokeWidth: 3, strokeLinejoin: 'round' }}
+              >
+                {labelBaku}
+              </text>
+
               {/* Hasil Bar */}
               <rect
-                x={groupCenter + 1}
+                x={xHasil}
                 y={yHasil}
                 width={barWidth}
                 height={hHasil}
                 rx={isExpanded ? 4 : 3}
                 className="fill-emerald-600 hover:fill-emerald-700 transition-colors"
               />
+              {/* Number indicator on top of Hasil bar */}
+              <text
+                x={centerHasil}
+                y={yHasil - 5}
+                textAnchor="middle"
+                className={`${isExpanded ? 'text-[11px]' : 'text-[9.5px]'} font-mono font-bold fill-emerald-700 select-none`}
+                style={{ paintOrder: 'stroke', stroke: '#ffffff', strokeWidth: 3, strokeLinejoin: 'round' }}
+              >
+                {labelHasil}
+              </text>
+
               {/* Month Label */}
               <text
                 x={groupCenter}
@@ -333,7 +389,7 @@ export const TrendJenisLineChart: React.FC<{
   const width = isExpanded ? 960 : 500;
   const height = isExpanded ? 360 : 180;
   const paddingX = isExpanded ? 60 : 40;
-  const paddingY = isExpanded ? 40 : 25;
+  const paddingY = isExpanded ? 46 : 32;
   const chartW = width - paddingX * 2;
   const chartH = height - paddingY * 2;
 
@@ -367,9 +423,28 @@ export const TrendJenisLineChart: React.FC<{
         {points.map((p, i) => (
           <g key={i}>
             <circle cx={p.x} cy={p.y} r={isExpanded ? 6 : 4} className="fill-amber-500 stroke-white stroke-2" />
-            <text x={p.x} y={p.y - (isExpanded ? 12 : 8)} textAnchor="middle" className={`${isExpanded ? 'text-xs' : 'text-[10px]'} font-mono font-bold fill-amber-700`}>
-              {formatPct(p.data.susutPct)}
-            </text>
+            {/* Number indicator pill badge */}
+            <g className="pointer-events-none">
+              <rect
+                x={p.x - (isExpanded ? 26 : 22)}
+                y={p.y - (isExpanded ? 26 : 22)}
+                width={isExpanded ? 52 : 44}
+                height={isExpanded ? 20 : 17}
+                rx={5}
+                fill="#ffffff"
+                stroke="#d97706"
+                strokeWidth={1.5}
+                className="shadow-sm"
+              />
+              <text
+                x={p.x}
+                y={p.y - (isExpanded ? 12 : 10)}
+                textAnchor="middle"
+                className={`${isExpanded ? 'text-xs' : 'text-[10px]'} font-mono font-bold fill-amber-800 select-none`}
+              >
+                {formatPct(p.data.susutPct)}
+              </text>
+            </g>
             <text x={p.x} y={height - (isExpanded ? 10 : 6)} textAnchor="middle" className={`${isExpanded ? 'text-xs font-semibold' : 'text-[10px]'} fill-slate-600 font-medium`}>
               {isExpanded ? `${p.data.bulan?.substring(0, 3)} '${p.data.tahun?.slice(-2)}` : p.data.bulan?.substring(0, 3)}
             </text>
