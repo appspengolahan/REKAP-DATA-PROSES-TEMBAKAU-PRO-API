@@ -40,42 +40,42 @@ export const INITIAL_SERVER_DASHBOARD = {
     ],
     jenisProses: ["SKM", "SKT"]
   },
-  entriTerkini: "28 September 2026",
+  entriTerkini: "5 Oktober 2026",
   ringkasanTahunan: {
-    jumlahData: 1487,
-    baku: 1493938.5,
-    hasil: 1359103.6,
-    susutKg: 134834.9,
+    jumlahData: 1493,
+    baku: 1496478.4,
+    hasil: 1361392.9,
+    susutKg: 135085.5,
     susutPct: 9.03,
     susutMinPct: -1.28,
     susutMaxPct: 33.65,
     gagangPct: 6.05,
-    debuAirPct: 2.99,
+    debuAirPct: 3.00,
     periodeLabel: "Semua Tahun"
   },
   ringkasanBulanan: {
-    jumlahData: 1487,
-    baku: 1493938.5,
-    hasil: 1359103.6,
-    susutKg: 134834.9,
+    jumlahData: 1493,
+    baku: 1496478.4,
+    hasil: 1361392.9,
+    susutKg: 135085.5,
     susutPct: 9.03,
     susutMinPct: -1.28,
     susutMaxPct: 33.65,
     gagangPct: 6.05,
-    debuAirPct: 2.99,
+    debuAirPct: 3.00,
     periodeLabel: "Semua Bulan Semua Tahun"
   },
   ringkasanPeriode: {
-    jumlahData: 729,
-    baku: 764612.0,
-    hasil: 684380.2,
-    susutKg: 80231.8,
+    jumlahData: 735,
+    baku: 767151.9,
+    hasil: 686669.5,
+    susutKg: 80482.4,
     susutPct: 10.49,
     susutMinPct: 1.02,
     susutMaxPct: 29.92,
-    gagangPct: 7.47,
-    debuAirPct: 3.03,
-    periodeLabel: "Januari 2026 — September 2026"
+    gagangPct: 7.45,
+    debuAirPct: 3.05,
+    periodeLabel: "Januari 2026 — Oktober 2026"
   },
   rekapBulan: [
     { label: "April 2025", bulan: "April", tahun: "2025", jumlahData: 49, baku: 33336.9, hasil: 30819.8, susutKg: 2517.1, susutPct: 7.55, minPct: 1.52, maxPct: 24.16, gagangPct: 4.66, debuAirPct: 2.91, kapasitasPct: 2.23 },
@@ -95,7 +95,8 @@ export const INITIAL_SERVER_DASHBOARD = {
     { label: "Juni 2026", bulan: "Juni", tahun: "2026", jumlahData: 88, baku: 91200.0, hasil: 81700.0, susutKg: 9500.0, susutPct: 10.42, minPct: 1.74, maxPct: 27.20, gagangPct: 7.32, debuAirPct: 3.10, kapasitasPct: 6.10 },
     { label: "Juli 2026", bulan: "Juli", tahun: "2026", jumlahData: 95, baku: 96400.0, hasil: 86280.0, susutKg: 10120.0, susutPct: 10.50, minPct: 1.65, maxPct: 28.40, gagangPct: 7.41, debuAirPct: 3.09, kapasitasPct: 6.45 },
     { label: "Agustus 2026", bulan: "Agustus", tahun: "2026", jumlahData: 90, baku: 92100.0, hasil: 82420.0, susutKg: 9680.0, susutPct: 10.51, minPct: 1.55, maxPct: 29.10, gagangPct: 7.45, debuAirPct: 3.06, kapasitasPct: 6.16 },
-    { label: "September 2026", bulan: "September", tahun: "2026", jumlahData: 84, baku: 82695.6, hasil: 75163.7, susutKg: 7531.9, susutPct: 9.11, minPct: 1.02, maxPct: 24.50, gagangPct: 6.48, debuAirPct: 2.63, kapasitasPct: 5.54 }
+    { label: "September 2026", bulan: "September", tahun: "2026", jumlahData: 84, baku: 82695.6, hasil: 75163.7, susutKg: 7531.9, susutPct: 9.11, minPct: 1.02, maxPct: 24.50, gagangPct: 6.48, debuAirPct: 2.63, kapasitasPct: 5.54 },
+    { label: "Oktober 2026", bulan: "Oktober", tahun: "2026", jumlahData: 6, baku: 2539.9, hasil: 2289.3, susutKg: 250.6, susutPct: 9.87, minPct: 1.54, maxPct: 15.95, gagangPct: 2.11, debuAirPct: 7.76, kapasitasPct: 0.17 }
   ]
 };
 
