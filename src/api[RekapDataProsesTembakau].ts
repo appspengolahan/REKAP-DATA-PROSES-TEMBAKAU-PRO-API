@@ -26,7 +26,8 @@ const CACHE_KEY_RAW = 'CACHE_PP1_REKAP_DATA_PROSES_TEMBAKAU_RAW_V2';
 const CACHE_KEY_CONFIG = 'CACHE_PP1_REKAP_DATA_PROSES_TEMBAKAU_GAS_CFG_V2';
 const CACHE_KEY_DASHBOARD = 'CACHE_PP1_REKAP_DATA_PROSES_TEMBAKAU_SERVER_DASH_V2';
 
-export const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbxSN-YhfNR5dwYFBWKyT5A8FN7juS3AuahOitVpfr-UWNKhF5fUUUeQ6k8-_ORqy3mYGA/exec';
+export const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbw34wezcB4YC4N-n2nL0ll9jofM3i9s5OHYxLZJ4Xu32_AmCEDcIAYi9V1AdPg2iACM/exec';
+export const LEGACY_GAS_URL = 'https://script.google.com/macros/s/AKfycbxSN-YhfNR5dwYFBWKyT5A8FN7juS3AuahOitVpfr-UWNKhF5fUUUeQ6k8-_ORqy3mYGA/exec';
 
 // FORMATTING RULES:
 // 1. Persentase (%): Tepat 2 angka di belakang koma

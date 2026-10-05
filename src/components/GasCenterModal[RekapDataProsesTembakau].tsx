@@ -13,7 +13,7 @@ import {
   Code
 } from 'lucide-react';
 import { GasConfig } from '../types[RekapDataProsesTembakau]';
-import { DEFAULT_GAS_URL, RekapDataProsesTembakauService } from '../api[RekapDataProsesTembakau]';
+import { DEFAULT_GAS_URL, LEGACY_GAS_URL, RekapDataProsesTembakauService } from '../api[RekapDataProsesTembakau]';
 import { NEW_GAS_CODE_STRING } from '../mockData[RekapDataProsesTembakau]';
 
 interface GasCenterModalProps {
@@ -345,7 +345,38 @@ export const GasCenterModalRekapDataProsesTembakau: React.FC<GasCenterModalProps
                     <RotateCcw className="w-3.5 h-3.5" />
                   </button>
                 </div>
-                <p className="text-[11px] text-slate-500 mt-1">
+                <div className="flex flex-wrap items-center gap-2 mt-2">
+                  <span className="text-[11px] text-slate-500 font-semibold">Pilihan Cepat:</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setInputUrl(DEFAULT_GAS_URL);
+                      onUpdateConfig({ apiUrl: DEFAULT_GAS_URL });
+                    }}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-all ${
+                      inputUrl === DEFAULT_GAS_URL
+                        ? 'bg-blue-50 text-blue-700 border-blue-300 ring-1 ring-blue-400/40'
+                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    ⚡ GAS Standalone Baru (AKfycbw34...)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setInputUrl(LEGACY_GAS_URL);
+                      onUpdateConfig({ apiUrl: LEGACY_GAS_URL });
+                    }}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-all ${
+                      inputUrl === LEGACY_GAS_URL
+                        ? 'bg-amber-50 text-amber-700 border-amber-300 ring-1 ring-amber-400/40'
+                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    🕒 GAS Lama / Legacy (AKfycbxSN...)
+                  </button>
+                </div>
+                <p className="text-[11px] text-slate-500 mt-2">
                   URL ini akan menerima query GET <code className="bg-slate-100 px-1 py-0.5 rounded">?action=getDashboardData</code> dan mengembalikan JSON.
                 </p>
               </div>
