@@ -14,7 +14,9 @@ import {
   ChevronDown,
   X,
   ExternalLink,
-  ChevronRight
+  ChevronRight,
+  GitCompare,
+  Check
 } from 'lucide-react';
 import { UserRole, JenisProsesType, GasConfig } from '../types[RekapDataProsesTembakau]';
 
@@ -52,7 +54,9 @@ export const HeaderRekapDataProsesTembakau: React.FC<HeaderProps> = ({
   onExportPdf
 }) => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isJalurOpen, setIsJalurOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const jalurDropdownRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -60,20 +64,24 @@ export const HeaderRekapDataProsesTembakau: React.FC<HeaderProps> = ({
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsDropdownOpen(false);
       }
+      if (jalurDropdownRef.current && !jalurDropdownRef.current.contains(event.target as Node)) {
+        setIsJalurOpen(false);
+      }
     };
-    if (isDropdownOpen) {
+    if (isDropdownOpen || isJalurOpen) {
       document.addEventListener('mousedown', handleClickOutside);
     }
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [isDropdownOpen]);
+  }, [isDropdownOpen, isJalurOpen]);
 
   // Close dropdown on ESC key
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setIsDropdownOpen(false);
+        setIsJalurOpen(false);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -85,22 +93,22 @@ export const HeaderRekapDataProsesTembakau: React.FC<HeaderProps> = ({
       <div className="w-full px-3 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 gap-3">
           
-          {/* Logo & Main Title */}
-          <div className="flex items-center gap-3 min-w-0 flex-shrink">
+          {/* Logo & Main Title (Always full title without truncation on desktop) */}
+          <div className="flex items-center gap-3 min-w-0 flex-shrink-0">
             <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center font-bold text-white shadow-md flex-shrink-0 text-sm sm:text-base tracking-wider ring-1 ring-amber-400/30">
               PP1
             </div>
             <div className="min-w-0 flex flex-col justify-center">
               <div className="flex items-center gap-2">
-                <h1 className="text-sm sm:text-base lg:text-lg font-bold tracking-tight text-slate-100 truncate">
-                  <span className="hidden md:inline">Monitoring Board — </span>Rekap Data Proses Tembakau
+                <h1 className="text-sm sm:text-base lg:text-lg font-bold tracking-tight text-slate-100 whitespace-nowrap">
+                  <span className="hidden sm:inline">Monitoring Board — </span>Rekap Data Proses Tembakau
                 </h1>
-                <span className="hidden xl:inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-950/80 text-emerald-400 border border-emerald-800/80 flex-shrink-0">
+                <span className="hidden 2xl:inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-950/80 text-emerald-400 border border-emerald-800/80 flex-shrink-0">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
                   {gasConfig.status === 'online' ? 'Headless GAS Online' : 'Offline Cache'}
                 </span>
               </div>
-              <div className="flex items-center gap-1.5 sm:gap-2 text-xs text-slate-400 mt-0.5 truncate">
+              <div className="flex items-center gap-1.5 sm:gap-2 text-xs text-slate-400 mt-0.5 whitespace-nowrap">
                 <span className="text-slate-300 font-medium">PT Batu Karang</span>
                 <span className="text-slate-600 hidden sm:inline">·</span>
                 <span className="hidden sm:inline">Divisi Produksi I</span>
@@ -109,6 +117,11 @@ export const HeaderRekapDataProsesTembakau: React.FC<HeaderProps> = ({
                   <Calendar className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
                   <span>Entri: {entriTerkini}</span>
                 </span>
+                <span className="hidden md:inline-flex 2xl:hidden items-center gap-1 text-[11px] text-emerald-400 font-medium">
+                  <span className="text-slate-600">·</span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                  {gasConfig.status === 'online' ? 'GAS Online' : 'Offline'}
+                </span>
               </div>
             </div>
           </div>
@@ -116,29 +129,67 @@ export const HeaderRekapDataProsesTembakau: React.FC<HeaderProps> = ({
           {/* Action Center */}
           <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
             
-            {/* Global SKT / SKM Switcher (Visible on desktop) */}
-            <div className="hidden lg:flex items-center bg-slate-800/90 p-1 rounded-xl border border-slate-700">
-              <span className="text-xs text-slate-400 px-2 font-medium">Jalur:</span>
-              {(['Semua', 'SKT', 'SKM'] as JenisProsesType[]).map((jp) => {
-                const isActive = jenisProses === jp;
-                return (
-                  <button
-                    key={jp}
-                    onClick={() => onJenisProsesChange(jp)}
-                    className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all ${
-                      isActive 
-                        ? jp === 'SKT'
-                          ? 'bg-amber-600 text-white shadow-sm'
-                          : jp === 'SKM'
-                          ? 'bg-blue-600 text-white shadow-sm'
-                          : 'bg-slate-700 text-white shadow-sm'
-                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                    }`}
-                  >
-                    {jp === 'Semua' ? 'Semua Jalur' : jp}
-                  </button>
-                );
-              })}
+            {/* Jalur Toggle Dropdown (Clean, compact replacement for wide segmented buttons) */}
+            <div className="relative hidden md:block" ref={jalurDropdownRef}>
+              <button
+                type="button"
+                onClick={() => setIsJalurOpen(prev => !prev)}
+                className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all select-none shadow-sm ${
+                  jenisProses === 'SKT'
+                    ? 'bg-amber-950/70 border-amber-600/80 text-amber-300 ring-1 ring-amber-500/30'
+                    : jenisProses === 'SKM'
+                    ? 'bg-blue-950/70 border-blue-600/80 text-blue-300 ring-1 ring-blue-500/30'
+                    : 'bg-slate-800/90 hover:bg-slate-700/90 text-slate-200 border-slate-700 hover:border-slate-600'
+                }`}
+                title="Pilih Jalur Proses (Semua / SKT / SKM)"
+                aria-haspopup="true"
+                aria-expanded={isJalurOpen}
+              >
+                <GitCompare className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                <span className="text-slate-400 font-normal">Jalur:</span>
+                <span className="font-bold">
+                  {jenisProses === 'Semua' ? 'Semua Jalur' : jenisProses}
+                </span>
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isJalurOpen ? 'rotate-180 text-white' : 'text-slate-400'}`} />
+              </button>
+
+              {/* Jalur Popover Menu */}
+              {isJalurOpen && (
+                <div className="absolute right-0 mt-2 w-52 bg-slate-900 border border-slate-700/90 rounded-2xl shadow-2xl z-50 overflow-hidden p-1.5 space-y-1 animate-in fade-in slide-in-from-top-2 duration-150">
+                  <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    Pilih Jalur Proses
+                  </div>
+                  {(['Semua', 'SKT', 'SKM'] as JenisProsesType[]).map((jp) => {
+                    const isSelected = jenisProses === jp;
+                    return (
+                      <button
+                        key={jp}
+                        onClick={() => {
+                          onJenisProsesChange(jp);
+                          setIsJalurOpen(false);
+                        }}
+                        className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+                          isSelected
+                            ? jp === 'SKT'
+                              ? 'bg-amber-600 text-white shadow-sm'
+                              : jp === 'SKM'
+                              ? 'bg-blue-600 text-white shadow-sm'
+                              : 'bg-slate-700 text-white shadow-sm'
+                            : 'hover:bg-slate-800 text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className={`w-2 h-2 rounded-full ${
+                            jp === 'SKT' ? 'bg-amber-400' : jp === 'SKM' ? 'bg-blue-400' : 'bg-slate-400'
+                          }`} />
+                          <span>{jp === 'Semua' ? 'Semua Jalur (SKT & SKM)' : jp === 'SKT' ? 'SKT (Tangan)' : 'SKM (Mesin)'}</span>
+                        </div>
+                        {isSelected && <Check className="w-3.5 h-3.5" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {/* Tarik Data Langsung dari Datasheet Button */}
