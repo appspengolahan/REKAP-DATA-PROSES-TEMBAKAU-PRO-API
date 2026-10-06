@@ -285,7 +285,7 @@ export default function App() {
         />
 
         {/* Dynamic Content Canvas */}
-        <main className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 py-6 main-content min-h-0">
+        <main className="flex-1 overflow-y-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 pb-24 lg:pb-8 main-content min-h-0 w-full">
           <div className="max-w-7xl mx-auto space-y-6">
             
             {/* View 1: Main Dashboard (Default) */}
@@ -395,11 +395,11 @@ export default function App() {
       </div>
 
       {/* Mobile Bottom Quick Navigation */}
-      <nav className="no-print lg:hidden fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 text-white px-2 py-1.5 flex items-center justify-around z-30 shadow-lg">
+      <nav className="no-print lg:hidden fixed bottom-0 left-0 right-0 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 text-white px-2 pt-2 pb-2.5 flex items-center justify-around z-40 shadow-2xl">
         <button
           onClick={() => setActiveTab('dashboard')}
-          className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg text-[10px] font-medium transition-colors ${
-            activeTab === 'dashboard' ? 'text-blue-400 font-bold' : 'text-slate-400'
+          className={`flex flex-col items-center gap-1 px-3 py-1 rounded-xl text-[10px] font-medium transition-all ${
+            activeTab === 'dashboard' ? 'text-blue-400 font-bold bg-blue-500/10' : 'text-slate-400 hover:text-slate-200'
           }`}
         >
           <LayoutDashboard className="w-4 h-4" />
@@ -407,8 +407,8 @@ export default function App() {
         </button>
         <button
           onClick={() => setActiveTab('rekap-bulan')}
-          className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg text-[10px] font-medium transition-colors ${
-            activeTab === 'rekap-bulan' ? 'text-blue-400 font-bold' : 'text-slate-400'
+          className={`flex flex-col items-center gap-1 px-3 py-1 rounded-xl text-[10px] font-medium transition-all ${
+            activeTab === 'rekap-bulan' ? 'text-blue-400 font-bold bg-blue-500/10' : 'text-slate-400 hover:text-slate-200'
           }`}
         >
           <CalendarDays className="w-4 h-4" />
@@ -416,8 +416,8 @@ export default function App() {
         </button>
         <button
           onClick={() => setActiveTab('rekap-jenis')}
-          className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg text-[10px] font-medium transition-colors ${
-            activeTab === 'rekap-jenis' ? 'text-blue-400 font-bold' : 'text-slate-400'
+          className={`flex flex-col items-center gap-1 px-3 py-1 rounded-xl text-[10px] font-medium transition-all ${
+            activeTab === 'rekap-jenis' ? 'text-blue-400 font-bold bg-blue-500/10' : 'text-slate-400 hover:text-slate-200'
           }`}
         >
           <Layers className="w-4 h-4" />
@@ -425,8 +425,8 @@ export default function App() {
         </button>
         <button
           onClick={() => setActiveTab('matriks-skt-skm')}
-          className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg text-[10px] font-medium transition-colors ${
-            activeTab === 'matriks-skt-skm' ? 'text-blue-400 font-bold' : 'text-slate-400'
+          className={`flex flex-col items-center gap-1 px-3 py-1 rounded-xl text-[10px] font-medium transition-all ${
+            activeTab === 'matriks-skt-skm' ? 'text-blue-400 font-bold bg-blue-500/10' : 'text-slate-400 hover:text-slate-200'
           }`}
         >
           <GitCompare className="w-4 h-4" />
@@ -434,8 +434,8 @@ export default function App() {
         </button>
         <button
           onClick={() => setActiveTab('data-explorer')}
-          className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg text-[10px] font-medium transition-colors ${
-            activeTab === 'data-explorer' ? 'text-blue-400 font-bold' : 'text-slate-400'
+          className={`flex flex-col items-center gap-1 px-3 py-1 rounded-xl text-[10px] font-medium transition-all ${
+            activeTab === 'data-explorer' ? 'text-blue-400 font-bold bg-blue-500/10' : 'text-slate-400 hover:text-slate-200'
           }`}
         >
           <Database className="w-4 h-4" />

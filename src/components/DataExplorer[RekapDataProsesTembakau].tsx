@@ -121,9 +121,15 @@ export const DataExplorerRekapDataProsesTembakau: React.FC<DataExplorerProps> = 
         )}
       </div>
 
+      {/* Mobile Swipe Hint */}
+      <div className="sm:hidden text-[11px] text-slate-400 italic flex items-center gap-1.5 px-1">
+        <span>👉</span>
+        <span>Geser tabel ke samping untuk melihat detail batch lengkap</span>
+      </div>
+
       {/* Table Container */}
       <div className="overflow-x-auto border border-slate-200 rounded-2xl bg-white shadow-sm">
-        <table className="w-full text-xs text-left border-collapse">
+        <table className="w-full text-xs text-left border-collapse min-w-[760px]">
           <thead>
             <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
               <th className="py-3 px-3">Batch & Tanggal</th>

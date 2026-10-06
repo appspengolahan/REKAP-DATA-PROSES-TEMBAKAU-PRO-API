@@ -62,6 +62,58 @@ export function generateSheetFormulaSusutPct(bakuCell: string, susutCell: string
   return `=IF(${bakuCell}>0; (${susutCell}/${bakuCell})*100; 0)`;
 }
 
+// 4. Indonesian Locale Date & Time Formatter
+export function formatIndonesianDate(val: string | Date | null | undefined): string {
+  if (!val) return '-';
+  try {
+    let d: Date;
+    if (typeof val === 'string') {
+      const trimmed = val.trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+        const [y, m, day] = trimmed.split('-').map(Number);
+        d = new Date(y, m - 1, day);
+      } else {
+        d = new Date(trimmed);
+      }
+    } else {
+      d = val;
+    }
+    if (isNaN(d.getTime())) return String(val);
+    return d.toLocaleDateString('id-ID', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      timeZone: 'Asia/Jakarta'
+    });
+  } catch (e) {
+    return String(val);
+  }
+}
+
+export function formatIndonesianDateTime(val: string | Date | null | undefined): string {
+  if (!val) return '-';
+  try {
+    const d = typeof val === 'string' ? new Date(val) : val;
+    if (isNaN(d.getTime())) return String(val);
+    const dateStr = d.toLocaleDateString('id-ID', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      timeZone: 'Asia/Jakarta'
+    });
+    const timeStr = d.toLocaleTimeString('id-ID', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+      timeZone: 'Asia/Jakarta'
+    }).replace(/:/g, '.');
+    return `${dateStr}, ${timeStr} WIB`;
+  } catch (e) {
+    return String(val);
+  }
+}
+
 export class RekapDataProsesTembakauService {
   private static cachedRows: RawRowData[] | null = null;
 

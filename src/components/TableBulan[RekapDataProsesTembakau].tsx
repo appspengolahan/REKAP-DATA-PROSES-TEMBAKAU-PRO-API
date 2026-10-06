@@ -17,8 +17,13 @@ export const TableBulanRekapDataProsesTembakau: React.FC<TableBulanProps> = ({ d
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-xs text-left border-collapse">
+    <div className="space-y-1.5">
+      <div className="sm:hidden text-[11px] text-slate-400 italic flex items-center gap-1.5 px-1">
+        <span>👉</span>
+        <span>Geser tabel ke samping untuk melihat kolom lengkap</span>
+      </div>
+      <div className="overflow-x-auto border border-slate-200 rounded-xl bg-white shadow-sm">
+        <table className="w-full text-xs text-left border-collapse min-w-[660px]">
         <thead>
           <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
             <th className="py-3 px-3">Bulan</th>
@@ -73,6 +78,7 @@ export const TableBulanRekapDataProsesTembakau: React.FC<TableBulanProps> = ({ d
           })}
         </tbody>
       </table>
+      </div>
     </div>
   );
 };

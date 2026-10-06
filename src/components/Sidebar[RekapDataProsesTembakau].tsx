@@ -62,7 +62,7 @@ export const SidebarRekapDataProsesTembakau: React.FC<SidebarProps> = ({
 
   return (
     <aside
-      className={`no-print bg-slate-900 border-r border-slate-800 text-slate-300 flex flex-col transition-all duration-300 relative select-none z-20 flex-shrink-0 h-full ${
+      className={`no-print hidden lg:flex bg-slate-900 border-r border-slate-800 text-slate-300 flex-col transition-all duration-300 relative select-none z-20 flex-shrink-0 h-full ${
         isCollapsed ? 'w-16' : 'w-64'
       }`}
     >

@@ -13,7 +13,7 @@ import {
   Code
 } from 'lucide-react';
 import { GasConfig } from '../types[RekapDataProsesTembakau]';
-import { DEFAULT_GAS_URL, LEGACY_GAS_URL, RekapDataProsesTembakauService } from '../api[RekapDataProsesTembakau]';
+import { DEFAULT_GAS_URL, LEGACY_GAS_URL, RekapDataProsesTembakauService, formatIndonesianDateTime } from '../api[RekapDataProsesTembakau]';
 import { NEW_GAS_CODE_STRING } from '../mockData[RekapDataProsesTembakau]';
 
 interface GasCenterModalProps {
@@ -412,6 +412,13 @@ export const GasCenterModalRekapDataProsesTembakau: React.FC<GasCenterModalProps
                     <RefreshCw className={`w-3.5 h-3.5 ${testing ? 'animate-spin' : ''}`} />
                     {testing ? 'Menguji...' : 'Test Ping / Health Check'}
                   </button>
+                </div>
+
+                <div className="text-[11px] text-slate-500 font-mono mb-2 flex items-center justify-between">
+                  <span>Sinkronisasi Terakhir:</span>
+                  <span className="font-semibold text-slate-700">
+                    {config.lastSync ? formatIndonesianDateTime(config.lastSync) : '-'}
+                  </span>
                 </div>
 
                 {testResult && (
