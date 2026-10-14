@@ -102,3 +102,17 @@ export interface ServerDashboardPayload {
   trendJenis?: TrendJenisData;
   rawRows?: RawRowData[];
 }
+
+export interface SwitchBoardAppItem {
+  id: string;
+  name: string;
+  desc: string;
+  url: string;
+  category: 'komoditas' | 'sistem';
+  badge?: string;
+  isDefault?: boolean;
+  status?: 'active' | 'external';
+  updatedAt?: string;
+}
+
+export type ActiveTabType = 'dashboard' | 'rekap-bulan' | 'rekap-jenis' | 'matriks-skt-skm' | 'data-explorer' | 'switch-app';

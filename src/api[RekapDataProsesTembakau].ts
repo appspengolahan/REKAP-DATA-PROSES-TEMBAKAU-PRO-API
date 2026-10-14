@@ -326,7 +326,20 @@ export class RekapDataProsesTembakauService {
         };
       }
     } catch (err: any) {
-      console.warn('Gagal sync ke GAS, menggunakan offline cache lokal:', err);
+      console.warn('Sync ke GAS terkendala, mencoba langsung ke Google Sheet...', err);
+      try {
+        const sheetRes = await this.pullDirectFromSheet();
+        if (sheetRes.success && sheetRes.count > 0) {
+          return {
+            success: true,
+            message: `Auto-sync aktif via Google Sheet (${sheetRes.count} baris riil).`,
+            rowCount: sheetRes.count
+          };
+        }
+      } catch (fallbackErr) {
+        console.warn('Fallback sheet juga gagal', fallbackErr);
+      }
+
       this.saveGasConfig({
         status: 'offline',
         errorMessage: err?.message || 'Koneksi time-out'

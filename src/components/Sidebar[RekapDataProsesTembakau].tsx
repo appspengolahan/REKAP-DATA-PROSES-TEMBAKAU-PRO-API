@@ -7,10 +7,12 @@ import {
   Database,
   Cpu,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  LayoutGrid
 } from 'lucide-react';
+import { ActiveTabType } from '../types[RekapDataProsesTembakau]';
 
-export type ActiveTabType = 'dashboard' | 'rekap-bulan' | 'rekap-jenis' | 'matriks-skt-skm' | 'data-explorer';
+export type { ActiveTabType };
 
 interface SidebarProps {
   activeTab: ActiveTabType;
@@ -57,6 +59,12 @@ export const SidebarRekapDataProsesTembakau: React.FC<SidebarProps> = ({
       label: 'Data Explorer Batch',
       sublabel: 'Verifikasi & Audit Baris Mentah',
       icon: Database
+    },
+    {
+      id: 'switch-app' as ActiveTabType,
+      label: 'Switch App',
+      sublabel: 'Hub Ekosistem Pabrik PP1',
+      icon: LayoutGrid
     }
   ];
 

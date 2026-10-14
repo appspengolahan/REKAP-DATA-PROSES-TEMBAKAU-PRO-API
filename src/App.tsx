@@ -25,6 +25,7 @@ import { RekapJenisViewRekapDataProsesTembakau } from './components/RekapJenisVi
 import { MatriksSktSkmRekapDataProsesTembakau } from './components/MatriksSktSkm[RekapDataProsesTembakau]';
 import { DataExplorerRekapDataProsesTembakau } from './components/DataExplorer[RekapDataProsesTembakau]';
 import { SwitchBoardModalRekapDataProsesTembakau } from './components/SwitchBoardModal[RekapDataProsesTembakau]';
+import { SwitchAppBoardView } from './components/SwitchAppBoardView';
 import { GasCenterModalRekapDataProsesTembakau } from './components/GasCenterModal[RekapDataProsesTembakau]';
 import { HelpModalRekapDataProsesTembakau } from './components/HelpModal[RekapDataProsesTembakau]';
 import { FooterRekapDataProsesTembakau } from './components/Footer[RekapDataProsesTembakau]';
@@ -35,7 +36,8 @@ import {
   GitCompare, 
   Database,
   CheckCircle2,
-  FileText
+  FileText,
+  LayoutGrid
 } from 'lucide-react';
 
 const STORAGE_SIDEBAR_COLLAPSED = 'PP1_SIDEBAR_COLLAPSED_TBK';
@@ -70,7 +72,12 @@ export default function App() {
 
   // Tarik Datasheet & Feedback Notification State
   const [isPullingDatasheet, setIsPullingDatasheet] = useState<boolean>(false);
-  const [toastNotification, setToastNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [toastNotification, setToastNotification] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+
+  // Auto Sync / Auto Refresh State (Defaults to true, continuous background live sync)
+  const [isAutoSync, setIsAutoSync] = useState<boolean>(() => {
+    return localStorage.getItem('PP1_AUTO_SYNC_ACTIVE') !== 'false';
+  });
 
   // 6. Range Period State (Default: 2026 Januari - September)
   const [periodeRange, setPeriodeRange] = useState<PeriodeRange>(() => {
@@ -174,6 +181,49 @@ export default function App() {
     }
   };
 
+  // Toggle Auto Sync On / Off
+  const handleToggleAutoSync = async () => {
+    const next = !isAutoSync;
+    setIsAutoSync(next);
+    localStorage.setItem('PP1_AUTO_SYNC_ACTIVE', String(next));
+
+    if (next) {
+      setToastNotification({
+        message: 'Auto Sync AKTIF: Data Google Sheet akan terus terupdate otomatis secara berkala.',
+        type: 'success'
+      });
+      setTimeout(() => setToastNotification(null), 4000);
+      handleManualRefresh();
+    } else {
+      setToastNotification({
+        message: 'Auto Sync DINONAKTIFKAN: Mode sinkronisasi manual.',
+        type: 'info'
+      });
+      setTimeout(() => setToastNotification(null), 4000);
+    }
+  };
+
+  // Auto Sync Background Periodic Interval (Runs every 25 seconds when Auto Sync is active)
+  useEffect(() => {
+    if (!isAutoSync) return;
+
+    const intervalTimer = setInterval(async () => {
+      try {
+        const res = await RekapDataProsesTembakauService.syncFromGas();
+        if (res.success) {
+          const freshRows = RekapDataProsesTembakauService.getRawData();
+          setRows(freshRows);
+          setGasConfig(RekapDataProsesTembakauService.getGasConfig());
+          setServerDashboard(RekapDataProsesTembakauService.getServerDashboardData());
+        }
+      } catch (err) {
+        console.warn('Auto sync interval silent skip', err);
+      }
+    }, 25000); // 25 detik
+
+    return () => clearInterval(intervalTimer);
+  }, [isAutoSync]);
+
   // Tarik Data Langsung dari Datasheet Google Sheets (via gviz CSV)
   const handleTarikDatasheet = async (tabName: string = 'AUTO') => {
     setIsPullingDatasheet(true);
@@ -263,6 +313,8 @@ export default function App() {
         onJenisProsesChange={setJenisProses}
         gasConfig={gasConfig}
         isSyncing={isSyncing}
+        isAutoSync={isAutoSync}
+        onToggleAutoSync={handleToggleAutoSync}
         onRefresh={handleManualRefresh}
         onPullDatasheet={() => handleTarikDatasheet('AUTO')}
         isPullingDatasheet={isPullingDatasheet}
@@ -387,6 +439,11 @@ export default function App() {
               </div>
             )}
 
+            {/* View 6: Switch App Board (Synchronized with Header Dropdown Switch App) */}
+            {activeTab === 'switch-app' && (
+              <SwitchAppBoardView />
+            )}
+
           </div>
 
           {/* Web App Footer as required by Rule 2 */}
@@ -395,10 +452,10 @@ export default function App() {
       </div>
 
       {/* Mobile Bottom Quick Navigation */}
-      <nav className="no-print lg:hidden fixed bottom-0 left-0 right-0 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 text-white px-2 pt-2 pb-2.5 flex items-center justify-around z-40 shadow-2xl">
+      <nav className="no-print lg:hidden fixed bottom-0 left-0 right-0 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 text-white px-1.5 pt-2 pb-2.5 flex items-center justify-around z-40 shadow-2xl">
         <button
           onClick={() => setActiveTab('dashboard')}
-          className={`flex flex-col items-center gap-1 px-3 py-1 rounded-xl text-[10px] font-medium transition-all ${
+          className={`flex flex-col items-center gap-1 px-2 py-1 rounded-xl text-[10px] font-medium transition-all ${
             activeTab === 'dashboard' ? 'text-blue-400 font-bold bg-blue-500/10' : 'text-slate-400 hover:text-slate-200'
           }`}
         >
@@ -407,7 +464,7 @@ export default function App() {
         </button>
         <button
           onClick={() => setActiveTab('rekap-bulan')}
-          className={`flex flex-col items-center gap-1 px-3 py-1 rounded-xl text-[10px] font-medium transition-all ${
+          className={`flex flex-col items-center gap-1 px-2 py-1 rounded-xl text-[10px] font-medium transition-all ${
             activeTab === 'rekap-bulan' ? 'text-blue-400 font-bold bg-blue-500/10' : 'text-slate-400 hover:text-slate-200'
           }`}
         >
@@ -416,7 +473,7 @@ export default function App() {
         </button>
         <button
           onClick={() => setActiveTab('rekap-jenis')}
-          className={`flex flex-col items-center gap-1 px-3 py-1 rounded-xl text-[10px] font-medium transition-all ${
+          className={`flex flex-col items-center gap-1 px-2 py-1 rounded-xl text-[10px] font-medium transition-all ${
             activeTab === 'rekap-jenis' ? 'text-blue-400 font-bold bg-blue-500/10' : 'text-slate-400 hover:text-slate-200'
           }`}
         >
@@ -425,7 +482,7 @@ export default function App() {
         </button>
         <button
           onClick={() => setActiveTab('matriks-skt-skm')}
-          className={`flex flex-col items-center gap-1 px-3 py-1 rounded-xl text-[10px] font-medium transition-all ${
+          className={`flex flex-col items-center gap-1 px-2 py-1 rounded-xl text-[10px] font-medium transition-all ${
             activeTab === 'matriks-skt-skm' ? 'text-blue-400 font-bold bg-blue-500/10' : 'text-slate-400 hover:text-slate-200'
           }`}
         >
@@ -434,12 +491,21 @@ export default function App() {
         </button>
         <button
           onClick={() => setActiveTab('data-explorer')}
-          className={`flex flex-col items-center gap-1 px-3 py-1 rounded-xl text-[10px] font-medium transition-all ${
+          className={`flex flex-col items-center gap-1 px-2 py-1 rounded-xl text-[10px] font-medium transition-all ${
             activeTab === 'data-explorer' ? 'text-blue-400 font-bold bg-blue-500/10' : 'text-slate-400 hover:text-slate-200'
           }`}
         >
           <Database className="w-4 h-4" />
           <span>Batch</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('switch-app')}
+          className={`flex flex-col items-center gap-1 px-2 py-1 rounded-xl text-[10px] font-medium transition-all ${
+            activeTab === 'switch-app' ? 'text-amber-400 font-bold bg-amber-500/10' : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <LayoutGrid className="w-4 h-4" />
+          <span>Switch</span>
         </button>
       </nav>
 
@@ -447,6 +513,7 @@ export default function App() {
       <SwitchBoardModalRekapDataProsesTembakau
         isOpen={isSwitchBoardOpen}
         onClose={() => setIsSwitchBoardOpen(false)}
+        onNavigateToTab={() => setActiveTab('switch-app')}
       />
 
       {/* Headless GAS Center Modal */}

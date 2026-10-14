@@ -28,6 +28,8 @@ interface HeaderProps {
   onJenisProsesChange: (j: JenisProsesType) => void;
   gasConfig: GasConfig;
   isSyncing: boolean;
+  isAutoSync?: boolean;
+  onToggleAutoSync?: () => void;
   onRefresh: () => void;
   onPullDatasheet?: () => void;
   isPullingDatasheet?: boolean;
@@ -45,6 +47,8 @@ export const HeaderRekapDataProsesTembakau: React.FC<HeaderProps> = ({
   onJenisProsesChange,
   gasConfig,
   isSyncing,
+  isAutoSync = true,
+  onToggleAutoSync,
   onRefresh,
   onPullDatasheet,
   isPullingDatasheet,
@@ -207,16 +211,31 @@ export const HeaderRekapDataProsesTembakau: React.FC<HeaderProps> = ({
               </button>
             )}
 
-            {/* Quick 1-Tap Refresh Button */}
+            {/* Auto Sync / Auto Refresh Toggle Button (Circled in Red by User) */}
             <button
-              onClick={onRefresh}
-              disabled={isSyncing}
-              className={`p-1.5 sm:p-2 rounded-xl border border-slate-700 bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white transition-colors flex items-center justify-center ${
-                isSyncing ? 'opacity-70 cursor-not-allowed' : ''
+              onClick={onToggleAutoSync || onRefresh}
+              className={`relative flex items-center gap-1.5 p-1.5 sm:px-3 sm:py-1.5 rounded-xl border transition-all shadow-sm select-none ${
+                isAutoSync
+                  ? 'bg-emerald-950/80 border-emerald-500/70 text-emerald-300 ring-1 ring-emerald-500/40 hover:bg-emerald-900/90'
+                  : 'bg-slate-800/90 hover:bg-slate-700/90 text-slate-400 hover:text-slate-200 border-slate-700'
               }`}
-              title="Refresh / Sinkronisasi Data Cepat"
+              title={
+                isAutoSync
+                  ? 'Auto Sync: AKTIF (Icon berputar terus — Data Google Sheet terus terupdate otomatis tiap 25 detik). Klik untuk menjeda.'
+                  : 'Auto Sync: NONAKTIF. Klik untuk mengaktifkan Auto Refresh otomatis.'
+              }
+              aria-label="Toggle Auto Sync"
             >
-              <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isSyncing ? 'animate-spin text-amber-400' : ''}`} />
+              <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isAutoSync || isSyncing ? 'animate-spin text-emerald-400' : 'text-slate-400'}`} />
+              <span className="hidden xl:inline text-xs font-semibold">
+                {isAutoSync ? 'Auto Sync' : 'Sync'}
+              </span>
+              {isAutoSync && (
+                <span className="absolute -top-1 -right-1 flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+              )}
             </button>
 
             {/* Export PDF Button */}
@@ -293,6 +312,31 @@ export const HeaderRekapDataProsesTembakau: React.FC<HeaderProps> = ({
                         <span className={`w-1.5 h-1.5 rounded-full ${gasConfig.status === 'online' ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`}></span>
                         {gasConfig.status === 'online' ? 'Headless GAS Online' : 'Offline Cache'}
                       </span>
+                    </div>
+
+                    {/* Auto Sync Live Switcher */}
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-700/60 text-[11px]">
+                      <div className="flex items-center gap-1.5 text-slate-300">
+                        <RefreshCw className={`w-3 h-3 ${isAutoSync ? 'animate-spin text-emerald-400' : 'text-slate-400'}`} />
+                        <span>Auto Sync Live:</span>
+                      </div>
+                      {onToggleAutoSync && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onToggleAutoSync();
+                          }}
+                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold transition-all ${
+                            isAutoSync 
+                              ? 'bg-emerald-600 text-white shadow-sm' 
+                              : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                          }`}
+                          title="Klik untuk menghidupkan / mematikan Auto Refresh otomatis"
+                        >
+                          {isAutoSync ? '● AKTIF' : '○ NONAKTIF'}
+                        </button>
+                      )}
                     </div>
                   </div>
 
