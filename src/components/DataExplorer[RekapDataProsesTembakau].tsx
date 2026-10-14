@@ -9,6 +9,66 @@ interface DataExplorerProps {
   userRole: UserRole;
 }
 
+// Helper format hari dan tanggal ke bahasa Indonesia
+const HARI_INDONESIA = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+const BULAN_INDONESIA = [
+  'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+  'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+];
+
+function formatHariTanggal(dateStr: string): { full: string; hari: string; tanggal: string } {
+  if (!dateStr) return { full: '-', hari: '', tanggal: '-' };
+  try {
+    const parts = dateStr.trim().split('-');
+    if (parts.length === 3) {
+      const year = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10) - 1;
+      const day = parseInt(parts[2], 10);
+      const d = new Date(year, month, day);
+      if (!isNaN(d.getTime())) {
+        const hari = HARI_INDONESIA[d.getDay()];
+        const tglStr = `${day} ${BULAN_INDONESIA[month]} ${year}`;
+        return {
+          hari,
+          tanggal: tglStr,
+          full: `${hari}, ${tglStr}`
+        };
+      }
+    }
+
+    const slashParts = dateStr.trim().split('/');
+    if (slashParts.length === 3) {
+      const day = parseInt(slashParts[0], 10);
+      const month = parseInt(slashParts[1], 10) - 1;
+      const year = parseInt(slashParts[2], 10);
+      const d = new Date(year, month, day);
+      if (!isNaN(d.getTime())) {
+        const hari = HARI_INDONESIA[d.getDay()];
+        const tglStr = `${day} ${BULAN_INDONESIA[month]} ${year}`;
+        return {
+          hari,
+          tanggal: tglStr,
+          full: `${hari}, ${tglStr}`
+        };
+      }
+    }
+
+    const d = new Date(dateStr);
+    if (!isNaN(d.getTime())) {
+      const hari = HARI_INDONESIA[d.getDay()];
+      const tglStr = `${d.getDate()} ${BULAN_INDONESIA[d.getMonth()]} ${d.getFullYear()}`;
+      return {
+        hari,
+        tanggal: tglStr,
+        full: `${hari}, ${tglStr}`
+      };
+    }
+  } catch (e) {
+    // ignore
+  }
+  return { full: dateStr, hari: '', tanggal: dateStr };
+}
+
 export const DataExplorerRekapDataProsesTembakau: React.FC<DataExplorerProps> = ({
   rows,
   onAddNewBatch,
@@ -29,10 +89,13 @@ export const DataExplorerRekapDataProsesTembakau: React.FC<DataExplorerProps> = 
   const [formCatatan, setFormCatatan] = useState('');
 
   const filtered = rows.filter((r) => {
+    const searchLower = searchTerm.toLowerCase();
+    const dateFormatted = formatHariTanggal(r.tanggal);
     const matchSearch =
-      r.jenisTembakau.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (r.batchNo && r.batchNo.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      r.tanggal.includes(searchTerm);
+      r.jenisTembakau.toLowerCase().includes(searchLower) ||
+      (r.batchNo && r.batchNo.toLowerCase().includes(searchLower)) ||
+      r.tanggal.includes(searchTerm) ||
+      dateFormatted.full.toLowerCase().includes(searchLower);
     const matchJalur = filterJalur === 'Semua' || r.jenisProses === filterJalur;
     return matchSearch && matchJalur;
   });
@@ -91,7 +154,7 @@ export const DataExplorerRekapDataProsesTembakau: React.FC<DataExplorerProps> = 
             <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
             <input
               type="text"
-              placeholder="Cari nomor batch, varian, atau tanggal..."
+              placeholder="Cari hari, tanggal, nomor batch, atau jenis tembakau..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -132,7 +195,7 @@ export const DataExplorerRekapDataProsesTembakau: React.FC<DataExplorerProps> = 
         <table className="w-full text-xs text-left border-collapse min-w-[760px]">
           <thead>
             <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
-              <th className="py-3 px-3">Batch & Tanggal</th>
+              <th className="py-3 px-3 min-w-[150px]">Hari, Tanggal & Batch</th>
               <th className="py-3 px-3">Jenis Tembakau</th>
               <th className="py-3 px-3">Jalur</th>
               <th className="py-3 px-3 text-right">Baku (Kg)</th>
@@ -148,14 +211,19 @@ export const DataExplorerRekapDataProsesTembakau: React.FC<DataExplorerProps> = 
             {filtered.map((r, idx) => {
               const isHigh = r.susutPct >= 8.5;
               const isLow = r.susutPct <= 5.5;
+              const dateInfo = formatHariTanggal(r.tanggal);
 
               return (
                 <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
-                  <td className="py-2.5 px-3">
-                    <div className="font-semibold text-slate-800 font-mono text-[11px]">
+                  <td className="py-2.5 px-3 min-w-[150px]">
+                    {/* Informasi Utama: Hari dan Tanggal (Warna Hitam) */}
+                    <div className="font-semibold text-slate-900 text-[11px] leading-snug">
+                      {dateInfo.full}
+                    </div>
+                    {/* Informasi Kedua: Batch (Warna Abu-abu) */}
+                    <div className="text-[10px] text-slate-400 font-mono mt-0.5 tracking-tight">
                       {r.batchNo || `SRC-ROW-${r.srcRow}`}
                     </div>
-                    <div className="text-[10px] text-slate-400">{r.tanggal}</div>
                   </td>
                   <td className="py-2.5 px-3 font-semibold text-slate-800">
                     {r.jenisTembakau}

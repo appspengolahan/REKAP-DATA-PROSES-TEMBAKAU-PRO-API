@@ -416,14 +416,14 @@ export default function App() {
                   <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
                     <div>
                       <h2 className="text-base font-bold text-slate-800">
-                        Data Explorer & Verifikasi Batch Mentah
+                        Log Data Harian & Verifikasi Batch Mentah
                       </h2>
                       <p className="text-xs text-slate-500">
                         Penelusuran detail setiap baris entri sheet REKAP SUSUT TEMBAKAU
                       </p>
                     </div>
                     <button
-                      onClick={() => handleExportPdf('Data_Explorer_Batch')}
+                      onClick={() => handleExportPdf('Log_Data_Harian')}
                       className="no-print flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition-colors"
                     >
                       <FileText className="w-3.5 h-3.5" />
@@ -496,7 +496,7 @@ export default function App() {
           }`}
         >
           <Database className="w-4 h-4" />
-          <span>Batch</span>
+          <span>Log Harian</span>
         </button>
         <button
           onClick={() => setActiveTab('switch-app')}

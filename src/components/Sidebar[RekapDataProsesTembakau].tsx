@@ -56,7 +56,7 @@ export const SidebarRekapDataProsesTembakau: React.FC<SidebarProps> = ({
     },
     {
       id: 'data-explorer' as ActiveTabType,
-      label: 'Data Explorer Batch',
+      label: 'Log Data Harian',
       sublabel: 'Verifikasi & Audit Baris Mentah',
       icon: Database
     },
