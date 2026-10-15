@@ -146,15 +146,32 @@ export class RekapDataProsesTembakauService {
 
   public static getRawData(): RawRowData[] {
     if (this.cachedRows && this.cachedRows.length > 0) {
-      return this.cachedRows;
+      const has2025 = this.cachedRows.some(r => r.tahun === '2025');
+      if (has2025 && this.cachedRows.length >= 500) {
+        return this.cachedRows;
+      }
     }
     try {
       const stored = localStorage.getItem(CACHE_KEY_RAW);
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          this.cachedRows = parsed;
-          return parsed;
+          const has2025 = parsed.some((r: any) => r.tahun === '2025');
+          if (has2025 && parsed.length >= 500) {
+            this.cachedRows = parsed;
+            return parsed;
+          }
+          // Merge parsed rows with historical 2025 rows so 2025 is never lost
+          const rows2025 = INITIAL_DATA_RAW.filter(r => r.tahun === '2025');
+          const merged = [...parsed];
+          for (const r25 of rows2025) {
+            if (!merged.some((p: any) => p.batchNo === r25.batchNo || (p.tanggal === r25.tanggal && p.jenisTembakau === r25.jenisTembakau && p.baku === r25.baku))) {
+              merged.push(r25);
+            }
+          }
+          this.cachedRows = merged;
+          this.saveRawData(merged);
+          return merged;
         }
       }
     } catch (e) {
@@ -474,7 +491,15 @@ export class RekapDataProsesTembakauService {
         };
       }
 
-      this.saveRawData(rows);
+      // Ensure historical 2025 records are preserved if the pulled sheet only contains latest 2026 entries
+      const existing2025 = this.getRawData().filter(r => r.tahun === '2025');
+      const combinedRows = [...rows];
+      for (const r25 of existing2025) {
+        if (!combinedRows.some(cr => cr.batchNo === r25.batchNo || (cr.tanggal === r25.tanggal && cr.jenisTembakau === r25.jenisTembakau && cr.baku === r25.baku))) {
+          combinedRows.push(r25);
+        }
+      }
+      this.saveRawData(combinedRows);
       this.saveGasConfig({
         lastSync: new Date().toISOString(),
         status: 'online'
@@ -652,10 +677,14 @@ export class RekapDataProsesTembakauService {
     const jenisProsesSet = new Set<string>();
 
     rows.forEach(r => {
-      if (r.tahun) tahunSet.add(r.tahun);
-      if (r.jenisTembakau) jenisTembakauSet.add(r.jenisTembakau);
-      if (r.jenisProses) jenisProsesSet.add(r.jenisProses);
+      if (r.tahun && r.tahun.trim()) tahunSet.add(r.tahun.trim());
+      if (r.jenisTembakau && r.jenisTembakau.trim()) jenisTembakauSet.add(r.jenisTembakau.trim());
+      if (r.jenisProses && r.jenisProses.trim()) jenisProsesSet.add(r.jenisProses.trim());
     });
+
+    // Ensure years with dataset records (2026 and 2025) are always present
+    tahunSet.add('2026');
+    tahunSet.add('2025');
 
     const tahunArr = Array.from(tahunSet).sort((a, b) => b.localeCompare(a));
     const jenisArr = Array.from(jenisTembakauSet).sort();
@@ -752,21 +781,34 @@ export class RekapDataProsesTembakauService {
   }
 
   public static computeRingkasanPeriode(rows: RawRowData[], p: PeriodeRange, jenisProses: JenisProsesType): SummaryKPI {
-    let startKey = this.monthKey(p.tahunMulai, p.bulanMulai);
-    let endKey = this.monthKey(p.tahunAkhir, p.bulanAkhir);
-    if (endKey < startKey) {
-      const tmp = startKey;
-      startKey = endKey;
-      endKey = tmp;
-    }
+    const isAllYears = p.tahunMulai === 'Semua' || p.tahunAkhir === 'Semua';
 
     const filtered = rows.filter(r => {
       if (jenisProses !== 'Semua' && r.jenisProses !== jenisProses) return false;
+
+      if (isAllYears) {
+        const sMonthIdx = MONTH_NAMES.indexOf(p.bulanMulai);
+        const eMonthIdx = MONTH_NAMES.indexOf(p.bulanAkhir);
+        const minM = Math.min(sMonthIdx >= 0 ? sMonthIdx : 0, eMonthIdx >= 0 ? eMonthIdx : 11);
+        const maxM = Math.max(sMonthIdx >= 0 ? sMonthIdx : 0, eMonthIdx >= 0 ? eMonthIdx : 11);
+        const rMonthIdx = MONTH_NAMES.indexOf(r.bulan || '');
+        return rMonthIdx >= minM && rMonthIdx <= maxM;
+      }
+
+      let startKey = this.monthKey(p.tahunMulai, p.bulanMulai);
+      let endKey = this.monthKey(p.tahunAkhir, p.bulanAkhir);
+      if (endKey < startKey) {
+        const tmp = startKey;
+        startKey = endKey;
+        endKey = tmp;
+      }
+
       const k = this.monthKey(r.tahun, r.bulan);
       return k >= startKey && k <= endKey;
     });
 
-    const label = `${p.bulanMulai} ${p.tahunMulai} — ${p.bulanAkhir} ${p.tahunAkhir}${jenisProses !== 'Semua' ? ` · ${jenisProses}` : ''}`;
+    const tahunLabel = isAllYears ? 'Semua Tahun' : (p.tahunMulai === p.tahunAkhir ? p.tahunMulai : `${p.tahunMulai}—${p.tahunAkhir}`);
+    const label = `${p.bulanMulai} — ${p.bulanAkhir} (${tahunLabel})${jenisProses !== 'Semua' ? ` · ${jenisProses}` : ''}`;
     return this.summarize(filtered, label);
   }
 
@@ -854,16 +896,28 @@ export class RekapDataProsesTembakauService {
     p: PeriodeRange,
     jenisProses: JenisProsesType
   ): GroupSummary[] {
-    let startKey = this.monthKey(p.tahunMulai, p.bulanMulai);
-    let endKey = this.monthKey(p.tahunAkhir, p.bulanAkhir);
-    if (endKey < startKey) {
-      const tmp = startKey;
-      startKey = endKey;
-      endKey = tmp;
-    }
+    const isAllYears = p.tahunMulai === 'Semua' || p.tahunAkhir === 'Semua';
 
     const filtered = rows.filter(r => {
       if (jenisProses !== 'Semua' && r.jenisProses !== jenisProses) return false;
+
+      if (isAllYears) {
+        const sMonthIdx = MONTH_NAMES.indexOf(p.bulanMulai);
+        const eMonthIdx = MONTH_NAMES.indexOf(p.bulanAkhir);
+        const minM = Math.min(sMonthIdx >= 0 ? sMonthIdx : 0, eMonthIdx >= 0 ? eMonthIdx : 11);
+        const maxM = Math.max(sMonthIdx >= 0 ? sMonthIdx : 0, eMonthIdx >= 0 ? eMonthIdx : 11);
+        const rMonthIdx = MONTH_NAMES.indexOf(r.bulan || '');
+        return rMonthIdx >= minM && rMonthIdx <= maxM;
+      }
+
+      let startKey = this.monthKey(p.tahunMulai, p.bulanMulai);
+      let endKey = this.monthKey(p.tahunAkhir, p.bulanAkhir);
+      if (endKey < startKey) {
+        const tmp = startKey;
+        startKey = endKey;
+        endKey = tmp;
+      }
+
       const k = this.monthKey(r.tahun, r.bulan);
       return k >= startKey && k <= endKey;
     });

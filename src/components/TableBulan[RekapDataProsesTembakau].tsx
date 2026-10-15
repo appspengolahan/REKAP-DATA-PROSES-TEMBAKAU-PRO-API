@@ -1,13 +1,33 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { GroupSummary } from '../types[RekapDataProsesTembakau]';
 import { formatKg, formatPct } from '../api[RekapDataProsesTembakau]';
-import { FileSpreadsheet, ArrowUpDown } from 'lucide-react';
+import { MONTH_NAMES } from '../mockData[RekapDataProsesTembakau]';
+import { ArrowDown, ArrowUp } from 'lucide-react';
 
 interface TableBulanProps {
   data: GroupSummary[];
 }
 
 export const TableBulanRekapDataProsesTembakau: React.FC<TableBulanProps> = ({ data }) => {
+  // Default: 'desc' agar periode bulan & tahun terbaru berada paling atas dan paling lama paling bawah
+  const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
+
+  const sortedData = useMemo(() => {
+    if (!data || data.length === 0) return [];
+
+    return [...data].sort((a, b) => {
+      const aMonthIdx = MONTH_NAMES.indexOf(a.bulan || '');
+      const aYear = parseInt(a.tahun || '0', 10);
+      const aKey = aYear * 12 + (aMonthIdx >= 0 ? aMonthIdx : 0);
+
+      const bMonthIdx = MONTH_NAMES.indexOf(b.bulan || '');
+      const bYear = parseInt(b.tahun || '0', 10);
+      const bKey = bYear * 12 + (bMonthIdx >= 0 ? bMonthIdx : 0);
+
+      return sortOrder === 'desc' ? bKey - aKey : aKey - bKey;
+    });
+  }, [data, sortOrder]);
+
   if (!data || data.length === 0) {
     return (
       <div className="p-8 text-center text-xs text-slate-400">
@@ -26,7 +46,25 @@ export const TableBulanRekapDataProsesTembakau: React.FC<TableBulanProps> = ({ d
         <table className="w-full text-xs text-left border-collapse min-w-[660px]">
         <thead>
           <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
-            <th className="py-3 px-3">Bulan</th>
+            <th 
+              className="py-3 px-3 cursor-pointer hover:bg-slate-100/90 transition-colors select-none"
+              onClick={() => setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc')}
+              title={`Klik untuk membalik urutan (${sortOrder === 'desc' ? 'Terbaru di atas' : 'Terlama di atas'})`}
+            >
+              <div className="flex items-center gap-1.5 text-slate-700">
+                <span>Bulan</span>
+                <span className="p-0.5 rounded bg-slate-200/80 text-blue-600">
+                  {sortOrder === 'desc' ? (
+                    <ArrowDown className="w-3 h-3" />
+                  ) : (
+                    <ArrowUp className="w-3 h-3" />
+                  )}
+                </span>
+                <span className="text-[9px] font-semibold text-blue-600 lowercase hidden sm:inline">
+                  ({sortOrder === 'desc' ? 'terbaru di atas' : 'terlama di atas'})
+                </span>
+              </div>
+            </th>
             <th className="py-3 px-3 text-right">Jumlah Data</th>
             <th className="py-3 px-3 text-right">Baku (Kg)</th>
             <th className="py-3 px-3 text-right">Hasil (Kg)</th>
@@ -38,7 +76,7 @@ export const TableBulanRekapDataProsesTembakau: React.FC<TableBulanProps> = ({ d
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
-          {data.map((row, idx) => {
+          {sortedData.map((row, idx) => {
             const isHigh = row.susutPct >= 8.5;
             const isLow = row.susutPct <= 5.5;
 

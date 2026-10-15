@@ -251,8 +251,9 @@ export const SummaryCardsRekapDataProsesTembakau: React.FC<SummaryCardsProps> = 
               onChange={(e) => onPeriodeRangeChange({ ...periodeRange, tahunMulai: e.target.value })}
               className="text-xs border border-slate-200 rounded-lg px-2 py-1 bg-white text-slate-700 font-medium focus:outline-none"
             >
-              {tahunList.map((t) => (
-                <option key={t} value={t}>{t}</option>
+              <option value="Semua">Semua Tahun</option>
+              {tahunList.filter(t => t !== 'Semua').map((t) => (
+                <option key={`tm-${t}`} value={t}>{t}</option>
               ))}
             </select>
 
@@ -271,8 +272,9 @@ export const SummaryCardsRekapDataProsesTembakau: React.FC<SummaryCardsProps> = 
               onChange={(e) => onPeriodeRangeChange({ ...periodeRange, tahunAkhir: e.target.value })}
               className="text-xs border border-slate-200 rounded-lg px-2 py-1 bg-white text-slate-700 font-medium focus:outline-none"
             >
-              {tahunList.map((t) => (
-                <option key={t} value={t}>{t}</option>
+              <option value="Semua">Semua Tahun</option>
+              {tahunList.filter(t => t !== 'Semua').map((t) => (
+                <option key={`ta-${t}`} value={t}>{t}</option>
               ))}
             </select>
 

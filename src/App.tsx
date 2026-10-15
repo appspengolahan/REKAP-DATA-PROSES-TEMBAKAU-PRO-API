@@ -79,13 +79,13 @@ export default function App() {
     return localStorage.getItem('PP1_AUTO_SYNC_ACTIVE') !== 'false';
   });
 
-  // 6. Range Period State (Default: 2026 Januari - September)
+  // 6. Range Period State (Default: Semua Tahun, Januari - Desember)
   const [periodeRange, setPeriodeRange] = useState<PeriodeRange>(() => {
     return {
       bulanMulai: 'Januari',
-      tahunMulai: '2026',
-      bulanAkhir: 'September',
-      tahunAkhir: '2026'
+      tahunMulai: 'Semua',
+      bulanAkhir: 'Desember',
+      tahunAkhir: 'Semua'
     };
   });
 
@@ -165,8 +165,9 @@ export default function App() {
   // Compute Trend per Jenis Tembakau dynamically from actual rows
   const trendJenis = useMemo(() => {
     if (!activeJenisTrend) return { jenisTembakau: '', data: [] };
-    return RekapDataProsesTembakauService.computeTrendJenisTembakau(rows, selectedTahun, activeJenisTrend, jenisProses);
-  }, [rows, selectedTahun, activeJenisTrend, jenisProses]);
+    const effectiveYear = periodeRange.tahunMulai || selectedTahun;
+    return RekapDataProsesTembakauService.computeTrendJenisTembakau(rows, effectiveYear, activeJenisTrend, jenisProses);
+  }, [rows, periodeRange.tahunMulai, selectedTahun, activeJenisTrend, jenisProses]);
 
   // Refresh Trigger
   const handleManualRefresh = async () => {
@@ -398,6 +399,7 @@ export default function App() {
                 jenisProses={jenisProses}
                 onJenisProsesChange={setJenisProses}
                 onSelectJenisTrend={setSelectedJenisTrend}
+                tahunList={filterOptions.tahun}
                 onExportPdf={() => handleExportPdf('Rekap_Jenis_Tembakau_Lengkap')}
               />
             )}

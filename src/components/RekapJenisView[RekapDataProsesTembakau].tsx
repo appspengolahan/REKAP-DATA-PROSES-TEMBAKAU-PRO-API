@@ -26,6 +26,7 @@ interface RekapJenisViewProps {
   jenisProses: JenisProsesType;
   onJenisProsesChange: (j: JenisProsesType) => void;
   onSelectJenisTrend: (j: string) => void;
+  tahunList?: string[];
   onExportPdf: () => void;
 }
 
@@ -42,9 +43,21 @@ export const RekapJenisViewRekapDataProsesTembakau: React.FC<RekapJenisViewProps
   jenisProses,
   onJenisProsesChange,
   onSelectJenisTrend,
+  tahunList,
   onExportPdf
 }) => {
   const [expandedChart, setExpandedChart] = useState<ChartModalType | null>(null);
+
+  // Available Years List (Always ensuring 2026 and 2025 are available)
+  const effectiveTahunList = useMemo(() => {
+    const set = new Set<string>(['2026', '2025']);
+    if (tahunList && tahunList.length > 0) {
+      tahunList.forEach(t => {
+        if (t && t !== 'Semua') set.add(t);
+      });
+    }
+    return Array.from(set).sort((a, b) => b.localeCompare(a));
+  }, [tahunList]);
 
   // Compute stats across tobacco varieties
   const { topVolume, mostEfficient, highestLoss, totalVolume } = useMemo(() => {
@@ -134,7 +147,25 @@ export const RekapJenisViewRekapDataProsesTembakau: React.FC<RekapJenisViewProps
                   <option key={b} value={b}>{b}</option>
                 ))}
               </select>
-              <span className="text-slate-400 font-medium">{periodeRange.tahunMulai}</span>
+              {/* Dropdown Filter Tahun (Semua Tahun, 2026, 2025) */}
+              <select
+                value={periodeRange.tahunMulai || 'Semua'}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  onPeriodeRangeChange({
+                    ...periodeRange,
+                    tahunMulai: val,
+                    tahunAkhir: val
+                  });
+                }}
+                className="bg-white border border-slate-200 rounded px-2 py-0.5 text-slate-700 font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-2xs"
+                title="Pilih Tahun untuk Rekap Jenis Tembakau"
+              >
+                <option value="Semua">Semua Tahun</option>
+                {effectiveTahunList.map(t => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
             </div>
 
             <div className="flex items-center gap-1.5">
