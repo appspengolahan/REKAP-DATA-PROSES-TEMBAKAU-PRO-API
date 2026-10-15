@@ -19,7 +19,7 @@ import {
   ChartExpandedModalRekapDataProsesTembakau, 
   ChartModalType 
 } from './ChartExpandedModal[RekapDataProsesTembakau]';
-import { CalendarDays, Layers, FileText, RefreshCw, Filter, TrendingDown, Database, Maximize2 } from 'lucide-react';
+import { CalendarDays, Layers, FileText, Filter, TrendingDown, Maximize2 } from 'lucide-react';
 
 interface DashboardViewProps {
   ringkasanTahunan: SummaryKPI;
@@ -82,7 +82,7 @@ export const DashboardViewRekapDataProsesTembakau: React.FC<DashboardViewProps> 
   return (
     <div className="space-y-6">
       
-      {/* Global Filter Bar */}
+      {/* Global Filter Bar (Clean & Uncluttered: Redundant Tarik Datasheet, Refresh, & Jalur are in Header) */}
       <div className="no-print bg-white rounded-2xl border border-slate-200/90 p-3.5 shadow-sm flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-1.5 text-xs text-slate-500 font-semibold">
@@ -91,7 +91,7 @@ export const DashboardViewRekapDataProsesTembakau: React.FC<DashboardViewProps> 
           </div>
 
           <div className="flex items-center gap-1.5">
-            <label className="text-xs text-slate-500">Tahun:</label>
+            <label className="text-xs text-slate-500 font-medium">Tahun:</label>
             <select
               value={selectedTahun}
               onChange={(e) => onTahunChange(e.target.value)}
@@ -103,47 +103,13 @@ export const DashboardViewRekapDataProsesTembakau: React.FC<DashboardViewProps> 
               ))}
             </select>
           </div>
-
-          <div className="flex items-center gap-1.5">
-            <label className="text-xs text-slate-500">Jalur:</label>
-            <select
-              value={jenisProses}
-              onChange={(e) => onJenisProsesChange(e.target.value as JenisProsesType)}
-              className="text-xs border border-slate-200 rounded-lg px-2.5 py-1 bg-white font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            >
-              <option value="Semua">Semua Jalur (SKT & SKM)</option>
-              <option value="SKT">SKT (Sigaret Kretek Tangan)</option>
-              <option value="SKM">SKM (Sigaret Kretek Mesin)</option>
-            </select>
-          </div>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          {onPullDatasheet && (
-            <button
-              onClick={onPullDatasheet}
-              disabled={isPullingDatasheet}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition-colors shadow-sm ${
-                isPullingDatasheet ? 'opacity-75 cursor-not-allowed' : ''
-              }`}
-              title="Tarik Data Langsung dari Google Spreadsheet (Datasheet Direct)"
-            >
-              <Database className={`w-3.5 h-3.5 ${isPullingDatasheet ? 'animate-spin' : ''}`} />
-              <span>{isPullingDatasheet ? 'Menarik Data...' : 'Tarik Datasheet'}</span>
-            </button>
-          )}
-
-          <button
-            onClick={onRefresh}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold transition-colors"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span>Refresh</span>
-          </button>
-
           <button
             onClick={onExportSummaryPdf}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition-colors shadow-sm"
+            title="Export Ringkasan Tahunan & Bulanan (PDF)"
           >
             <FileText className="w-3.5 h-3.5 text-blue-400" />
             <span>Export Ringkasan (PDF)</span>

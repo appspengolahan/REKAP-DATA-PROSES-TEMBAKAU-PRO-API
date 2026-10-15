@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
-import { GroupSummary, SummaryKPI, JenisProsesType } from '../types[RekapDataProsesTembakau]';
-import { formatKg, formatPct } from '../api[RekapDataProsesTembakau]';
+import { GroupSummary, SummaryKPI, JenisProsesType, RawRowData } from '../types[RekapDataProsesTembakau]';
+import { formatKg, formatPct, RekapDataProsesTembakauService } from '../api[RekapDataProsesTembakau]';
+import { MONTH_NAMES } from '../mockData[RekapDataProsesTembakau]';
 import { MonthlyLossLineChart, BakuVsHasilBarChart } from './Charts[RekapDataProsesTembakau]';
 import { TableBulanRekapDataProsesTembakau } from './TableBulan[RekapDataProsesTembakau]';
 import { ChartExpandedModalRekapDataProsesTembakau, ChartModalType } from './ChartExpandedModal[RekapDataProsesTembakau]';
@@ -12,57 +13,153 @@ import {
   CheckCircle2, 
   Maximize2, 
   FileText, 
-  Database,
   Filter,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  RotateCcw,
+  Calendar
 } from 'lucide-react';
 
 interface RekapBulanViewProps {
+  rows?: RawRowData[];
   rekapBulan: GroupSummary[];
   ringkasanTahunan: SummaryKPI;
   tahunList: string[];
   selectedTahun: string;
   onTahunChange: (t: string) => void;
   jenisProses: JenisProsesType;
-  onJenisProsesChange: (j: JenisProsesType) => void;
+  onJenisProsesChange?: (j: JenisProsesType) => void;
   onPullDatasheet?: () => void;
   isPullingDatasheet?: boolean;
   onExportPdf: () => void;
 }
 
 export const RekapBulanViewRekapDataProsesTembakau: React.FC<RekapBulanViewProps> = ({
+  rows,
   rekapBulan,
   ringkasanTahunan,
   tahunList,
   selectedTahun,
   onTahunChange,
   jenisProses,
-  onJenisProsesChange,
-  onPullDatasheet,
-  isPullingDatasheet,
   onExportPdf
 }) => {
   const [expandedChart, setExpandedChart] = useState<ChartModalType | null>(null);
 
-  // Compute highest & lowest loss months from actual data
-  const { maxLossMonth, minLossMonth, totalHasil } = useMemo(() => {
-    if (!rekapBulan || rekapBulan.length === 0) {
-      return { maxLossMonth: null, minLossMonth: null, totalHasil: 0 };
+  // Filter State: Rentang Periode Bulan-Tahun (Default: Semua Tahun & Semua Bulan)
+  const [startPeriod, setStartPeriod] = useState<string>('Semua');
+  const [endPeriod, setEndPeriod] = useState<string>('Semua');
+
+  // Compute all available monthly records (across all years for currently selected Jalur)
+  const allMonthsData = useMemo(() => {
+    if (rows && rows.length > 0) {
+      return RekapDataProsesTembakauService.computeRekapBulan(rows, 'Semua', jenisProses);
+    }
+    return rekapBulan;
+  }, [rows, rekapBulan, jenisProses]);
+
+  // Extract list of chronological month-years (e.g. "April 2025", "Mei 2025", ... "Oktober 2026")
+  const availableMonthYears = useMemo(() => {
+    return allMonthsData.map(m => {
+      const monthIdx = MONTH_NAMES.indexOf(m.bulan || '');
+      const yearNum = parseInt(m.tahun || '0', 10);
+      return {
+        label: m.label,
+        bulan: m.bulan || '',
+        tahun: m.tahun || '',
+        key: yearNum * 12 + (monthIdx >= 0 ? monthIdx : 0)
+      };
+    });
+  }, [allMonthsData]);
+
+  // Filtered monthly data based on startPeriod, endPeriod, and selectedTahun
+  const displayedRekapBulan = useMemo(() => {
+    return allMonthsData.filter(item => {
+      // Filter year if selectedTahun is specific (not 'Semua')
+      if (selectedTahun !== 'Semua' && item.tahun !== selectedTahun) {
+        return false;
+      }
+
+      const itemMonthIdx = MONTH_NAMES.indexOf(item.bulan || '');
+      const itemKey = parseInt(item.tahun || '0', 10) * 12 + (itemMonthIdx >= 0 ? itemMonthIdx : 0);
+
+      let minKey = -Infinity;
+      let maxKey = Infinity;
+
+      if (startPeriod !== 'Semua') {
+        const [sBulan, sTahun] = startPeriod.split(' ');
+        const sMonthIdx = MONTH_NAMES.indexOf(sBulan);
+        minKey = parseInt(sTahun, 10) * 12 + (sMonthIdx >= 0 ? sMonthIdx : 0);
+      }
+
+      if (endPeriod !== 'Semua') {
+        const [eBulan, eTahun] = endPeriod.split(' ');
+        const eMonthIdx = MONTH_NAMES.indexOf(eBulan);
+        maxKey = parseInt(eTahun, 10) * 12 + (eMonthIdx >= 0 ? eMonthIdx : 0);
+      }
+
+      // If both start and end are specified and inverted, swap them
+      if (minKey !== -Infinity && maxKey !== Infinity && minKey > maxKey) {
+        const temp = minKey;
+        minKey = maxKey;
+        maxKey = temp;
+      }
+
+      if (itemKey < minKey || itemKey > maxKey) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [allMonthsData, selectedTahun, startPeriod, endPeriod]);
+
+  // Compute highest & lowest loss months, total baku, total hasil, and weighted susut % from filtered data
+  const { maxLossMonth, minLossMonth, totalHasil, totalBaku, weightedSusutPct } = useMemo(() => {
+    if (!displayedRekapBulan || displayedRekapBulan.length === 0) {
+      return { 
+        maxLossMonth: null, 
+        minLossMonth: null, 
+        totalHasil: 0, 
+        totalBaku: 0, 
+        weightedSusutPct: 0 
+      };
     }
 
-    const validMonths = rekapBulan.filter(m => m.baku > 0);
+    const validMonths = displayedRekapBulan.filter(m => m.baku > 0);
     if (validMonths.length === 0) {
-      return { maxLossMonth: null, minLossMonth: null, totalHasil: 0 };
+      return { 
+        maxLossMonth: null, 
+        minLossMonth: null, 
+        totalHasil: 0, 
+        totalBaku: 0, 
+        weightedSusutPct: 0 
+      };
     }
 
     const sortedByLoss = [...validMonths].sort((a, b) => b.susutPct - a.susutPct);
     const max = sortedByLoss[0];
     const min = sortedByLoss[sortedByLoss.length - 1];
     const hasil = validMonths.reduce((acc, curr) => acc + curr.hasil, 0);
+    const baku = validMonths.reduce((acc, curr) => acc + curr.baku, 0);
+    const susutKg = validMonths.reduce((acc, curr) => acc + curr.susutKg, 0);
+    const weighted = baku > 0 ? (susutKg / baku) * 100 : 0;
 
-    return { maxLossMonth: max, minLossMonth: min, totalHasil: hasil };
-  }, [rekapBulan]);
+    return { 
+      maxLossMonth: max, 
+      minLossMonth: min, 
+      totalHasil: Math.round(hasil * 10) / 10, 
+      totalBaku: Math.round(baku * 10) / 10, 
+      weightedSusutPct: Math.round(weighted * 100) / 100 
+    };
+  }, [displayedRekapBulan]);
+
+  const isFilterActive = startPeriod !== 'Semua' || endPeriod !== 'Semua' || selectedTahun !== 'Semua';
+
+  const handleResetFilter = () => {
+    setStartPeriod('Semua');
+    setEndPeriod('Semua');
+    onTahunChange('Semua');
+  };
 
   return (
     <div className="space-y-6">
@@ -87,20 +184,7 @@ export const RekapBulanViewRekapDataProsesTembakau: React.FC<RekapBulanViewProps
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
-            {onPullDatasheet && (
-              <button
-                onClick={onPullDatasheet}
-                disabled={isPullingDatasheet}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-sm transition-colors ${
-                  isPullingDatasheet ? 'opacity-70 cursor-not-allowed' : ''
-                }`}
-                title="Tarik Data Terkini dari Datasheet Google Sheet"
-              >
-                <Database className={`w-3.5 h-3.5 ${isPullingDatasheet ? 'animate-spin' : ''}`} />
-                <span className="hidden sm:inline">{isPullingDatasheet ? 'Menarik...' : 'Tarik Datasheet'}</span>
-              </button>
-            )}
-
+            {/* Note: Redundant 'Tarik Datasheet' has been removed because it is already present in Header */}
             <button
               onClick={onExportPdf}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-sm transition-colors"
@@ -112,20 +196,63 @@ export const RekapBulanViewRekapDataProsesTembakau: React.FC<RekapBulanViewProps
           </div>
         </div>
 
-        {/* Filters Row */}
+        {/* Filters Row: Range Filter Periode Bulan & Tahun (Default: Semua Tahun & Semua Bulan) */}
         <div className="pt-4 flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="flex items-center gap-1.5 text-xs text-slate-500 font-semibold">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <div className="flex items-center gap-1.5 text-xs text-slate-500 font-semibold mr-1">
               <Filter className="w-3.5 h-3.5 text-slate-400" />
-              <span>Filter Data:</span>
+              <span>Filter Rentang Periode:</span>
             </div>
 
+            {/* Dropdown Periode Awal */}
             <div className="flex items-center gap-1.5">
-              <label className="text-xs text-slate-500">Tahun:</label>
+              <label className="text-xs text-slate-500 font-medium flex items-center gap-1">
+                <Calendar className="w-3 h-3 text-slate-400" />
+                <span>Dari:</span>
+              </label>
+              <select
+                value={startPeriod}
+                onChange={(e) => setStartPeriod(e.target.value)}
+                className="text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-xs cursor-pointer"
+              >
+                <option value="Semua">Semua Bulan & Tahun (Awal)</option>
+                {availableMonthYears.map((m) => (
+                  <option key={`start-${m.label}`} value={m.label}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <span className="text-xs text-slate-400 font-bold px-0.5">s/d</span>
+
+            {/* Dropdown Periode Akhir */}
+            <div className="flex items-center gap-1.5">
+              <label className="text-xs text-slate-500 font-medium flex items-center gap-1">
+                <Calendar className="w-3 h-3 text-slate-400" />
+                <span>Sampai:</span>
+              </label>
+              <select
+                value={endPeriod}
+                onChange={(e) => setEndPeriod(e.target.value)}
+                className="text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-xs cursor-pointer"
+              >
+                <option value="Semua">Semua Bulan & Tahun (Akhir)</option>
+                {availableMonthYears.map((m) => (
+                  <option key={`end-${m.label}`} value={m.label}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Filter Tahun (Opsional Cepat) */}
+            <div className="flex items-center gap-1.5 pl-2 border-l border-slate-200">
+              <label className="text-xs text-slate-500 font-medium">Tahun:</label>
               <select
                 value={selectedTahun}
                 onChange={(e) => onTahunChange(e.target.value)}
-                className="text-xs border border-slate-200 rounded-lg px-2.5 py-1 bg-white font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-xs cursor-pointer"
               >
                 <option value="Semua">Semua Tahun</option>
                 {tahunList.map((t) => (
@@ -134,27 +261,29 @@ export const RekapBulanViewRekapDataProsesTembakau: React.FC<RekapBulanViewProps
               </select>
             </div>
 
-            <div className="flex items-center gap-1.5">
-              <label className="text-xs text-slate-500">Jalur:</label>
-              <select
-                value={jenisProses}
-                onChange={(e) => onJenisProsesChange(e.target.value as JenisProsesType)}
-                className="text-xs border border-slate-200 rounded-lg px-2.5 py-1 bg-white font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            {/* Tombol Reset Filter */}
+            {isFilterActive && (
+              <button
+                onClick={handleResetFilter}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold transition-colors shadow-xs ml-1"
+                title="Reset filter kembali ke Semua Periode (Default)"
               >
-                <option value="Semua">Semua Jalur (SKT & SKM)</option>
-                <option value="SKT">SKT (Sigaret Kretek Tangan)</option>
-                <option value="SKM">SKM (Sigaret Kretek Mesin)</option>
-              </select>
-            </div>
+                <RotateCcw className="w-3 h-3" />
+                <span>Reset</span>
+              </button>
+            )}
           </div>
 
-          <div className="text-xs text-slate-400 font-medium">
-            Periode Data: {rekapBulan.length} Bulan Aktif Terdata
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200/80">
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+              <span>{displayedRekapBulan.length} Bulan Terpilih</span>
+            </span>
           </div>
         </div>
       </div>
 
-      {/* Monthly Highlight KPI Cards (4 Cards) */}
+      {/* Monthly Highlight KPI Cards (4 Cards) - Dynamically Updated by Filter */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: Total Baku */}
         <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-sm flex flex-col justify-between">
@@ -166,7 +295,7 @@ export const RekapBulanViewRekapDataProsesTembakau: React.FC<RekapBulanViewProps
           </div>
           <div className="mt-2">
             <div className="text-xl font-bold font-mono text-slate-800">
-              {formatKg(ringkasanTahunan.baku)}
+              {formatKg(totalBaku)}
             </div>
             <div className="text-[11px] text-slate-400 mt-0.5">
               Hasil Jadi: <span className="font-mono text-slate-600 font-medium">{formatKg(totalHasil)}</span>
@@ -177,17 +306,17 @@ export const RekapBulanViewRekapDataProsesTembakau: React.FC<RekapBulanViewProps
         {/* Card 2: Rerata Susut */}
         <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-sm flex flex-col justify-between">
           <div className="flex items-center justify-between text-slate-500 text-xs font-semibold">
-            <span>Rerata Susut Tahunan</span>
+            <span>Rerata Susut Periode</span>
             <span className="p-1.5 rounded-lg bg-blue-50 text-blue-600">
               <TrendingDown className="w-4 h-4" />
             </span>
           </div>
           <div className="mt-2">
             <div className="text-xl font-bold font-mono text-blue-600">
-              {formatPct(ringkasanTahunan.susutPct)}
+              {formatPct(weightedSusutPct)}
             </div>
             <div className="text-[11px] text-slate-400 mt-0.5">
-              Rasio Tertimbang Kumulatif
+              Rasio Tertimbang ({displayedRekapBulan.length} Bulan)
             </div>
           </div>
         </div>
@@ -235,7 +364,7 @@ export const RekapBulanViewRekapDataProsesTembakau: React.FC<RekapBulanViewProps
         </div>
       </div>
 
-      {/* 2 Monthly Interactive Charts */}
+      {/* 2 Monthly Interactive Charts - Dynamically Updated */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Chart 1: Tren Susut Bulanan */}
         <div 
@@ -259,7 +388,7 @@ export const RekapBulanViewRekapDataProsesTembakau: React.FC<RekapBulanViewProps
               <span className="hidden sm:inline">Perbesar</span>
             </button>
           </div>
-          <MonthlyLossLineChart data={rekapBulan} />
+          <MonthlyLossLineChart data={displayedRekapBulan} />
         </div>
 
         {/* Chart 2: Baku vs Hasil Bar Chart */}
@@ -284,11 +413,11 @@ export const RekapBulanViewRekapDataProsesTembakau: React.FC<RekapBulanViewProps
               <span className="hidden sm:inline">Perbesar</span>
             </button>
           </div>
-          <BakuVsHasilBarChart data={rekapBulan} />
+          <BakuVsHasilBarChart data={displayedRekapBulan} />
         </div>
       </div>
 
-      {/* Full Monthly Detail Table */}
+      {/* Full Monthly Detail Table - Dynamically Updated */}
       <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-sm space-y-4">
         <div className="flex items-center justify-between pb-3 border-b border-slate-100">
           <div>
@@ -299,12 +428,12 @@ export const RekapBulanViewRekapDataProsesTembakau: React.FC<RekapBulanViewProps
               Rincian bahan baku, hasil jadi, susut netto, rasio gagang & debu, serta rentang min/max
             </p>
           </div>
-          <div className="text-xs text-slate-400 font-mono">
-            {rekapBulan.length} Baris Data
+          <div className="text-xs text-slate-500 font-mono font-medium">
+            {displayedRekapBulan.length} Baris Data
           </div>
         </div>
 
-        <TableBulanRekapDataProsesTembakau data={rekapBulan} />
+        <TableBulanRekapDataProsesTembakau data={displayedRekapBulan} />
       </div>
 
       {/* Chart Expanded Modal */}
@@ -314,7 +443,7 @@ export const RekapBulanViewRekapDataProsesTembakau: React.FC<RekapBulanViewProps
           chartType={expandedChart}
           onClose={() => setExpandedChart(null)}
           onSelectChartType={setExpandedChart}
-          rekapBulan={rekapBulan}
+          rekapBulan={displayedRekapBulan}
           rekapJenisTembakauPeriode={[]}
           trendJenis={{ jenisTembakau: '', data: [] }}
           onSelectJenisTrend={() => {}}

@@ -374,6 +374,7 @@ export default function App() {
             {/* View 2: Dedicated Rekap per Bulan & Tren Waktu */}
             {activeTab === 'rekap-bulan' && (
               <RekapBulanViewRekapDataProsesTembakau
+                rows={rows}
                 rekapBulan={rekapBulan}
                 ringkasanTahunan={ringkasanTahunan}
                 tahunList={filterOptions.tahun}
