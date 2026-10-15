@@ -46,9 +46,12 @@ export const RekapBulanViewRekapDataProsesTembakau: React.FC<RekapBulanViewProps
 }) => {
   const [expandedChart, setExpandedChart] = useState<ChartModalType | null>(null);
 
-  // Filter State: Rentang Periode Bulan-Tahun (Default: Semua Tahun & Semua Bulan)
-  const [startPeriod, setStartPeriod] = useState<string>('Semua');
-  const [endPeriod, setEndPeriod] = useState<string>('Semua');
+  // Filter State: Rentang Periode Bulan-Tahun (Dari: Bulan, Tahun | Sampai: Bulan, Tahun)
+  // Default: Semua Tahun & Semua Bulan
+  const [startBulan, setStartBulan] = useState<string>('Semua');
+  const [startTahun, setStartTahun] = useState<string>('Semua');
+  const [endBulan, setEndBulan] = useState<string>('Semua');
+  const [endTahun, setEndTahun] = useState<string>('Semua');
 
   // Compute all available monthly records (across all years for currently selected Jalur)
   const allMonthsData = useMemo(() => {
@@ -58,60 +61,90 @@ export const RekapBulanViewRekapDataProsesTembakau: React.FC<RekapBulanViewProps
     return rekapBulan;
   }, [rows, rekapBulan, jenisProses]);
 
-  // Extract list of chronological month-years (e.g. "April 2025", "Mei 2025", ... "Oktober 2026")
-  const availableMonthYears = useMemo(() => {
-    return allMonthsData.map(m => {
-      const monthIdx = MONTH_NAMES.indexOf(m.bulan || '');
-      const yearNum = parseInt(m.tahun || '0', 10);
-      return {
-        label: m.label,
-        bulan: m.bulan || '',
-        tahun: m.tahun || '',
-        key: yearNum * 12 + (monthIdx >= 0 ? monthIdx : 0)
-      };
+  // Extract list of unique available years sorted ascending
+  const availableYears = useMemo(() => {
+    const yearsSet = new Set<string>();
+    if (tahunList && tahunList.length > 0) {
+      tahunList.forEach(t => { if (t && t !== 'Semua') yearsSet.add(t); });
+    }
+    allMonthsData.forEach(m => {
+      if (m.tahun && m.tahun !== 'Semua') yearsSet.add(m.tahun);
     });
-  }, [allMonthsData]);
+    return Array.from(yearsSet).sort();
+  }, [tahunList, allMonthsData]);
 
-  // Filtered monthly data based on startPeriod, endPeriod, and selectedTahun
+  const minYearNum = useMemo(() => {
+    const nums = availableYears.map(y => parseInt(y, 10)).filter(n => !isNaN(n));
+    return nums.length > 0 ? Math.min(...nums) : 2020;
+  }, [availableYears]);
+
+  const maxYearNum = useMemo(() => {
+    const nums = availableYears.map(y => parseInt(y, 10)).filter(n => !isNaN(n));
+    return nums.length > 0 ? Math.max(...nums) : 2030;
+  }, [availableYears]);
+
+  const isFilterActive = startBulan !== 'Semua' || startTahun !== 'Semua' || endBulan !== 'Semua' || endTahun !== 'Semua';
+
+  // Filtered monthly data based on startBulan, startTahun, endBulan, endTahun (automatically applied immediately)
   const displayedRekapBulan = useMemo(() => {
+    if (!isFilterActive) {
+      return allMonthsData;
+    }
+
+    const isYearFilterActive = startTahun !== 'Semua' || endTahun !== 'Semua';
+    const isMonthFilterActive = startBulan !== 'Semua' || endBulan !== 'Semua';
+
+    if (!isYearFilterActive && isMonthFilterActive) {
+      // Month-only filtering across years
+      const sIdx = startBulan !== 'Semua' ? MONTH_NAMES.indexOf(startBulan) : 0;
+      const eIdx = endBulan !== 'Semua' ? MONTH_NAMES.indexOf(endBulan) : 11;
+      const minMonth = Math.min(sIdx, eIdx);
+      const maxMonth = Math.max(sIdx, eIdx);
+
+      return allMonthsData.filter(item => {
+        const itemMonthIdx = MONTH_NAMES.indexOf(item.bulan || '');
+        return itemMonthIdx >= minMonth && itemMonthIdx <= maxMonth;
+      });
+    }
+
+    let minKey = -Infinity;
+    let maxKey = Infinity;
+
+    // Start key computation
+    if (startTahun !== 'Semua') {
+      const sYear = parseInt(startTahun, 10);
+      const sMonthIdx = startBulan !== 'Semua' ? MONTH_NAMES.indexOf(startBulan) : 0;
+      minKey = sYear * 12 + Math.max(0, sMonthIdx);
+    } else if (startBulan !== 'Semua') {
+      const sMonthIdx = MONTH_NAMES.indexOf(startBulan);
+      minKey = minYearNum * 12 + Math.max(0, sMonthIdx);
+    }
+
+    // End key computation
+    if (endTahun !== 'Semua') {
+      const eYear = parseInt(endTahun, 10);
+      const eMonthIdx = endBulan !== 'Semua' ? MONTH_NAMES.indexOf(endBulan) : 11;
+      maxKey = eYear * 12 + (eMonthIdx >= 0 ? eMonthIdx : 11);
+    } else if (endBulan !== 'Semua') {
+      const eMonthIdx = MONTH_NAMES.indexOf(endBulan);
+      maxKey = maxYearNum * 12 + (eMonthIdx >= 0 ? eMonthIdx : 11);
+    }
+
+    // Swap if inverted
+    if (minKey !== -Infinity && maxKey !== Infinity && minKey > maxKey) {
+      const temp = minKey;
+      minKey = maxKey;
+      maxKey = temp;
+    }
+
     return allMonthsData.filter(item => {
-      // Filter year if selectedTahun is specific (not 'Semua')
-      if (selectedTahun !== 'Semua' && item.tahun !== selectedTahun) {
-        return false;
-      }
-
       const itemMonthIdx = MONTH_NAMES.indexOf(item.bulan || '');
-      const itemKey = parseInt(item.tahun || '0', 10) * 12 + (itemMonthIdx >= 0 ? itemMonthIdx : 0);
+      const itemYear = parseInt(item.tahun || '0', 10);
+      const itemKey = itemYear * 12 + (itemMonthIdx >= 0 ? itemMonthIdx : 0);
 
-      let minKey = -Infinity;
-      let maxKey = Infinity;
-
-      if (startPeriod !== 'Semua') {
-        const [sBulan, sTahun] = startPeriod.split(' ');
-        const sMonthIdx = MONTH_NAMES.indexOf(sBulan);
-        minKey = parseInt(sTahun, 10) * 12 + (sMonthIdx >= 0 ? sMonthIdx : 0);
-      }
-
-      if (endPeriod !== 'Semua') {
-        const [eBulan, eTahun] = endPeriod.split(' ');
-        const eMonthIdx = MONTH_NAMES.indexOf(eBulan);
-        maxKey = parseInt(eTahun, 10) * 12 + (eMonthIdx >= 0 ? eMonthIdx : 0);
-      }
-
-      // If both start and end are specified and inverted, swap them
-      if (minKey !== -Infinity && maxKey !== Infinity && minKey > maxKey) {
-        const temp = minKey;
-        minKey = maxKey;
-        maxKey = temp;
-      }
-
-      if (itemKey < minKey || itemKey > maxKey) {
-        return false;
-      }
-
-      return true;
+      return itemKey >= minKey && itemKey <= maxKey;
     });
-  }, [allMonthsData, selectedTahun, startPeriod, endPeriod]);
+  }, [allMonthsData, isFilterActive, startBulan, startTahun, endBulan, endTahun, minYearNum, maxYearNum]);
 
   // Compute highest & lowest loss months, total baku, total hasil, and weighted susut % from filtered data
   const { maxLossMonth, minLossMonth, totalHasil, totalBaku, weightedSusutPct } = useMemo(() => {
@@ -153,12 +186,11 @@ export const RekapBulanViewRekapDataProsesTembakau: React.FC<RekapBulanViewProps
     };
   }, [displayedRekapBulan]);
 
-  const isFilterActive = startPeriod !== 'Semua' || endPeriod !== 'Semua' || selectedTahun !== 'Semua';
-
   const handleResetFilter = () => {
-    setStartPeriod('Semua');
-    setEndPeriod('Semua');
-    onTahunChange('Semua');
+    setStartBulan('Semua');
+    setStartTahun('Semua');
+    setEndBulan('Semua');
+    setEndTahun('Semua');
   };
 
   return (
@@ -196,76 +228,82 @@ export const RekapBulanViewRekapDataProsesTembakau: React.FC<RekapBulanViewProps
           </div>
         </div>
 
-        {/* Filters Row: Range Filter Periode Bulan & Tahun (Default: Semua Tahun & Semua Bulan) */}
+        {/* Filters Row: Format persis seperti format pada gambar (Dari: [Bulan] [Tahun] | Sampai: [Bulan] [Tahun]) */}
+        {/* Setiap perubahan bulan atau tahun secara otomatis diterapkan pada grafik dan data dibawahnya tanpa harus klik tombol 'Terapkan' */}
         <div className="pt-4 flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-2.5 flex-wrap">
-            <div className="flex items-center gap-1.5 text-xs text-slate-500 font-semibold mr-1">
-              <Filter className="w-3.5 h-3.5 text-slate-400" />
+            <div className="flex items-center gap-1.5 text-xs text-slate-600 font-semibold mr-1">
+              <Filter className="w-3.5 h-3.5 text-blue-600" />
               <span>Filter Rentang Periode:</span>
             </div>
 
-            {/* Dropdown Periode Awal */}
-            <div className="flex items-center gap-1.5">
-              <label className="text-xs text-slate-500 font-medium flex items-center gap-1">
-                <Calendar className="w-3 h-3 text-slate-400" />
-                <span>Dari:</span>
-              </label>
-              <select
-                value={startPeriod}
-                onChange={(e) => setStartPeriod(e.target.value)}
-                className="text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-xs cursor-pointer"
-              >
-                <option value="Semua">Semua Bulan & Tahun (Awal)</option>
-                {availableMonthYears.map((m) => (
-                  <option key={`start-${m.label}`} value={m.label}>
-                    {m.label}
-                  </option>
-                ))}
-              </select>
+            {/* Filter Container matching gambar format */}
+            <div className="no-print flex items-center gap-1.5 sm:gap-2 flex-wrap bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200 shadow-2xs">
+              
+              {/* Bagian Dari */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-semibold text-slate-600">Dari:</span>
+                <select
+                  value={startBulan}
+                  onChange={(e) => setStartBulan(e.target.value)}
+                  className="text-xs border border-slate-200 rounded-lg px-2.5 py-1 bg-white font-medium text-slate-700 hover:border-slate-300 focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-2xs cursor-pointer"
+                  title="Pilih Bulan Awal"
+                >
+                  <option value="Semua">Semua Bulan</option>
+                  {MONTH_NAMES.map((b) => (
+                    <option key={`start-b-${b}`} value={b}>{b}</option>
+                  ))}
+                </select>
+                <select
+                  value={startTahun}
+                  onChange={(e) => setStartTahun(e.target.value)}
+                  className="text-xs border border-slate-200 rounded-lg px-2.5 py-1 bg-white font-medium text-slate-700 hover:border-slate-300 focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-2xs cursor-pointer"
+                  title="Pilih Tahun Awal"
+                >
+                  <option value="Semua">Semua Tahun</option>
+                  {availableYears.map((t) => (
+                    <option key={`start-t-${t}`} value={t}>{t}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Pemisah / Arrow */}
+              <span className="text-xs font-bold text-slate-400 px-1">s/d</span>
+
+              {/* Bagian Sampai */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-semibold text-slate-600">Sampai:</span>
+                <select
+                  value={endBulan}
+                  onChange={(e) => setEndBulan(e.target.value)}
+                  className="text-xs border border-slate-200 rounded-lg px-2.5 py-1 bg-white font-medium text-slate-700 hover:border-slate-300 focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-2xs cursor-pointer"
+                  title="Pilih Bulan Akhir"
+                >
+                  <option value="Semua">Semua Bulan</option>
+                  {MONTH_NAMES.map((b) => (
+                    <option key={`end-b-${b}`} value={b}>{b}</option>
+                  ))}
+                </select>
+                <select
+                  value={endTahun}
+                  onChange={(e) => setEndTahun(e.target.value)}
+                  className="text-xs border border-slate-200 rounded-lg px-2.5 py-1 bg-white font-medium text-slate-700 hover:border-slate-300 focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-2xs cursor-pointer"
+                  title="Pilih Tahun Akhir"
+                >
+                  <option value="Semua">Semua Tahun</option>
+                  {availableYears.map((t) => (
+                    <option key={`end-t-${t}`} value={t}>{t}</option>
+                  ))}
+                </select>
+              </div>
+
             </div>
 
-            <span className="text-xs text-slate-400 font-bold px-0.5">s/d</span>
-
-            {/* Dropdown Periode Akhir */}
-            <div className="flex items-center gap-1.5">
-              <label className="text-xs text-slate-500 font-medium flex items-center gap-1">
-                <Calendar className="w-3 h-3 text-slate-400" />
-                <span>Sampai:</span>
-              </label>
-              <select
-                value={endPeriod}
-                onChange={(e) => setEndPeriod(e.target.value)}
-                className="text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-xs cursor-pointer"
-              >
-                <option value="Semua">Semua Bulan & Tahun (Akhir)</option>
-                {availableMonthYears.map((m) => (
-                  <option key={`end-${m.label}`} value={m.label}>
-                    {m.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Filter Tahun (Opsional Cepat) */}
-            <div className="flex items-center gap-1.5 pl-2 border-l border-slate-200">
-              <label className="text-xs text-slate-500 font-medium">Tahun:</label>
-              <select
-                value={selectedTahun}
-                onChange={(e) => onTahunChange(e.target.value)}
-                className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-xs cursor-pointer"
-              >
-                <option value="Semua">Semua Tahun</option>
-                {tahunList.map((t) => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Tombol Reset Filter */}
+            {/* Tombol Reset Cepat (Hanya muncul jika filter aktif) */}
             {isFilterActive && (
               <button
                 onClick={handleResetFilter}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold transition-colors shadow-xs ml-1"
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold transition-colors shadow-2xs"
                 title="Reset filter kembali ke Semua Periode (Default)"
               >
                 <RotateCcw className="w-3 h-3" />
@@ -275,9 +313,17 @@ export const RekapBulanViewRekapDataProsesTembakau: React.FC<RekapBulanViewProps
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200/80">
-              <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
-              <span>{displayedRekapBulan.length} Bulan Terpilih</span>
+            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${
+              isFilterActive 
+                ? 'bg-blue-50 text-blue-700 border-blue-200/80' 
+                : 'bg-slate-100 text-slate-600 border-slate-200'
+            }`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${isFilterActive ? 'bg-blue-600 animate-pulse' : 'bg-slate-400'}`}></span>
+              <span>
+                {isFilterActive
+                  ? `${displayedRekapBulan.length} Bulan Terpilih`
+                  : `Semua Periode (${displayedRekapBulan.length} Bulan)`}
+              </span>
             </span>
           </div>
         </div>
