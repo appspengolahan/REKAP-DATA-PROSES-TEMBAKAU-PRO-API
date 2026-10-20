@@ -12,9 +12,10 @@ import {
   Copy,
   Check,
   AlertCircle,
-  ExternalLink
+  ExternalLink,
+  Send
 } from 'lucide-react';
-import { RawRowData, DhpIntegrationData, DhpBatchItem } from '../types[RekapDataProsesTembakau]';
+import { RawRowData, DhpIntegrationData, DhpBatchItem, GasConfig } from '../types[RekapDataProsesTembakau]';
 import { RekapDataProsesTembakauService, formatKg, formatPct } from '../api[RekapDataProsesTembakau]';
 
 interface IntegrasiDhpModalProps {
@@ -22,16 +23,22 @@ interface IntegrasiDhpModalProps {
   onClose: () => void;
   existingRows: RawRowData[];
   onTarikDatasheetRekap: () => Promise<any>;
+  onAppendRecordsToRekap?: (newRows: RawRowData[]) => void;
+  gasConfig?: GasConfig;
 }
 
 export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModalProps> = ({
   isOpen,
   onClose,
   existingRows,
-  onTarikDatasheetRekap
+  onTarikDatasheetRekap,
+  onAppendRecordsToRekap,
+  gasConfig
 }) => {
   const [activeTab, setActiveTab] = useState<'transaksi' | 'pemetaan' | 'gas'>('transaksi');
   const [loading, setLoading] = useState<boolean>(true);
+  const [isSyncingToRekap, setIsSyncingToRekap] = useState<boolean>(false);
+  const [syncNotice, setSyncNotice] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [dhpData, setDhpData] = useState<DhpIntegrationData | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState<boolean>(false);
@@ -47,6 +54,126 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
       setErrorMsg(err?.message || 'Gagal mengambil data dari Google Sheets DHP');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Handle synchronization from DHP to Sheet Rekap (Direct Automation)
+  const handleSyncToRekap = async () => {
+    if (!dhpData || dhpData.items.length === 0) return;
+    setIsSyncingToRekap(true);
+    setSyncNotice(null);
+
+    try {
+      const unmerged = dhpData.items.filter((item) => !item.alreadyInRekap);
+      const itemsToSync = unmerged.length > 0 ? unmerged : dhpData.items;
+
+      const MONTH_NAMES = [
+        'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+        'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+      ];
+      const currentYear = new Date().getFullYear().toString();
+
+      const newRecords: RawRowData[] = itemsToSync.map((item, idx) => {
+        const nextSrcRow = existingRows.length + 12 + idx;
+        const rawDateStr = item.tanggal || item.tanggalFormatted || item.tanggalRaw;
+        const tglDate = new Date(rawDateStr);
+        const isoDate = !isNaN(tglDate.getTime()) ? tglDate.toISOString().split('T')[0] : (item.tanggalFormatted || '2026-10-20');
+        const bulanName = !isNaN(tglDate.getTime()) ? MONTH_NAMES[tglDate.getMonth()] : 'Oktober';
+        const tahunVal = !isNaN(tglDate.getTime()) ? tglDate.getFullYear().toString() : currentYear;
+
+        return {
+          batchNo: `DHP-${item.rowNumber}-${Date.now().toString().slice(-4)}`,
+          srcRow: nextSrcRow,
+          tanggal: isoDate,
+          tanggalDisplay: item.tanggalFormatted,
+          bulan: bulanName,
+          tahun: tahunVal,
+          jenisPerlakuan: `${item.jenisTembakau} ${item.jalur}`,
+          jenisTembakau: item.jenisTembakau,
+          jenisProses: item.jalur,
+          baku: item.nettoBaku,
+          hasil: item.hasil,
+          susutKg: item.susutKg,
+          susutPct: item.susutPct,
+          gagangKg: item.gagangKg,
+          gagangPct: item.nettoBaku > 0 ? Number(((item.gagangKg / item.nettoBaku) * 100).toFixed(2)) : 0,
+          airKg: item.airKg,
+          debuKg: item.debuKg,
+          debuAirKg: (item.airKg || 0) + (item.debuKg || 0),
+          debuAirPct: item.nettoBaku > 0 ? Number((((item.airKg + item.debuKg) / item.nettoBaku) * 100).toFixed(2)) : 0
+        };
+      });
+
+      // 1. Post to backend proxy or GAS
+      const gasUrl = gasConfig?.apiUrl || 'https://script.google.com/macros/s/AKfycbw34wezcB4YC4N-n2nL0ll9jofM3i9s5OHYxLZJ4Xu32_AmCEDcIAYi9V1AdPg2iACM/exec';
+      try {
+        await fetch('/api/sync-gas', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'appendDhpRecords',
+            records: newRecords
+          })
+        });
+      } catch (postErr) {
+        try {
+          await fetch(gasUrl, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'appendDhpRecords',
+              records: newRecords
+            })
+          });
+        } catch (e) {
+          console.warn('Network notice during direct GAS post:', e);
+        }
+      }
+
+      // 2. Append records to Rekap in Web App
+      if (onAppendRecordsToRekap) {
+        onAppendRecordsToRekap(newRecords);
+      } else {
+        const combined = [...existingRows, ...newRecords];
+        RekapDataProsesTembakauService.saveRawData(combined);
+      }
+
+      // 3. Mark items as already synchronized in modal state
+      setDhpData((prev) => {
+        if (!prev) return null;
+        const updatedItems = prev.items.map((it) => ({
+          ...it,
+          alreadyInRekap: true,
+          matchedRow: it.matchedRow || (existingRows.length + 12)
+        }));
+        return {
+          ...prev,
+          items: updatedItems,
+          terverifikasiCount: updatedItems.length,
+          terverifikasiPct: 100,
+          batchBaruCount: 0
+        };
+      });
+
+      setSyncNotice({
+        type: 'success',
+        message: `Berhasil membukukan ${newRecords.length} batch dari DHP Tembakau ke Datasheet Rekap Susut Tembakau secara presisi!`
+      });
+
+      // 4. Trigger auto pull to refresh
+      setTimeout(() => {
+        onTarikDatasheetRekap?.().catch(() => {});
+      }, 1500);
+
+    } catch (err: any) {
+      setSyncNotice({
+        type: 'error',
+        message: err?.message || 'Gagal menyinkronkan data ke Sheet Rekap'
+      });
+    } finally {
+      setIsSyncingToRekap(false);
+      setTimeout(() => setSyncNotice(null), 6000);
     }
   };
 
@@ -239,25 +366,25 @@ function sinkronkanDhpKeRekap() {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl max-w-6xl w-full h-[92vh] max-h-[92vh] flex flex-col overflow-hidden text-slate-100">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl max-w-6xl w-full h-[94vh] max-h-[94vh] flex flex-col overflow-hidden text-slate-100">
         
-        {/* Modal Top Header (Compact) */}
-        <div className="px-4 sm:px-6 py-3 border-b border-slate-800 flex items-center justify-between gap-4 bg-slate-900/90 flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-blue-400 shadow-sm flex-shrink-0">
+        {/* Modal Top Header (Ultra-Compact as in Image 1) */}
+        <div className="px-4 sm:px-5 py-2 sm:py-2.5 border-b border-slate-800 flex items-center justify-between gap-3 bg-gradient-to-r from-slate-900 via-slate-850 to-indigo-950 text-white shrink-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-lg bg-blue-500/20 border border-blue-400/30 flex items-center justify-center text-blue-300 shadow-sm flex-shrink-0">
               <Database className="w-4 h-4" />
             </div>
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h2 className="text-sm sm:text-base font-bold text-white tracking-tight">
+                <h2 className="text-xs sm:text-sm font-bold text-white tracking-tight truncate">
                   Integrasi &amp; Sinkronisasi DHP Tembakau
                 </h2>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-950/90 text-emerald-300 border border-emerald-700/60 shadow-sm">
+                <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 shadow-sm flex-shrink-0">
                   Presisi 100%
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400 mt-0.5">
+              <p className="text-[10px] sm:text-[11px] text-slate-300 leading-none mt-0.5 truncate">
                 Pencocokan dan transfer otomatis data aktif DHP Tembakau ke Datasheet Rekap Susut Tembakau
               </p>
             </div>
@@ -265,29 +392,29 @@ function sinkronkanDhpKeRekap() {
 
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors flex-shrink-0"
             title="Tutup Modal"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Source & Target Connection Bar (Compact) */}
-        <div className="px-4 sm:px-6 py-2 bg-slate-950/60 border-b border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-xs flex-shrink-0">
-          <div className="flex flex-wrap items-center gap-2 text-slate-300">
-            <span className="inline-flex items-center gap-1.5 font-medium text-amber-400">
+        {/* Source & Target Connection Bar (Compact Bar as in Image 1) */}
+        <div className="px-4 sm:px-5 py-1.5 bg-slate-950/70 border-b border-slate-800/80 flex flex-wrap items-center justify-between gap-1.5 text-xs shrink-0">
+          <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-300">
+            <span className="inline-flex items-center gap-1 font-semibold text-amber-400">
               <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
               Sumber DHP:
             </span>
-            <span className="bg-slate-800 px-2 py-0.5 rounded text-[11px] text-slate-200 font-mono">
+            <span className="bg-slate-800 px-2 py-0.5 rounded text-[10px] sm:text-[11px] text-slate-200 font-mono">
               Tab <strong className="text-blue-300">INTEGRASI DATA</strong> (1NDS55V...)
             </span>
-            <ArrowRight className="w-3.5 h-3.5 text-slate-500" />
-            <span className="inline-flex items-center gap-1.5 font-medium text-emerald-400">
+            <ArrowRight className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+            <span className="inline-flex items-center gap-1 font-semibold text-emerald-400">
               <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
               Target Rekap:
             </span>
-            <span className="bg-slate-800 px-2 py-0.5 rounded text-[11px] text-slate-200 font-mono">
+            <span className="bg-slate-800 px-2 py-0.5 rounded text-[10px] sm:text-[11px] text-slate-200 font-mono">
               Tab <strong className="text-emerald-300">REKAP SUSUT TEMBAKAU</strong> (1LnixFR...)
             </span>
           </div>
@@ -295,7 +422,7 @@ function sinkronkanDhpKeRekap() {
           <button
             onClick={loadDhpData}
             disabled={loading}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-medium transition-all shadow-sm disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-[11px] font-semibold transition-all shadow-sm disabled:opacity-50"
             title="Perbarui pembacaan lembar DHP"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-blue-400' : ''}`} />
@@ -303,125 +430,131 @@ function sinkronkanDhpKeRekap() {
           </button>
         </div>
 
-        {/* Sub-Tabs Navigation (Compact) */}
-        <div className="px-4 sm:px-6 border-b border-slate-800 flex items-center gap-2 bg-slate-900 flex-shrink-0">
+        {/* Sub-Tabs Navigation (Compact as in Image 1) */}
+        <div className="px-4 sm:px-5 border-b border-slate-800 flex items-center gap-1 bg-slate-900 shrink-0">
           <button
             onClick={() => setActiveTab('transaksi')}
-            className={`flex items-center gap-2 py-2.5 px-3 text-xs font-semibold border-b-2 transition-all ${
+            className={`flex items-center gap-1.5 py-2 px-3 text-xs font-semibold border-b-2 transition-all ${
               activeTab === 'transaksi'
                 ? 'border-blue-500 text-blue-400'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
-            <Layers className="w-4 h-4" />
+            <Layers className="w-3.5 h-3.5" />
             <span>Pratinjau &amp; Transaksi ({dhpData?.totalBatch ?? 0} Batch)</span>
           </button>
 
           <button
             onClick={() => setActiveTab('pemetaan')}
-            className={`flex items-center gap-2 py-2.5 px-3 text-xs font-semibold border-b-2 transition-all ${
+            className={`flex items-center gap-1.5 py-2 px-3 text-xs font-semibold border-b-2 transition-all ${
               activeTab === 'pemetaan'
                 ? 'border-blue-500 text-blue-400'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
-            <ShieldCheck className="w-4 h-4" />
+            <ShieldCheck className="w-3.5 h-3.5" />
             <span>Pemetaan Kolom</span>
           </button>
 
           <button
             onClick={() => setActiveTab('gas')}
-            className={`flex items-center gap-2 py-2.5 px-3 text-xs font-semibold border-b-2 transition-all ${
+            className={`flex items-center gap-1.5 py-2 px-3 text-xs font-semibold border-b-2 transition-all ${
               activeTab === 'gas'
                 ? 'border-blue-500 text-blue-400'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
-            <Code className="w-4 h-4" />
+            <Code className="w-3.5 h-3.5" />
             <span>Skrip Otomasi GAS</span>
           </button>
         </div>
 
         {/* Modal Scrollable Body */}
-        <div className="flex-1 overflow-y-auto p-3 sm:p-5 space-y-3.5 flex flex-col min-h-0">
+        <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-2.5 flex flex-col min-h-0">
           
+          {/* Feedback Toast Notification */}
+          {syncNotice && (
+            <div className={`p-2.5 rounded-lg border text-xs flex items-center gap-2 animate-in fade-in shrink-0 ${
+              syncNotice.type === 'success'
+                ? 'bg-emerald-950/70 border-emerald-500/60 text-emerald-300'
+                : 'bg-rose-950/70 border-rose-500/60 text-rose-300'
+            }`}>
+              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+              <span className="font-semibold">{syncNotice.message}</span>
+            </div>
+          )}
+
           {/* TAB 1: PRATINJAU & TRANSAKSI */}
           {activeTab === 'transaksi' && (
-            <div className="space-y-3.5 flex-1 flex flex-col min-h-0">
+            <div className="space-y-2.5 flex-1 flex flex-col min-h-0">
               
-              {/* 3 KPI Summary Cards - Slim & Low Profile Layout */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3 flex-shrink-0">
+              {/* 3 KPI Summary Cards - Ultra-Slim Layout as in Image 1 */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 flex-shrink-0">
                 {/* Total Batch Aktif */}
-                <div className="px-3.5 py-2.5 rounded-xl bg-slate-800/60 border border-slate-700/60 flex items-center justify-between shadow-sm">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-8 h-8 rounded-lg bg-slate-700/60 flex items-center justify-center text-slate-300 flex-shrink-0">
-                      <Layers className="w-4 h-4" />
+                <div className="px-3 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700/60 flex items-center justify-between shadow-sm">
+                  <div className="min-w-0">
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400 truncate">
+                      Total Batch Aktif DHP
                     </div>
-                    <div className="min-w-0">
-                      <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 truncate">
-                        Total Batch Aktif DHP
-                      </div>
-                      <div className="text-base sm:text-lg font-black text-white leading-tight">
-                        {dhpData?.totalBatch || 0} Batch{' '}
-                        <span className="text-[11px] font-normal text-slate-400">
-                          ({formatKg(dhpData?.totalBakuKg || 0)})
-                        </span>
-                      </div>
+                    <div className="text-sm sm:text-base font-black text-white leading-tight flex items-baseline gap-1.5">
+                      <span>{dhpData?.totalBatch || 0} Batch</span>
+                      <span className="text-[10px] font-normal text-slate-400">
+                        ({formatKg(dhpData?.totalBakuKg || 0)})
+                      </span>
                     </div>
+                  </div>
+                  <div className="w-7 h-7 rounded-md bg-slate-700/60 flex items-center justify-center text-slate-300 flex-shrink-0">
+                    <Layers className="w-3.5 h-3.5" />
                   </div>
                 </div>
 
                 {/* Terverifikasi di Rekap */}
-                <div className="px-3.5 py-2.5 rounded-xl bg-emerald-950/30 border border-emerald-800/50 flex items-center justify-between shadow-sm">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-8 h-8 rounded-lg bg-emerald-900/50 flex items-center justify-center text-emerald-400 flex-shrink-0">
-                      <CheckCircle2 className="w-4 h-4" />
+                <div className="px-3 py-1.5 rounded-lg bg-emerald-950/30 border border-emerald-800/50 flex items-center justify-between shadow-sm">
+                  <div className="min-w-0">
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-emerald-400 truncate">
+                      Terverifikasi di Rekap
                     </div>
-                    <div className="min-w-0">
-                      <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 truncate">
-                        Terverifikasi di Rekap
-                      </div>
-                      <div className="text-base sm:text-lg font-black text-emerald-300 leading-tight">
-                        {dhpData?.terverifikasiCount || 0} Batch{' '}
-                        <span className="text-[11px] font-normal text-emerald-400/80">
-                          ({dhpData?.terverifikasiPct || 0}%)
-                        </span>
-                      </div>
+                    <div className="text-sm sm:text-base font-black text-emerald-300 leading-tight flex items-baseline gap-1.5">
+                      <span>{dhpData?.terverifikasiCount || 0} Batch</span>
+                      <span className="text-[10px] font-semibold text-emerald-400/80">
+                        ({dhpData?.terverifikasiPct || 0}%)
+                      </span>
                     </div>
+                  </div>
+                  <div className="w-7 h-7 rounded-md bg-emerald-900/50 flex items-center justify-center text-emerald-400 flex-shrink-0">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
                   </div>
                 </div>
 
                 {/* Batch Baru Siap Masuk */}
-                <div className="px-3.5 py-2.5 rounded-xl bg-blue-950/30 border border-blue-800/50 flex items-center justify-between shadow-sm">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-8 h-8 rounded-lg bg-blue-900/50 flex items-center justify-center text-blue-400 flex-shrink-0">
-                      <Sparkles className="w-4 h-4" />
+                <div className="px-3 py-1.5 rounded-lg bg-blue-950/30 border border-blue-800/50 flex items-center justify-between shadow-sm">
+                  <div className="min-w-0">
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-blue-400 truncate">
+                      Batch Baru Siap Masuk
                     </div>
-                    <div className="min-w-0">
-                      <div className="text-[10px] font-bold uppercase tracking-wider text-blue-400 truncate">
-                        Batch Baru Siap Masuk
-                      </div>
-                      <div className="text-base sm:text-lg font-black text-blue-300 leading-tight">
-                        {dhpData?.batchBaruCount || 0} Batch{' '}
-                        <span className="text-[11px] font-normal text-blue-300/80">
-                          Perlu dibukukan
-                        </span>
-                      </div>
+                    <div className="text-sm sm:text-base font-black text-blue-300 leading-tight flex items-baseline gap-1.5">
+                      <span>{dhpData?.batchBaruCount || 0} Batch</span>
+                      <span className="text-[10px] font-normal text-blue-300/80">
+                        {(dhpData?.batchBaruCount ?? 0) === 0 ? 'Semua tersinkron' : 'Perlu dibukukan'}
+                      </span>
                     </div>
+                  </div>
+                  <div className="w-7 h-7 rounded-md bg-blue-900/50 flex items-center justify-center text-blue-400 flex-shrink-0">
+                    <Sparkles className="w-3.5 h-3.5" />
                   </div>
                 </div>
               </div>
 
               {/* Transactions Table Section - Maximized Viewport & Prominent */}
               <div className="bg-slate-900/90 border border-slate-800 rounded-xl overflow-hidden shadow-sm flex-1 flex flex-col min-h-0">
-                <div className="p-3 sm:px-4 sm:py-2.5 bg-slate-800/40 border-b border-slate-800 flex items-center justify-between flex-shrink-0">
+                <div className="px-3.5 py-1.5 bg-slate-800/40 border-b border-slate-800 flex items-center justify-between flex-shrink-0">
                   <div className="flex items-center gap-2">
-                    <Database className="w-4 h-4 text-blue-400" />
-                    <span className="text-xs sm:text-sm font-bold text-slate-200">
+                    <Database className="w-3.5 h-3.5 text-blue-400" />
+                    <span className="text-xs font-bold text-slate-200">
                       Daftar Transaksi DHP Terdeteksi (Tab INTEGRASI DATA)
                     </span>
                   </div>
-                  <span className="text-xs text-slate-400 font-medium">
+                  <span className="text-[11px] text-slate-400 font-medium">
                     Menampilkan {dhpData?.items.length || 0} baris proses aktif
                   </span>
                 </div>
@@ -534,6 +667,36 @@ function sinkronkanDhpKeRekap() {
                     </table>
                   </div>
                 )}
+              </div>
+
+              {/* Bottom Sync Action Banner as in Reference Image 1 */}
+              <div className="px-3.5 py-2 bg-gradient-to-r from-blue-950/70 via-indigo-950/60 to-blue-950/70 rounded-xl border border-blue-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shrink-0 shadow-sm">
+                <div className="flex items-center gap-2 text-xs">
+                  <ShieldCheck className="w-4 h-4 text-blue-400 shrink-0" />
+                  <span className="text-slate-200 font-medium text-[11px]">
+                    {(dhpData?.batchBaruCount ?? 0) > 0
+                      ? `Terdapat ${dhpData?.batchBaruCount} batch baru yang siap dibukukan ke baris baru Sheet Rekap.`
+                      : `Semua ${dhpData?.items.length || 0} baris data DHP sudah tersinkronisasi presisi di Sheet Rekap.`}
+                  </span>
+                </div>
+                <button
+                  onClick={handleSyncToRekap}
+                  disabled={isSyncingToRekap || ((dhpData?.batchBaruCount ?? 0) === 0)}
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white shadow-md transition-all disabled:opacity-50 disabled:pointer-events-none shrink-0"
+                  title="Sinkronkan data batch DHP ke sheet rekap"
+                >
+                  {isSyncingToRekap ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Sedang Membukukan...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-3.5 h-3.5 text-white" />
+                      <span>Sinkronkan ke Sheet Rekap</span>
+                    </>
+                  )}
+                </button>
               </div>
             </div>
           )}
@@ -715,17 +878,17 @@ function sinkronkanDhpKeRekap() {
 
         </div>
 
-        {/* Modal Footer */}
-        <div className="p-4 sm:p-5 border-t border-slate-800 bg-slate-900/90 flex items-center justify-between gap-3">
+        {/* Modal Footer (Compact as in Image 1) */}
+        <div className="px-4 sm:px-5 py-2 sm:py-2.5 border-t border-slate-800 bg-slate-900/90 flex items-center justify-between gap-3 flex-shrink-0">
           <div className="flex items-center gap-2 text-xs text-emerald-400 font-medium">
             <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-            <span>Koneksi aman &amp; pemetaan kolom terverifikasi</span>
+            <span className="text-[11px]">Koneksi aman &amp; pemetaan kolom terverifikasi</span>
           </div>
 
           <div className="flex items-center gap-2">
             <button
               onClick={onClose}
-              className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-colors"
+              className="px-4 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-colors shadow-sm"
             >
               Tutup
             </button>

@@ -583,6 +583,16 @@ export default function App() {
         onClose={() => setIsIntegrasiDhpOpen(false)}
         existingRows={rows}
         onTarikDatasheetRekap={() => handleTarikDatasheet('AUTO')}
+        onAppendRecordsToRekap={(newRecords) => {
+          const updated = [...rows, ...newRecords];
+          setRows(updated);
+          RekapDataProsesTembakauService.saveRawData(updated);
+          setToastNotification({
+            type: 'success',
+            message: `Berhasil membukukan ${newRecords.length} batch dari DHP Tembakau ke Rekap!`
+          });
+        }}
+        gasConfig={gasConfig}
       />
 
     </div>

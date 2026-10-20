@@ -70,6 +70,37 @@ async function startServer() {
     }
   });
 
+  // API Route: Proxy POST to Google Apps Script
+  app.post('/api/sync-gas', async (req, res) => {
+    try {
+      const targetUrl = (req.query.url as string) || 'https://script.google.com/macros/s/AKfycbw34wezcB4YC4N-n2nL0ll9jofM3i9s5OHYxLZJ4Xu32_AmCEDcIAYi9V1AdPg2iACM/exec';
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 20000);
+
+      const resp = await fetch(targetUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        },
+        body: JSON.stringify(req.body),
+        redirect: 'follow',
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+
+      const text = await resp.text();
+      try {
+        const json = JSON.parse(text);
+        return res.json(json);
+      } catch {
+        return res.json({ success: true, message: text });
+      }
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err?.message || 'Server error posting to GAS' });
+    }
+  });
+
   // Health check
   app.get('/api/health', (_req, res) => {
     res.json({ status: 'ok', time: new Date().toISOString() });

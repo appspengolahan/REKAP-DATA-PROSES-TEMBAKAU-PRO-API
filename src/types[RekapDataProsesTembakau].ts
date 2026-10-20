@@ -119,6 +119,7 @@ export interface DhpBatchItem {
   rowNumber: number;
   tanggalRaw: string;
   tanggalFormatted: string;
+  tanggal?: string;
   waktu: string;
   jenisTembakau: string;
   stockCode?: string;
@@ -133,6 +134,7 @@ export interface DhpBatchItem {
   statusIntegrasi: 'Sudah Masuk di Rekap' | 'Batch Baru (Siap Masuk)';
   alreadyInRekap: boolean;
   matchKey: string;
+  matchedRow?: number;
 }
 
 export interface DhpIntegrationData {
