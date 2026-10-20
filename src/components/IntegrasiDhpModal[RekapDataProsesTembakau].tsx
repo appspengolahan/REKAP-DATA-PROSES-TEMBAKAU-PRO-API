@@ -451,14 +451,17 @@ function sinkronkanDhpKeRekap() {
                     <table className="w-full text-left text-xs">
                       <thead className="bg-slate-950/80 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-800 sticky top-0 z-10 backdrop-blur">
                         <tr>
-                          <th className="py-2 px-3">Row</th>
-                          <th className="py-2 px-3">Tanggal &amp; Waktu</th>
-                          <th className="py-2 px-3">Jenis Tembakau</th>
-                          <th className="py-2 px-3 text-center">Jalur</th>
-                          <th className="py-2 px-3 text-right">Netto Baku (Kg)</th>
-                          <th className="py-2 px-3 text-right">Hasil (Kg)</th>
-                          <th className="py-2 px-3 text-right">Susut (%)</th>
-                          <th className="py-2 px-3 text-center">Status Integrasi Rekap</th>
+                          <th className="py-2 px-2.5">Row</th>
+                          <th className="py-2 px-2.5">Tanggal &amp; Waktu</th>
+                          <th className="py-2 px-2.5">Jenis Tembakau</th>
+                          <th className="py-2 px-2 text-center">Jalur</th>
+                          <th className="py-2 px-2.5 text-right">Baku (Kg)</th>
+                          <th className="py-2 px-2.5 text-right">Hasil (Kg)</th>
+                          <th className="py-2 px-2.5 text-right">Susut (%)</th>
+                          <th className="py-2 px-2 text-right">Gagang</th>
+                          <th className="py-2 px-2 text-right">K. Air</th>
+                          <th className="py-2 px-2 text-right">Debu</th>
+                          <th className="py-2 px-2.5 text-center">Status Integrasi Rekap</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-800/80">
@@ -467,10 +470,10 @@ function sinkronkanDhpKeRekap() {
                             key={item.rowNumber}
                             className="hover:bg-slate-800/50 transition-colors"
                           >
-                            <td className="py-2.5 px-3 text-slate-400 font-mono text-[11px]">
+                            <td className="py-2 px-2.5 text-slate-400 font-mono text-[11px]">
                               {item.rowNumber}
                             </td>
-                            <td className="py-2.5 px-3 whitespace-nowrap">
+                            <td className="py-2 px-2.5 whitespace-nowrap">
                               <div className="font-semibold text-slate-200 text-xs">
                                 {item.tanggalFormatted}
                               </div>
@@ -478,12 +481,12 @@ function sinkronkanDhpKeRekap() {
                                 🕒 {item.waktu}
                               </div>
                             </td>
-                            <td className="py-2.5 px-3">
+                            <td className="py-2 px-2.5">
                               <div className="font-bold text-slate-100 text-xs">
                                 {item.jenisTembakau}
                               </div>
                             </td>
-                            <td className="py-2.5 px-3 text-center">
+                            <td className="py-2 px-2 text-center">
                               <span
                                 className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                                   item.jalur === 'SKM'
@@ -494,16 +497,25 @@ function sinkronkanDhpKeRekap() {
                                 {item.jalur}
                               </span>
                             </td>
-                            <td className="py-2.5 px-3 text-right font-semibold text-slate-100">
+                            <td className="py-2 px-2.5 text-right font-semibold text-slate-100">
                               {formatKg(item.nettoBaku)}
                             </td>
-                            <td className="py-2.5 px-3 text-right font-medium text-slate-300">
+                            <td className="py-2 px-2.5 text-right font-medium text-slate-300">
                               {formatKg(item.hasil)}
                             </td>
-                            <td className="py-2.5 px-3 text-right font-bold text-amber-400">
+                            <td className="py-2 px-2.5 text-right font-bold text-amber-400">
                               {formatPct(item.susutPct)}%
                             </td>
-                            <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                            <td className="py-2 px-2 text-right font-medium text-amber-200/90 whitespace-nowrap">
+                              {formatKg(item.gagangKg)}
+                            </td>
+                            <td className="py-2 px-2 text-right font-medium text-sky-200/90 whitespace-nowrap">
+                              {formatKg(item.airKg)}
+                            </td>
+                            <td className="py-2 px-2 text-right font-medium text-slate-300 whitespace-nowrap">
+                              {formatKg(item.debuKg)}
+                            </td>
+                            <td className="py-2 px-2.5 text-center whitespace-nowrap">
                               {item.alreadyInRekap ? (
                                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-950/80 text-emerald-300 border border-emerald-700/70">
                                   <CheckCircle2 className="w-3 h-3 text-emerald-400" />
