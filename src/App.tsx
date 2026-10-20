@@ -38,7 +38,9 @@ import {
   Database,
   CheckCircle2,
   FileText,
-  LayoutGrid
+  LayoutGrid,
+  Menu,
+  Cable
 } from 'lucide-react';
 
 const STORAGE_SIDEBAR_COLLAPSED = 'PP1_SIDEBAR_COLLAPSED_TBK';
@@ -56,6 +58,7 @@ export default function App() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
     return localStorage.getItem(STORAGE_SIDEBAR_COLLAPSED) === 'true';
   });
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
 
   // 3. Modals State
   const [isSwitchBoardOpen, setIsSwitchBoardOpen] = useState(false);
@@ -326,19 +329,31 @@ export default function App() {
         onOpenGasCenter={() => setIsGasCenterOpen(true)}
         onOpenHelp={() => setIsHelpOpen(true)}
         onExportPdf={() => handleExportPdf(activeTab)}
+        onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
       />
 
-      {/* Main Workspace with Collapsible Sidebar */}
+      {/* Main Workspace with Collapsible Sidebar & Mobile Drawer */}
       <div className="flex-1 flex overflow-hidden min-h-0">
         
-        {/* Sidebar */}
+        {/* Sidebar (Desktop Persistent & Mobile Slide-Over Drawer) */}
         <SidebarRekapDataProsesTembakau
           activeTab={activeTab}
-          onTabChange={setActiveTab}
+          onTabChange={(tab) => {
+            setActiveTab(tab);
+            setIsMobileSidebarOpen(false);
+          }}
           isCollapsed={isSidebarCollapsed}
           onToggleCollapse={handleToggleSidebar}
-          onOpenGasCenter={() => setIsGasCenterOpen(true)}
-          onOpenIntegrasiDhp={() => setIsIntegrasiDhpOpen(true)}
+          onOpenGasCenter={() => {
+            setIsMobileSidebarOpen(false);
+            setIsGasCenterOpen(true);
+          }}
+          onOpenIntegrasiDhp={() => {
+            setIsMobileSidebarOpen(false);
+            setIsIntegrasiDhpOpen(true);
+          }}
+          isMobileOpen={isMobileSidebarOpen}
+          onCloseMobile={() => setIsMobileSidebarOpen(false)}
         />
 
         {/* Dynamic Content Canvas */}
@@ -459,10 +474,13 @@ export default function App() {
       </div>
 
       {/* Mobile Bottom Quick Navigation */}
-      <nav className="no-print lg:hidden fixed bottom-0 left-0 right-0 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 text-white px-1.5 pt-2 pb-2.5 flex items-center justify-around z-40 shadow-2xl">
+      <nav className="no-print lg:hidden fixed bottom-0 left-0 right-0 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 text-white px-1 pt-1.5 pb-2 flex items-center justify-around z-40 shadow-2xl">
         <button
-          onClick={() => setActiveTab('dashboard')}
-          className={`flex flex-col items-center gap-1 px-2 py-1 rounded-xl text-[10px] font-medium transition-all ${
+          onClick={() => {
+            setActiveTab('dashboard');
+            setIsMobileSidebarOpen(false);
+          }}
+          className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-xl text-[10px] font-medium transition-all ${
             activeTab === 'dashboard' ? 'text-blue-400 font-bold bg-blue-500/10' : 'text-slate-400 hover:text-slate-200'
           }`}
         >
@@ -470,8 +488,11 @@ export default function App() {
           <span>Dashboard</span>
         </button>
         <button
-          onClick={() => setActiveTab('rekap-bulan')}
-          className={`flex flex-col items-center gap-1 px-2 py-1 rounded-xl text-[10px] font-medium transition-all ${
+          onClick={() => {
+            setActiveTab('rekap-bulan');
+            setIsMobileSidebarOpen(false);
+          }}
+          className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-xl text-[10px] font-medium transition-all ${
             activeTab === 'rekap-bulan' ? 'text-blue-400 font-bold bg-blue-500/10' : 'text-slate-400 hover:text-slate-200'
           }`}
         >
@@ -479,8 +500,11 @@ export default function App() {
           <span>Bulanan</span>
         </button>
         <button
-          onClick={() => setActiveTab('rekap-jenis')}
-          className={`flex flex-col items-center gap-1 px-2 py-1 rounded-xl text-[10px] font-medium transition-all ${
+          onClick={() => {
+            setActiveTab('rekap-jenis');
+            setIsMobileSidebarOpen(false);
+          }}
+          className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-xl text-[10px] font-medium transition-all ${
             activeTab === 'rekap-jenis' ? 'text-blue-400 font-bold bg-blue-500/10' : 'text-slate-400 hover:text-slate-200'
           }`}
         >
@@ -488,31 +512,40 @@ export default function App() {
           <span>Varian</span>
         </button>
         <button
-          onClick={() => setActiveTab('matriks-skt-skm')}
-          className={`flex flex-col items-center gap-1 px-2 py-1 rounded-xl text-[10px] font-medium transition-all ${
-            activeTab === 'matriks-skt-skm' ? 'text-blue-400 font-bold bg-blue-500/10' : 'text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <GitCompare className="w-4 h-4" />
-          <span>SKT/SKM</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('data-explorer')}
-          className={`flex flex-col items-center gap-1 px-2 py-1 rounded-xl text-[10px] font-medium transition-all ${
+          onClick={() => {
+            setActiveTab('data-explorer');
+            setIsMobileSidebarOpen(false);
+          }}
+          className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-xl text-[10px] font-medium transition-all ${
             activeTab === 'data-explorer' ? 'text-blue-400 font-bold bg-blue-500/10' : 'text-slate-400 hover:text-slate-200'
           }`}
         >
           <Database className="w-4 h-4" />
-          <span>Log Harian</span>
+          <span>Log</span>
         </button>
         <button
-          onClick={() => setActiveTab('switch-app')}
-          className={`flex flex-col items-center gap-1 px-2 py-1 rounded-xl text-[10px] font-medium transition-all ${
-            activeTab === 'switch-app' ? 'text-amber-400 font-bold bg-amber-500/10' : 'text-slate-400 hover:text-slate-200'
-          }`}
+          onClick={() => {
+            setIsMobileSidebarOpen(false);
+            setIsIntegrasiDhpOpen(true);
+          }}
+          className="flex flex-col items-center gap-0.5 px-2 py-1 rounded-xl text-[10px] font-medium transition-all text-blue-300 hover:text-blue-200 relative"
+          title="Buka Integrasi DHP Tembakau (100% Otomatis)"
         >
-          <LayoutGrid className="w-4 h-4" />
-          <span>Switch</span>
+          <div className="relative">
+            <Cable className="w-4 h-4 text-blue-400" />
+            <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          </div>
+          <span className="font-bold text-blue-300">DHP (100%)</span>
+        </button>
+        <button
+          onClick={() => setIsMobileSidebarOpen(prev => !prev)}
+          className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-xl text-[10px] font-medium transition-all ${
+            isMobileSidebarOpen ? 'text-amber-400 font-bold bg-amber-500/15' : 'text-slate-400 hover:text-slate-200'
+          }`}
+          title="Buka Navigasi & Menu Sidebar Lengkap"
+        >
+          <Menu className="w-4 h-4" />
+          <span>Menu ☰</span>
         </button>
       </nav>
 

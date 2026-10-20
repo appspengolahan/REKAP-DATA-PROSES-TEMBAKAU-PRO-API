@@ -39,6 +39,7 @@ interface HeaderProps {
   onOpenGasCenter: () => void;
   onOpenHelp: () => void;
   onExportPdf: () => void;
+  onOpenMobileSidebar?: () => void;
 }
 
 export const HeaderRekapDataProsesTembakau: React.FC<HeaderProps> = ({
@@ -58,7 +59,8 @@ export const HeaderRekapDataProsesTembakau: React.FC<HeaderProps> = ({
   onOpenSwitchBoard,
   onOpenGasCenter,
   onOpenHelp,
-  onExportPdf
+  onExportPdf,
+  onOpenMobileSidebar
 }) => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isJalurOpen, setIsJalurOpen] = useState(false);
@@ -101,7 +103,20 @@ export const HeaderRekapDataProsesTembakau: React.FC<HeaderProps> = ({
         <div className="flex items-center justify-between h-16 gap-3">
           
           {/* Logo & Main Title (Always full title without truncation on desktop) */}
-          <div className="flex items-center gap-3 min-w-0 flex-shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-shrink-0">
+            {/* Mobile/Tablet Hamburger Menu Button */}
+            {onOpenMobileSidebar && (
+              <button
+                type="button"
+                onClick={onOpenMobileSidebar}
+                className="lg:hidden p-1.5 sm:p-2 -ml-1 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-slate-600 transition-colors flex items-center justify-center shadow-sm"
+                title="Buka Navigasi Sidebar & Modul Lengkap"
+                aria-label="Buka Menu Sidebar"
+              >
+                <Menu className="w-5 h-5 text-blue-400" />
+              </button>
+            )}
+
             <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center font-bold text-white shadow-md flex-shrink-0 text-sm sm:text-base tracking-wider ring-1 ring-amber-400/30">
               PP1
             </div>
@@ -199,11 +214,11 @@ export const HeaderRekapDataProsesTembakau: React.FC<HeaderProps> = ({
               )}
             </div>
 
-            {/* Integrasi DHP Button */}
+            {/* Integrasi DHP Button (Visible on Tablet and Desktop) */}
             {onOpenIntegrasiDhp && (
               <button
                 onClick={onOpenIntegrasiDhp}
-                className="hidden lg:flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-blue-600/90 hover:bg-blue-600 text-white text-xs font-semibold shadow-sm border border-blue-500/40 transition-colors"
+                className="hidden sm:flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-blue-600/90 hover:bg-blue-600 text-white text-xs font-semibold shadow-sm border border-blue-500/40 transition-colors"
                 title="Integrasi & Sinkronisasi DHP Tembakau (Presisi 100%)"
               >
                 <Cable className="w-3.5 h-3.5 text-blue-200" />
