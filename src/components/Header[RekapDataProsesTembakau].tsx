@@ -16,7 +16,8 @@ import {
   ExternalLink,
   ChevronRight,
   GitCompare,
-  Check
+  Check,
+  Cable
 } from 'lucide-react';
 import { UserRole, JenisProsesType, GasConfig } from '../types[RekapDataProsesTembakau]';
 
@@ -33,6 +34,7 @@ interface HeaderProps {
   onRefresh: () => void;
   onPullDatasheet?: () => void;
   isPullingDatasheet?: boolean;
+  onOpenIntegrasiDhp?: () => void;
   onOpenSwitchBoard: () => void;
   onOpenGasCenter: () => void;
   onOpenHelp: () => void;
@@ -52,6 +54,7 @@ export const HeaderRekapDataProsesTembakau: React.FC<HeaderProps> = ({
   onRefresh,
   onPullDatasheet,
   isPullingDatasheet,
+  onOpenIntegrasiDhp,
   onOpenSwitchBoard,
   onOpenGasCenter,
   onOpenHelp,
@@ -195,6 +198,21 @@ export const HeaderRekapDataProsesTembakau: React.FC<HeaderProps> = ({
                 </div>
               )}
             </div>
+
+            {/* Integrasi DHP Button */}
+            {onOpenIntegrasiDhp && (
+              <button
+                onClick={onOpenIntegrasiDhp}
+                className="hidden lg:flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-blue-600/90 hover:bg-blue-600 text-white text-xs font-semibold shadow-sm border border-blue-500/40 transition-colors"
+                title="Integrasi & Sinkronisasi DHP Tembakau (Presisi 100%)"
+              >
+                <Cable className="w-3.5 h-3.5 text-blue-200" />
+                <span className="hidden xl:inline">Integrasi DHP</span>
+                <span className="px-1.5 py-0.5 rounded-full text-[9px] bg-emerald-950 text-emerald-300 border border-emerald-600 font-bold">
+                  100%
+                </span>
+              </button>
+            )}
 
             {/* Tarik Data Langsung dari Datasheet Button */}
             {onPullDatasheet && (
@@ -392,6 +410,33 @@ export const HeaderRekapDataProsesTembakau: React.FC<HeaderProps> = ({
                       </div>
                       <ChevronRight className="w-4 h-4 text-slate-600 group-hover:text-slate-300 transition-transform group-hover:translate-x-0.5" />
                     </button>
+
+                    {/* Item: Integrasi DHP Tembakau */}
+                    {onOpenIntegrasiDhp && (
+                      <button
+                        onClick={() => {
+                          setIsDropdownOpen(false);
+                          onOpenIntegrasiDhp();
+                        }}
+                        className="w-full flex items-center justify-between p-2.5 rounded-xl hover:bg-slate-800 transition-colors text-left group"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-blue-500/10 text-blue-400 rounded-xl group-hover:bg-blue-500/20 transition-colors">
+                            <Cable className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <div className="text-xs font-bold text-slate-200 group-hover:text-white flex items-center gap-1.5">
+                              <span>Integrasi DHP Tembakau</span>
+                              <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 font-bold">100%</span>
+                            </div>
+                            <div className="text-[10px] text-slate-400">
+                              Otomasi &amp; sinkronisasi lembar DHP
+                            </div>
+                          </div>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-slate-600 group-hover:text-slate-300 transition-transform group-hover:translate-x-0.5" />
+                      </button>
+                    )}
 
                     {/* Item 3: Bantuan & Panduan */}
                     <button

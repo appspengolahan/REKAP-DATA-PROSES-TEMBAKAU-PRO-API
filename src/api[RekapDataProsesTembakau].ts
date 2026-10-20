@@ -18,7 +18,9 @@ import {
   PeriodeRange,
   GasConfig,
   JenisProsesType,
-  ServerDashboardPayload
+  ServerDashboardPayload,
+  DhpBatchItem,
+  DhpIntegrationData
 } from './types[RekapDataProsesTembakau]';
 import { INITIAL_DATA_RAW, MONTH_NAMES, INITIAL_SERVER_DASHBOARD } from './mockData[RekapDataProsesTembakau]';
 
@@ -1077,4 +1079,168 @@ export class RekapDataProsesTembakauService {
     this.saveRawData(updated);
     return newRecord;
   }
+
+  /**
+   * Mengambil dan memvalidasi data aktif dari Spreadsheet DHP Tembakau (Tab INTEGRASI DATA)
+   * Menghubungkan ID 1NDS55VchAgNAeJJbY12ANA8HyJDeNNhAZ33zbojpH5I dengan Rekap Tembakau
+   */
+  public static async fetchDhpIntegrationData(
+    existingRows?: RawRowData[]
+  ): Promise<DhpIntegrationData> {
+    const dhpSpreadsheetId = '1NDS55VchAgNAeJJbY12ANA8HyJDeNNhAZ33zbojpH5I';
+    const dhpSheetName = 'INTEGRASI DATA';
+    const targetSpreadsheetId = '1LnixFRQXFjDaR_LYoOUvsj84Y_Lb5W8samFOPWrDSC0';
+    const targetSheetName = 'REKAP SUSUT TEMBAKAU';
+
+    const currentRows = existingRows || this.getRawData();
+    
+    // Siapkan set kunci yang sudah ada di Rekap untuk pencocokan anti-duplikasi
+    const existingKeys = new Set<string>();
+    currentRows.forEach(r => {
+      const tglClean = (r.tanggal || '').trim().toLowerCase();
+      const jenisClean = (r.jenisTembakau || '').trim().toLowerCase();
+      const bakuFix = Number(r.baku || 0).toFixed(1);
+      if (tglClean && bakuFix !== '0.0') {
+        existingKeys.add(`${tglClean}|${jenisClean}|${bakuFix}`);
+      }
+    });
+
+    let csvText = '';
+    // 1. Coba lewat proxy server
+    try {
+      const resp = await fetch(`/api/pull-sheet?spreadsheetId=${dhpSpreadsheetId}&sheet=${encodeURIComponent(dhpSheetName)}`);
+      if (resp.ok) {
+        const json = await resp.json();
+        if (json?.success && json?.csv) {
+          csvText = json.csv;
+        }
+      }
+    } catch (e) {
+      // proxy fallback
+    }
+
+    // 2. Fallback fetch langsung jika proxy offline
+    if (!csvText) {
+      try {
+        const directUrl = `https://docs.google.com/spreadsheets/d/${dhpSpreadsheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(dhpSheetName)}`;
+        const directResp = await fetch(directUrl);
+        if (directResp.ok) {
+          const text = await directResp.text();
+          if (text && !text.includes('google-signin') && !text.includes('<!DOCTYPE html>')) {
+            csvText = text;
+          }
+        }
+      } catch (e) {
+        console.warn('Fallback direct fetch DHP notice:', e);
+      }
+    }
+
+    if (!csvText) {
+      throw new Error('Gagal memuat data dari Spreadsheet DHP Tembakau. Pastikan koneksi internet tersedia.');
+    }
+
+    // Helper parser tanggal Indonesia
+    const bulanIndoMap: Record<string, string> = {
+      januari: '01', februari: '02', maret: '03', april: '04',
+      mei: '05', juni: '06', juli: '07', agustus: '08',
+      september: '09', oktober: '10', november: '11', desember: '12'
+    };
+
+    const parseToIsoDate = (rawStr: string): string => {
+      if (!rawStr) return '';
+      const clean = rawStr.replace(/^[a-zA-Z]+,\s*/, '').trim();
+      const parts = clean.split(/\s+/);
+      if (parts.length >= 3) {
+        const d = parts[0].padStart(2, '0');
+        const m = bulanIndoMap[parts[1].toLowerCase()] || '01';
+        const y = parts[2];
+        return `${y}-${m}-${d}`;
+      }
+      return '';
+    };
+
+    const parseNumber = (val: string): number => {
+      if (!val) return 0;
+      const clean = String(val).replace(/[^0-9,.-]/g, '').replace(',', '.');
+      return Number(clean) || 0;
+    };
+
+    // Parse CSV menggunakan parser bawaan yang robust
+    const parsedRows = this.parseRawCSVGrid(csvText);
+    const items: DhpBatchItem[] = [];
+    let totalBakuKg = 0;
+    let terverifikasiCount = 0;
+
+    // Baris 0 adalah summary total, baris 1 adalah header ('JENIS TEMBAKAU', 'WAKTU')
+    // Data aktif berada di baris 2 sampai akhir
+    for (let i = 2; i < parsedRows.length; i++) {
+      const row = parsedRows[i];
+      if (!row || row.length < 5) continue;
+
+      const rawTgl = row[2] ? row[2].trim() : '';
+      const jenis = (row[3] || '').trim();
+      const rawBaku = parseNumber(row[4]);
+
+      if (!jenis || rawBaku <= 0) continue;
+
+      const isoDate = parseToIsoDate(rawTgl);
+      const matchKeyIso = `${isoDate}|${jenis.toLowerCase()}|${rawBaku.toFixed(1)}`;
+      const matchKeyRaw = `${rawTgl.toLowerCase()}|${jenis.toLowerCase()}|${rawBaku.toFixed(1)}`;
+      
+      const alreadyInRekap = existingKeys.has(matchKeyIso) || existingKeys.has(matchKeyRaw);
+
+      const gagangKg = parseNumber(row[5]);
+      const airKg = parseNumber(row[6]);
+      const debuKg = parseNumber(row[7]);
+      const hasil = parseNumber(row[8]);
+      const susutKg = parseNumber(row[9]) || (rawBaku - hasil);
+      const susutPct = rawBaku > 0 ? (susutKg / rawBaku) * 100 : 0;
+      const waktu = (row[12] || '-').trim();
+
+      const jalur: 'SKT' | 'SKM' = jenis.toUpperCase().includes('SKM') ? 'SKM' : 'SKT';
+
+      if (alreadyInRekap) {
+        terverifikasiCount++;
+      }
+      totalBakuKg += rawBaku;
+
+      items.push({
+        rowNumber: i + 1, // Nomor baris di sheet DHP
+        tanggalRaw: rawTgl,
+        tanggalFormatted: rawTgl.replace(/^[a-zA-Z]+,\s*/, '').trim(),
+        waktu,
+        jenisTembakau: jenis,
+        jalur,
+        nettoBaku: Math.round(rawBaku * 10) / 10,
+        hasil: Math.round(hasil * 10) / 10,
+        susutKg: Math.round(susutKg * 10) / 10,
+        susutPct: Math.round(susutPct * 100) / 100,
+        gagangKg: Math.round(gagangKg * 10) / 10,
+        airKg: Math.round(airKg * 10) / 10,
+        debuKg: Math.round(debuKg * 10) / 10,
+        statusIntegrasi: alreadyInRekap ? 'Sudah Masuk di Rekap' : 'Batch Baru (Siap Masuk)',
+        alreadyInRekap,
+        matchKey: matchKeyIso
+      });
+    }
+
+    const totalBatch = items.length;
+    const batchBaruCount = totalBatch - terverifikasiCount;
+    const terverifikasiPct = totalBatch > 0 ? Math.round((terverifikasiCount / totalBatch) * 100) : 0;
+
+    return {
+      sourceSpreadsheetId: dhpSpreadsheetId,
+      sourceSheetName: dhpSheetName,
+      targetSpreadsheetId: targetSpreadsheetId,
+      targetSheetName: targetSheetName,
+      totalBatch,
+      totalBakuKg: Math.round(totalBakuKg * 10) / 10,
+      terverifikasiCount,
+      terverifikasiPct,
+      batchBaruCount,
+      items,
+      fetchTimestamp: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    };
+  }
 }
+

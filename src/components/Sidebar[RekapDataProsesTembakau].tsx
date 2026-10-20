@@ -8,7 +8,9 @@ import {
   Cpu,
   ChevronLeft,
   ChevronRight,
-  LayoutGrid
+  LayoutGrid,
+  Cable,
+  Sparkles
 } from 'lucide-react';
 import { ActiveTabType } from '../types[RekapDataProsesTembakau]';
 
@@ -20,6 +22,7 @@ interface SidebarProps {
   isCollapsed: boolean;
   onToggleCollapse: () => void;
   onOpenGasCenter: () => void;
+  onOpenIntegrasiDhp: () => void;
 }
 
 export const SidebarRekapDataProsesTembakau: React.FC<SidebarProps> = ({
@@ -27,7 +30,8 @@ export const SidebarRekapDataProsesTembakau: React.FC<SidebarProps> = ({
   onTabChange,
   isCollapsed,
   onToggleCollapse,
-  onOpenGasCenter
+  onOpenGasCenter,
+  onOpenIntegrasiDhp
 }) => {
   const menuItems = [
     {
@@ -120,6 +124,31 @@ export const SidebarRekapDataProsesTembakau: React.FC<SidebarProps> = ({
             </button>
           );
         })}
+
+        {/* Menu Khusus: Integrasi DHP Tembakau (Membuka Modal Integrasi & Otomasi) */}
+        <button
+          onClick={onOpenIntegrasiDhp}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all border border-blue-500/40 bg-gradient-to-r from-blue-950/50 to-indigo-950/40 hover:from-blue-900/60 hover:to-indigo-900/60 text-blue-200 hover:text-white shadow-sm my-1"
+          title="Integrasi & Sinkronisasi DHP Tembakau (Presisi 100%)"
+        >
+          <div className="relative flex-shrink-0">
+            <Cable className="w-5 h-5 text-blue-400" />
+            <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          </div>
+          {!isCollapsed && (
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between">
+                <div className="text-xs font-bold leading-tight truncate text-white">Integrasi DHP Tembakau</div>
+                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-700/60">
+                  100%
+                </span>
+              </div>
+              <div className="text-[10px] text-blue-200/70 leading-tight truncate">
+                Otomasi Lembar DHP
+              </div>
+            </div>
+          )}
+        </button>
 
         <div className="pt-4 mt-4 border-t border-slate-800">
           <button

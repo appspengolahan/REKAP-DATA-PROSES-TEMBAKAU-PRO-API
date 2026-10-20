@@ -115,4 +115,38 @@ export interface SwitchBoardAppItem {
   updatedAt?: string;
 }
 
+export interface DhpBatchItem {
+  rowNumber: number;
+  tanggalRaw: string;
+  tanggalFormatted: string;
+  waktu: string;
+  jenisTembakau: string;
+  stockCode?: string;
+  jalur: 'SKT' | 'SKM';
+  nettoBaku: number;
+  hasil: number;
+  susutKg: number;
+  susutPct: number;
+  gagangKg: number;
+  airKg: number;
+  debuKg: number;
+  statusIntegrasi: 'Sudah Masuk di Rekap' | 'Batch Baru (Siap Masuk)';
+  alreadyInRekap: boolean;
+  matchKey: string;
+}
+
+export interface DhpIntegrationData {
+  sourceSpreadsheetId: string;
+  sourceSheetName: string;
+  targetSpreadsheetId: string;
+  targetSheetName: string;
+  totalBatch: number;
+  totalBakuKg: number;
+  terverifikasiCount: number;
+  terverifikasiPct: number;
+  batchBaruCount: number;
+  items: DhpBatchItem[];
+  fetchTimestamp: string;
+}
+
 export type ActiveTabType = 'dashboard' | 'rekap-bulan' | 'rekap-jenis' | 'matriks-skt-skm' | 'data-explorer' | 'switch-app';

@@ -28,6 +28,7 @@ import { SwitchBoardModalRekapDataProsesTembakau } from './components/SwitchBoar
 import { SwitchAppBoardView } from './components/SwitchAppBoardView';
 import { GasCenterModalRekapDataProsesTembakau } from './components/GasCenterModal[RekapDataProsesTembakau]';
 import { HelpModalRekapDataProsesTembakau } from './components/HelpModal[RekapDataProsesTembakau]';
+import { IntegrasiDhpModalRekapDataProsesTembakau } from './components/IntegrasiDhpModal[RekapDataProsesTembakau]';
 import { FooterRekapDataProsesTembakau } from './components/Footer[RekapDataProsesTembakau]';
 import { 
   LayoutDashboard, 
@@ -60,6 +61,7 @@ export default function App() {
   const [isSwitchBoardOpen, setIsSwitchBoardOpen] = useState(false);
   const [isGasCenterOpen, setIsGasCenterOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [isIntegrasiDhpOpen, setIsIntegrasiDhpOpen] = useState(false);
 
   // 4. Role-Based Access Control State
   const [userRole, setUserRole] = useState<UserRole>('Project Manager');
@@ -319,6 +321,7 @@ export default function App() {
         onRefresh={handleManualRefresh}
         onPullDatasheet={() => handleTarikDatasheet('AUTO')}
         isPullingDatasheet={isPullingDatasheet}
+        onOpenIntegrasiDhp={() => setIsIntegrasiDhpOpen(true)}
         onOpenSwitchBoard={() => setIsSwitchBoardOpen(true)}
         onOpenGasCenter={() => setIsGasCenterOpen(true)}
         onOpenHelp={() => setIsHelpOpen(true)}
@@ -335,6 +338,7 @@ export default function App() {
           isCollapsed={isSidebarCollapsed}
           onToggleCollapse={handleToggleSidebar}
           onOpenGasCenter={() => setIsGasCenterOpen(true)}
+          onOpenIntegrasiDhp={() => setIsIntegrasiDhpOpen(true)}
         />
 
         {/* Dynamic Content Canvas */}
@@ -538,6 +542,14 @@ export default function App() {
       <HelpModalRekapDataProsesTembakau
         isOpen={isHelpOpen}
         onClose={() => setIsHelpOpen(false)}
+      />
+
+      {/* Integrasi & Sinkronisasi DHP Tembakau Modal */}
+      <IntegrasiDhpModalRekapDataProsesTembakau
+        isOpen={isIntegrasiDhpOpen}
+        onClose={() => setIsIntegrasiDhpOpen(false)}
+        existingRows={rows}
+        onTarikDatasheetRekap={() => handleTarikDatasheet('AUTO')}
       />
 
     </div>
