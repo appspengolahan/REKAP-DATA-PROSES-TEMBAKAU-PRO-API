@@ -239,25 +239,25 @@ function sinkronkanDhpKeRekap() {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl max-w-5xl w-full max-h-[92vh] flex flex-col overflow-hidden text-slate-100">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl max-w-6xl w-full h-[92vh] max-h-[92vh] flex flex-col overflow-hidden text-slate-100">
         
-        {/* Modal Top Header */}
-        <div className="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between gap-4 bg-slate-900/90">
+        {/* Modal Top Header (Compact) */}
+        <div className="px-4 sm:px-6 py-3 border-b border-slate-800 flex items-center justify-between gap-4 bg-slate-900/90 flex-shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-blue-400 shadow-sm flex-shrink-0">
-              <Database className="w-5 h-5" />
+            <div className="w-9 h-9 rounded-xl bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-blue-400 shadow-sm flex-shrink-0">
+              <Database className="w-4 h-4" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-base sm:text-lg font-bold text-white tracking-tight">
+                <h2 className="text-sm sm:text-base font-bold text-white tracking-tight">
                   Integrasi &amp; Sinkronisasi DHP Tembakau
                 </h2>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-950/90 text-emerald-300 border border-emerald-700/60 shadow-sm">
                   Presisi 100%
                 </span>
               </div>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-[11px] text-slate-400 mt-0.5">
                 Pencocokan dan transfer otomatis data aktif DHP Tembakau ke Datasheet Rekap Susut Tembakau
               </p>
             </div>
@@ -272,8 +272,8 @@ function sinkronkanDhpKeRekap() {
           </button>
         </div>
 
-        {/* Source & Target Connection Bar */}
-        <div className="px-4 sm:px-5 py-2.5 bg-slate-950/60 border-b border-slate-800/80 flex flex-wrap items-center justify-between gap-3 text-xs">
+        {/* Source & Target Connection Bar (Compact) */}
+        <div className="px-4 sm:px-6 py-2 bg-slate-950/60 border-b border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-xs flex-shrink-0">
           <div className="flex flex-wrap items-center gap-2 text-slate-300">
             <span className="inline-flex items-center gap-1.5 font-medium text-amber-400">
               <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
@@ -295,7 +295,7 @@ function sinkronkanDhpKeRekap() {
           <button
             onClick={loadDhpData}
             disabled={loading}
-            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-medium transition-all shadow-sm disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-medium transition-all shadow-sm disabled:opacity-50"
             title="Perbarui pembacaan lembar DHP"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-blue-400' : ''}`} />
@@ -303,11 +303,11 @@ function sinkronkanDhpKeRekap() {
           </button>
         </div>
 
-        {/* Sub-Tabs Navigation */}
-        <div className="px-4 sm:px-5 border-b border-slate-800 flex items-center gap-2 bg-slate-900">
+        {/* Sub-Tabs Navigation (Compact) */}
+        <div className="px-4 sm:px-6 border-b border-slate-800 flex items-center gap-2 bg-slate-900 flex-shrink-0">
           <button
             onClick={() => setActiveTab('transaksi')}
-            className={`flex items-center gap-2 py-3 px-3 text-xs font-semibold border-b-2 transition-all ${
+            className={`flex items-center gap-2 py-2.5 px-3 text-xs font-semibold border-b-2 transition-all ${
               activeTab === 'transaksi'
                 ? 'border-blue-500 text-blue-400'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -319,7 +319,7 @@ function sinkronkanDhpKeRekap() {
 
           <button
             onClick={() => setActiveTab('pemetaan')}
-            className={`flex items-center gap-2 py-3 px-3 text-xs font-semibold border-b-2 transition-all ${
+            className={`flex items-center gap-2 py-2.5 px-3 text-xs font-semibold border-b-2 transition-all ${
               activeTab === 'pemetaan'
                 ? 'border-blue-500 text-blue-400'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -331,91 +331,97 @@ function sinkronkanDhpKeRekap() {
 
           <button
             onClick={() => setActiveTab('gas')}
-            className={`flex items-center gap-2 py-3 px-3 text-xs font-semibold border-b-2 transition-all ${
+            className={`flex items-center gap-2 py-2.5 px-3 text-xs font-semibold border-b-2 transition-all ${
               activeTab === 'gas'
                 ? 'border-blue-500 text-blue-400'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
             <Code className="w-4 h-4" />
-            <span>&lt;/&gt; Skrip Otomasi GAS</span>
+            <span>Skrip Otomasi GAS</span>
           </button>
         </div>
 
         {/* Modal Scrollable Body */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+        <div className="flex-1 overflow-y-auto p-3 sm:p-5 space-y-3.5 flex flex-col min-h-0">
           
           {/* TAB 1: PRATINJAU & TRANSAKSI */}
           {activeTab === 'transaksi' && (
-            <div className="space-y-6">
+            <div className="space-y-3.5 flex-1 flex flex-col min-h-0">
               
-              {/* 3 KPI Summary Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
+              {/* 3 KPI Summary Cards - Slim & Low Profile Layout */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3 flex-shrink-0">
                 {/* Total Batch Aktif */}
-                <div className="p-4 rounded-xl bg-slate-800/60 border border-slate-700/60 flex items-center justify-between">
-                  <div>
-                    <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                      Total Batch Aktif DHP
+                <div className="px-3.5 py-2.5 rounded-xl bg-slate-800/60 border border-slate-700/60 flex items-center justify-between shadow-sm">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-8 h-8 rounded-lg bg-slate-700/60 flex items-center justify-center text-slate-300 flex-shrink-0">
+                      <Layers className="w-4 h-4" />
                     </div>
-                    <div className="text-xl sm:text-2xl font-black text-white mt-1">
-                      {dhpData?.totalBatch || 0} Batch{' '}
-                      <span className="text-xs font-normal text-slate-400">
-                        ({formatKg(dhpData?.totalBakuKg || 0)} Kg)
-                      </span>
+                    <div className="min-w-0">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 truncate">
+                        Total Batch Aktif DHP
+                      </div>
+                      <div className="text-base sm:text-lg font-black text-white leading-tight">
+                        {dhpData?.totalBatch || 0} Batch{' '}
+                        <span className="text-[11px] font-normal text-slate-400">
+                          ({formatKg(dhpData?.totalBakuKg || 0)})
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                  <div className="w-10 h-10 rounded-xl bg-slate-700/40 flex items-center justify-center text-slate-300">
-                    <Layers className="w-5 h-5" />
                   </div>
                 </div>
 
                 {/* Terverifikasi di Rekap */}
-                <div className="p-4 rounded-xl bg-emerald-950/30 border border-emerald-800/50 flex items-center justify-between">
-                  <div>
-                    <div className="text-[11px] font-bold uppercase tracking-wider text-emerald-400">
-                      Terverifikasi di Rekap
+                <div className="px-3.5 py-2.5 rounded-xl bg-emerald-950/30 border border-emerald-800/50 flex items-center justify-between shadow-sm">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-8 h-8 rounded-lg bg-emerald-900/50 flex items-center justify-center text-emerald-400 flex-shrink-0">
+                      <CheckCircle2 className="w-4 h-4" />
                     </div>
-                    <div className="text-xl sm:text-2xl font-black text-emerald-300 mt-1">
-                      {dhpData?.terverifikasiCount || 0} Batch{' '}
-                      <span className="text-xs font-normal text-emerald-400/80">
-                        ({dhpData?.terverifikasiPct || 0}%)
-                      </span>
+                    <div className="min-w-0">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 truncate">
+                        Terverifikasi di Rekap
+                      </div>
+                      <div className="text-base sm:text-lg font-black text-emerald-300 leading-tight">
+                        {dhpData?.terverifikasiCount || 0} Batch{' '}
+                        <span className="text-[11px] font-normal text-emerald-400/80">
+                          ({dhpData?.terverifikasiPct || 0}%)
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                  <div className="w-10 h-10 rounded-xl bg-emerald-900/40 flex items-center justify-center text-emerald-400">
-                    <CheckCircle2 className="w-5 h-5" />
                   </div>
                 </div>
 
                 {/* Batch Baru Siap Masuk */}
-                <div className="p-4 rounded-xl bg-blue-950/30 border border-blue-800/50 flex items-center justify-between">
-                  <div>
-                    <div className="text-[11px] font-bold uppercase tracking-wider text-blue-400">
-                      Batch Baru Siap Masuk
+                <div className="px-3.5 py-2.5 rounded-xl bg-blue-950/30 border border-blue-800/50 flex items-center justify-between shadow-sm">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-8 h-8 rounded-lg bg-blue-900/50 flex items-center justify-center text-blue-400 flex-shrink-0">
+                      <Sparkles className="w-4 h-4" />
                     </div>
-                    <div className="text-xl sm:text-2xl font-black text-blue-300 mt-1">
-                      {dhpData?.batchBaruCount || 0} Batch{' '}
-                      <span className="text-xs font-normal text-blue-400/80">
-                        Perlu dibukukan
-                      </span>
+                    <div className="min-w-0">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-blue-400 truncate">
+                        Batch Baru Siap Masuk
+                      </div>
+                      <div className="text-base sm:text-lg font-black text-blue-300 leading-tight">
+                        {dhpData?.batchBaruCount || 0} Batch{' '}
+                        <span className="text-[11px] font-normal text-blue-300/80">
+                          Perlu dibukukan
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                  <div className="w-10 h-10 rounded-xl bg-blue-900/40 flex items-center justify-center text-blue-400">
-                    <Sparkles className="w-5 h-5" />
                   </div>
                 </div>
               </div>
 
-              {/* Transactions Table Section */}
-              <div className="bg-slate-900/90 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
-                <div className="p-3.5 sm:p-4 bg-slate-800/40 border-b border-slate-800 flex items-center justify-between">
+              {/* Transactions Table Section - Maximized Viewport & Prominent */}
+              <div className="bg-slate-900/90 border border-slate-800 rounded-xl overflow-hidden shadow-sm flex-1 flex flex-col min-h-0">
+                <div className="p-3 sm:px-4 sm:py-2.5 bg-slate-800/40 border-b border-slate-800 flex items-center justify-between flex-shrink-0">
                   <div className="flex items-center gap-2">
                     <Database className="w-4 h-4 text-blue-400" />
                     <span className="text-xs sm:text-sm font-bold text-slate-200">
                       Daftar Transaksi DHP Terdeteksi (Tab INTEGRASI DATA)
                     </span>
                   </div>
-                  <span className="text-xs text-slate-400">
+                  <span className="text-xs text-slate-400 font-medium">
                     Menampilkan {dhpData?.items.length || 0} baris proses aktif
                   </span>
                 </div>
@@ -441,18 +447,18 @@ function sinkronkanDhpKeRekap() {
                     Tidak ada baris transaksi aktif yang terdeteksi di tab INTEGRASI DATA.
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
+                  <div className="overflow-x-auto overflow-y-auto flex-1 min-h-0">
                     <table className="w-full text-left text-xs">
-                      <thead className="bg-slate-950/60 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-800">
+                      <thead className="bg-slate-950/80 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-800 sticky top-0 z-10 backdrop-blur">
                         <tr>
-                          <th className="py-2.5 px-3">Row</th>
-                          <th className="py-2.5 px-3">Tanggal &amp; Waktu</th>
-                          <th className="py-2.5 px-3">Jenis Tembakau</th>
-                          <th className="py-2.5 px-3 text-center">Jalur</th>
-                          <th className="py-2.5 px-3 text-right">Netto Baku (Kg)</th>
-                          <th className="py-2.5 px-3 text-right">Hasil (Kg)</th>
-                          <th className="py-2.5 px-3 text-right">Susut (%)</th>
-                          <th className="py-2.5 px-3 text-center">Status Integrasi Rekap</th>
+                          <th className="py-2 px-3">Row</th>
+                          <th className="py-2 px-3">Tanggal &amp; Waktu</th>
+                          <th className="py-2 px-3">Jenis Tembakau</th>
+                          <th className="py-2 px-3 text-center">Jalur</th>
+                          <th className="py-2 px-3 text-right">Netto Baku (Kg)</th>
+                          <th className="py-2 px-3 text-right">Hasil (Kg)</th>
+                          <th className="py-2 px-3 text-right">Susut (%)</th>
+                          <th className="py-2 px-3 text-center">Status Integrasi Rekap</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-800/80">
@@ -461,23 +467,23 @@ function sinkronkanDhpKeRekap() {
                             key={item.rowNumber}
                             className="hover:bg-slate-800/50 transition-colors"
                           >
-                            <td className="py-3 px-3 text-slate-500 font-mono">
+                            <td className="py-2.5 px-3 text-slate-400 font-mono text-[11px]">
                               {item.rowNumber}
                             </td>
-                            <td className="py-3 px-3 whitespace-nowrap">
-                              <div className="font-medium text-slate-200">
+                            <td className="py-2.5 px-3 whitespace-nowrap">
+                              <div className="font-semibold text-slate-200 text-xs">
                                 {item.tanggalFormatted}
                               </div>
-                              <div className="text-[11px] text-slate-500">
+                              <div className="text-[10px] text-slate-500">
                                 🕒 {item.waktu}
                               </div>
                             </td>
-                            <td className="py-3 px-3">
-                              <div className="font-semibold text-slate-200">
+                            <td className="py-2.5 px-3">
+                              <div className="font-bold text-slate-100 text-xs">
                                 {item.jenisTembakau}
                               </div>
                             </td>
-                            <td className="py-3 px-3 text-center">
+                            <td className="py-2.5 px-3 text-center">
                               <span
                                 className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                                   item.jalur === 'SKM'
@@ -488,23 +494,23 @@ function sinkronkanDhpKeRekap() {
                                 {item.jalur}
                               </span>
                             </td>
-                            <td className="py-3 px-3 text-right font-medium text-slate-200">
+                            <td className="py-2.5 px-3 text-right font-semibold text-slate-100">
                               {formatKg(item.nettoBaku)}
                             </td>
-                            <td className="py-3 px-3 text-right font-medium text-slate-200">
+                            <td className="py-2.5 px-3 text-right font-medium text-slate-300">
                               {formatKg(item.hasil)}
                             </td>
-                            <td className="py-3 px-3 text-right font-semibold text-amber-400">
+                            <td className="py-2.5 px-3 text-right font-bold text-amber-400">
                               {formatPct(item.susutPct)}%
                             </td>
-                            <td className="py-3 px-3 text-center whitespace-nowrap">
+                            <td className="py-2.5 px-3 text-center whitespace-nowrap">
                               {item.alreadyInRekap ? (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-950/80 text-emerald-300 border border-emerald-700/70">
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-950/80 text-emerald-300 border border-emerald-700/70">
                                   <CheckCircle2 className="w-3 h-3 text-emerald-400" />
                                   Sudah Masuk di Rekap
                                 </span>
                               ) : (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-blue-950/80 text-blue-300 border border-blue-700/70 shadow-sm animate-pulse">
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-blue-950/80 text-blue-300 border border-blue-700/70 shadow-sm animate-pulse">
                                   <Sparkles className="w-3 h-3 text-blue-400" />
                                   Batch Baru (Siap Masuk)
                                 </span>
