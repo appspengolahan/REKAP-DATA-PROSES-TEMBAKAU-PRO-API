@@ -57,15 +57,14 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
     }
   };
 
-  // Handle synchronization from DHP to Sheet Rekap (Direct Automation)
+  // Handle synchronization from DHP to Sheet Rekap (Direct Automation with Smart In-Place Fill)
   const handleSyncToRekap = async () => {
     if (!dhpData || dhpData.items.length === 0) return;
     setIsSyncingToRekap(true);
     setSyncNotice(null);
 
     try {
-      const unmerged = dhpData.items.filter((item) => !item.alreadyInRekap);
-      const itemsToSync = unmerged.length > 0 ? unmerged : dhpData.items;
+      const itemsToSync = dhpData.items;
 
       const MONTH_NAMES = [
         'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
@@ -74,7 +73,7 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
       const currentYear = new Date().getFullYear().toString();
 
       const newRecords: RawRowData[] = itemsToSync.map((item, idx) => {
-        const nextSrcRow = existingRows.length + 12 + idx;
+        const nextSrcRow = item.matchedRow || (existingRows.length + 12 + idx);
         const rawDateStr = item.tanggal || item.tanggalFormatted || item.tanggalRaw;
         const tglDate = new Date(rawDateStr);
         const isoDate = !isNaN(tglDate.getTime()) ? tglDate.toISOString().split('T')[0] : (item.tanggalFormatted || '2026-10-20');
@@ -104,14 +103,14 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
         };
       });
 
-      // 1. Post to backend proxy or GAS
+      // 1. Post to backend proxy / GAS Web App
       const gasUrl = gasConfig?.apiUrl || 'https://script.google.com/macros/s/AKfycbw34wezcB4YC4N-n2nL0ll9jofM3i9s5OHYxLZJ4Xu32_AmCEDcIAYi9V1AdPg2iACM/exec';
       try {
         await fetch('/api/sync-gas', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            action: 'appendDhpRecords',
+            action: 'syncDhpToRekap',
             records: newRecords
           })
         });
@@ -122,7 +121,7 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
             mode: 'no-cors',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              action: 'appendDhpRecords',
+              action: 'syncDhpToRekap',
               records: newRecords
             })
           });
@@ -131,7 +130,7 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
         }
       }
 
-      // 2. Append records to Rekap in Web App
+      // 2. Update/Upsert records to Rekap in Web App
       if (onAppendRecordsToRekap) {
         onAppendRecordsToRekap(newRecords);
       } else {
@@ -139,13 +138,13 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
         RekapDataProsesTembakauService.saveRawData(combined);
       }
 
-      // 3. Mark items as already synchronized in modal state
+      // 3. Mark items as synchronized in modal state
       setDhpData((prev) => {
         if (!prev) return null;
         const updatedItems = prev.items.map((it) => ({
           ...it,
           alreadyInRekap: true,
-          matchedRow: it.matchedRow || (existingRows.length + 12)
+          statusIntegrasi: (it.matchedRow ? `Sudah Masuk di Rekap (Baris ${it.matchedRow})` : 'Sudah Masuk di Rekap') as any
         }));
         return {
           ...prev,
@@ -158,7 +157,7 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
 
       setSyncNotice({
         type: 'success',
-        message: `Berhasil membukukan ${newRecords.length} batch dari DHP Tembakau ke Datasheet Rekap Susut Tembakau secara presisi!`
+        message: `Berhasil membukukan data DHP ke baris draft Sheet Rekap (Baris 1531-1537) secara in-place!`
       });
 
       // 4. Trigger auto pull to refresh
@@ -185,13 +184,20 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
 
   if (!isOpen) return null;
 
-  // Complete GAS Script dedicated strictly for TEMBAKAU (not krosok)
+  // Complete GAS Script with Smart In-Place Fill & Formula Protection
   const gasScriptCode = `/**
  * =====================================================================
- * OTOMATISASI PENARIKAN DATA DHP TEMBAKAU -> REKAP SUSUT TEMBAKAU
+ * OTOMATISASI INTEGRASI DATA DHP TEMBAKAU -> REKAP SUSUT TEMBAKAU
  * Divisi Produksi I - PT Batu Karang
- * Dilengkapi Proteksi Penuh Rumus Kolom E: =iferror(JOIN(" ";F...;G...))
- * dan Penguncian Anti-Duplikasi Berdasarkan Kunci Unik
+ * 
+ * FITUR UTAMA:
+ * 1. Smart In-Place Fill: Mengisi otomatis baris draft yang sudah ada
+ *    (Baris dengan Tanggal & Jenis Tembakau sama yang Hasil/Komponennya masih kosong)
+ * 2. Append Baris Baru: Menambah baris baru jika ada batch yang belum tercatat
+ * 3. Proteksi Rumus Kolom E: =iferror(JOIN(" ";F...;G...))
+ * 4. Rumus Susut Kg (Kolom J) & Susut % (Kolom K) otomatis
+ * 5. Menu Otomatis di Google Sheets: "⚡ Integrasi DHP Tembakau"
+ * 6. Webhook doPost(e) & doGet(e) untuk sinkronisasi langsung dari tombol Web App
  * =====================================================================
  */
 
@@ -206,6 +212,13 @@ var CONFIG_INTEGRASI_TEMBAKAU = {
   REKAP_DATA_START_ROW: 7 // Baris data di Rekap Tembakau dimulai dari baris 7
 };
 
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu('⚡ Integrasi DHP Tembakau')
+    .addItem('▶ Jalankan Sinkronisasi DHP ke Rekap', 'sinkronkanDhpKeRekap')
+    .addToUi();
+}
+
 function sinkronkanDhpKeRekap() {
   var ssRekap = SpreadsheetApp.openById(CONFIG_INTEGRASI_TEMBAKAU.REKAP_SS_ID);
   var shRekap = ssRekap.getSheetByName(CONFIG_INTEGRASI_TEMBAKAU.REKAP_SHEET_NAME);
@@ -214,58 +227,35 @@ function sinkronkanDhpKeRekap() {
   var shDhp = ssDhp.getSheetByName(CONFIG_INTEGRASI_TEMBAKAU.DHP_SHEET_NAME);
 
   if (!shRekap || !shDhp) {
-    Logger.log('Error: Salah satu sheet tidak ditemukan');
-    return;
+    var errMsg = 'Error: Sheet Rekap atau Sheet DHP tidak ditemukan!';
+    Logger.log(errMsg);
+    return { success: false, error: errMsg };
   }
 
-  // 1. Ambil data yang sudah ada di Rekap untuk proteksi anti-duplikasi
-  var lastRowRekap = shRekap.getLastRow();
-  var existingKeys = new Set();
-  var actualLastRow = 6;
-  
-  if (lastRowRekap >= CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW) {
-    var checkCount = Math.min(lastRowRekap - 6, 600);
-    var rekapValues = shRekap.getRange(CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW, 2, checkCount, 8).getValues();
-    for (var i = 0; i < rekapValues.length; i++) {
-      var tgl = rekapValues[i][0];
-      var jenis = String(rekapValues[i][4] || '').trim().toLowerCase(); // Kolom F
-      var baku = Number(rekapValues[i][6]) || 0; // Kolom H
-      if (tgl && String(tgl).trim() !== '' && baku > 0) {
-        actualLastRow = CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW + i;
-        var dateStr = '';
-        if (tgl instanceof Date) {
-          dateStr = Utilities.formatDate(tgl, Session.getScriptTimeZone(), 'yyyy-MM-dd');
-        } else {
-          dateStr = String(tgl).trim().toLowerCase();
-        }
-        var key = dateStr + '|' + jenis + '|' + baku.toFixed(1);
-        existingKeys.add(key);
-      }
-    }
-  }
-
-  // 2. Baca data dari DHP Tembakau (Tab INTEGRASI DATA)
+  // 1. Ambil data aktif dari DHP Tembakau (Tab INTEGRASI DATA)
   var lastRowDhp = shDhp.getLastRow();
   if (lastRowDhp < 3) {
     Logger.log('Data di DHP belum tersedia atau kosong.');
-    return;
+    return { success: false, error: 'Data DHP kosong' };
   }
   
   // Baris 1: Summary, Baris 2: Header, Data mulai baris 3
   var dhpValues = shDhp.getRange(3, 1, lastRowDhp - 2, shDhp.getLastColumn()).getValues();
-  var rowsToAppend = [];
+  var dhpBatches = [];
   var MONTH_NAMES = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
 
   for (var j = 0; j < dhpValues.length; j++) {
     var row = dhpValues[j];
     var rawTgl = row[2]; // Kolom C: Tanggal (misal: "Selasa, 20 Oktober 2026")
     var rawJenis = String(row[3] || '').trim(); // Kolom D: Jenis Tembakau
-    
-    // Normalisasi angka desimal
-    var rawBakuStr = String(row[4] || '').replace(/[^0-9,.-]/g, '').replace(',', '.');
-    var rawBaku = Number(rawBakuStr) || 0;
+    var rawBaku = parseDecimalNumber(row[4]); // Kolom E
+    var gagang = parseDecimalNumber(row[5]); // Kolom F
+    var air = parseDecimalNumber(row[6]); // Kolom G
+    var debu = parseDecimalNumber(row[7]); // Kolom H
+    var hasil = parseDecimalNumber(row[8]); // Kolom I
+    var susut = parseDecimalNumber(row[9]) || (rawBaku - hasil); // Kolom J
 
-    if (rawJenis && rawBaku > 0) {
+    if (rawJenis && (rawBaku > 0 || hasil > 0)) {
       var dateObj = null;
       var dateLabel = '';
       if (rawTgl instanceof Date) {
@@ -280,83 +270,200 @@ function sinkronkanDhpKeRekap() {
         }
       }
 
-      var checkKey = Utilities.formatDate(dateObj, Session.getScriptTimeZone(), 'yyyy-MM-dd') + '|' + rawJenis.toLowerCase() + '|' + rawBaku.toFixed(1);
+      var isoDate = Utilities.formatDate(dateObj, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+      var jalur = rawJenis.toUpperCase().includes('SKM') ? 'SKM' : 'SKT';
 
-      if (!existingKeys.has(checkKey)) {
-        var nextTargetRow = actualLastRow + 1 + rowsToAppend.length;
-        
-        var gagangStr = String(row[5] || '').replace(/[^0-9,.-]/g, '').replace(',', '.');
-        var gagang = Number(gagangStr) || 0;
-        
-        var airStr = String(row[6] || '').replace(/[^0-9,.-]/g, '').replace(',', '.');
-        var air = Number(airStr) || 0;
-        
-        var debuStr = String(row[7] || '').replace(/[^0-9,.-]/g, '').replace(',', '.');
-        var debu = Number(debuStr) || 0;
+      dhpBatches.push({
+        dateObj: dateObj,
+        dateLabel: dateLabel,
+        isoDate: isoDate,
+        bulan: MONTH_NAMES[dateObj.getMonth()],
+        tahun: String(dateObj.getFullYear()),
+        jenis: rawJenis,
+        jalur: jalur,
+        baku: rawBaku,
+        hasil: hasil,
+        susut: susut,
+        gagang: gagang,
+        air: air,
+        debu: debu
+      });
+    }
+  }
 
-        var hasilStr = String(row[8] || '').replace(/[^0-9,.-]/g, '').replace(',', '.');
-        var hasil = Number(hasilStr) || 0;
+  // 2. Baca seluruh baris di Sheet Rekap untuk pencocokan pintar (Smart Match & Fill)
+  var lastRowRekap = shRekap.getLastRow();
+  var rekapCount = Math.max(0, lastRowRekap - CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW + 1);
+  var rekapValues = [];
 
-        var susutStr = String(row[9] || '').replace(/[^0-9,.-]/g, '').replace(',', '.');
-        var susut = Number(susutStr) || (rawBaku - hasil);
-        var susutPct = rawBaku > 0 ? (susut / rawBaku) : 0;
-        
-        var jalur = rawJenis.toUpperCase().includes('SKM') ? 'SKM' : 'SKT';
+  if (rekapCount > 0) {
+    // Ambil kolom A sampai N (14 kolom)
+    rekapValues = shRekap.getRange(CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW, 1, rekapCount, 14).getValues();
+  }
 
-        rowsToAppend.push([
-          '', // A: No
-          dateLabel, // B: Tanggal (misal: "20 Okt 2026")
-          MONTH_NAMES[dateObj.getMonth()], // C: Bulan
-          String(dateObj.getFullYear()), // D: Tahun
-          '=iferror(JOIN(" ";F' + nextTargetRow + ';G' + nextTargetRow + '))', // E: Rumus Kolom E
-          rawJenis, // F: Jenis Tembakau
-          jalur, // G: Jalur (SKT/SKM)
-          rawBaku, // H: Netto Baku (Kg)
-          hasil, // I: Netto Hasil (Kg)
-          susut, // J: Susut (Kg)
-          susutPct, // K: Susut (%)
-          gagang, // L: Gagang
-          air, // M: Air
-          debu // N: Debu
-        ]);
-        existingKeys.add(checkKey);
+  var updatedCount = 0;
+  var matchedDhpIndices = new Set();
+  var rowsToAppend = [];
+  var actualMaxRow = CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW - 1;
+
+  function cleanStr(s) {
+    return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  }
+
+  // Loop setiap baris di Rekap
+  for (var k = 0; k < rekapValues.length; k++) {
+    var rowIdx = CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW + k;
+    var rRow = rekapValues[k];
+    var rTgl = rRow[1]; // Kolom B
+    var rJenis = String(rRow[5] || '').trim(); // Kolom F
+    var rBaku = parseDecimalNumber(rRow[7]); // Kolom H
+    var rHasil = parseDecimalNumber(rRow[8]); // Kolom I
+
+    if (rTgl && String(rTgl).trim() !== '') {
+      actualMaxRow = Math.max(actualMaxRow, rowIdx);
+
+      var rIso = '';
+      if (rTgl instanceof Date) {
+        rIso = Utilities.formatDate(rTgl, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+      } else {
+        var str = String(rTgl).trim();
+        var dObj = new Date(str);
+        if (!isNaN(dObj.getTime())) {
+          rIso = Utilities.formatDate(dObj, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+        } else {
+          rIso = str.toLowerCase();
+        }
+      }
+
+      // Cocokkan dengan batch DHP
+      for (var b = 0; b < dhpBatches.length; b++) {
+        var batch = dhpBatches[b];
+        var matchTgl = (rIso === batch.isoDate) || 
+                       (String(rTgl).toLowerCase().includes(batch.dateLabel.toLowerCase())) || 
+                       (String(rTgl).toLowerCase().includes(batch.isoDate));
+        var matchJenis = cleanStr(rJenis) === cleanStr(batch.jenis);
+
+        if (matchTgl && matchJenis) {
+          matchedDhpIndices.add(b);
+
+          // Cek apakah baris ini perlu diisi (Hasil masih kosong / 0)
+          var needsFill = (rHasil === 0) || (rRow[8] === '' || rRow[8] === null);
+
+          if (needsFill) {
+            // Kolom H: Netto Baku (isi jika di rekap masih kosong)
+            if (rBaku === 0 && batch.baku > 0) {
+              shRekap.getRange(rowIdx, 8).setValue(batch.baku);
+            }
+            // Kolom I: Netto Hasil
+            shRekap.getRange(rowIdx, 9).setValue(batch.hasil);
+            // Kolom J: Susut (Kg) formula
+            shRekap.getRange(rowIdx, 10).setFormula('=H' + rowIdx + '-I' + rowIdx);
+            // Kolom K: Susut (%) formula (dengan pengali 100 sesuai format angka sheet)
+            shRekap.getRange(rowIdx, 11).setFormula('=IF(H' + rowIdx + '>0; (J' + rowIdx + '/H' + rowIdx + ')*100; 0)');
+            // Kolom L: Gagang
+            shRekap.getRange(rowIdx, 12).setValue(batch.gagang);
+            // Kolom M: Air
+            if (batch.air > 0) {
+              shRekap.getRange(rowIdx, 13).setValue(batch.air);
+            } else {
+              shRekap.getRange(rowIdx, 13).clearContent();
+            }
+            // Kolom N: Debu
+            shRekap.getRange(rowIdx, 14).setValue(batch.debu);
+
+            // Kolom E: Formula JOIN
+            var formulaJoin = '=iferror(JOIN(" ";F' + rowIdx + ';G' + rowIdx + '))';
+            shRekap.getRange(rowIdx, 5).setFormula(formulaJoin);
+
+            updatedCount++;
+          }
+          break;
+        }
       }
     }
   }
 
-  // 3. Tulis baris baru (Aman dari Filter Aktif)
-  if (rowsToAppend.length > 0) {
-    // Lepas filter aktif sementara jika ada agar Google Sheets tidak memblokir penulisan baris
-    var activeFilter = shRekap.getFilter();
-    var filterRange = null;
-    if (activeFilter) {
-      filterRange = activeFilter.getRange();
-      activeFilter.remove();
+  // 3. Tambahkan baris baru jika ada batch DHP yang belum ada barisnya sama sekali
+  for (var m = 0; m < dhpBatches.length; m++) {
+    if (!matchedDhpIndices.has(m)) {
+      var item = dhpBatches[m];
+      var newTargetRow = actualMaxRow + 1 + rowsToAppend.length;
+      rowsToAppend.push([
+        '', // A: No
+        item.dateLabel, // B: Tanggal
+        item.bulan, // C: Bulan
+        item.tahun, // D: Tahun
+        '=iferror(JOIN(" ";F' + newTargetRow + ';G' + newTargetRow + '))', // E: Formula JOIN
+        item.jenis, // F: Jenis Tembakau
+        item.jalur, // G: Jalur (SKT/SKM)
+        item.baku, // H: Netto Baku
+        item.hasil, // I: Netto Hasil
+        '=H' + newTargetRow + '-I' + newTargetRow, // J: Susut (Kg)
+        '=IF(H' + newTargetRow + '>0; (J' + newTargetRow + '/H' + newTargetRow + ')*100; 0)', // K: Susut (%)
+        item.gagang, // L: Gagang
+        item.air > 0 ? item.air : '', // M: Air
+        item.debu // N: Debu
+      ]);
     }
-
-    // Tulis baris baru (Kolom E otomatis menjadi formula aktif =iferror(JOIN(...)))
-    shRekap.getRange(actualLastRow + 1, 1, rowsToAppend.length, rowsToAppend[0].length).setValues(rowsToAppend);
-    
-    // Pasang kembali filter mencakup baris baru
-    if (filterRange) {
-      try {
-        var newTotalRows = actualLastRow + rowsToAppend.length;
-        shRekap.getRange(6, 2, newTotalRows - 5, filterRange.getNumColumns()).createFilter();
-      } catch (eF) {}
-    }
-    
-    var successMsg = 'Berhasil membukukan ' + rowsToAppend.length + ' baris baru dari DHP ke Rekap Susut Tembakau!';
-    Logger.log(successMsg);
-    try {
-      SpreadsheetApp.getUi().alert('Sukses Integrasi', successMsg, SpreadsheetApp.getUi().ButtonSet.OK);
-    } catch(e) {}
-  } else {
-    var upToDateMsg = 'Semua data DHP Tembakau sudah tercatat di Rekap (0 baris baru).';
-    Logger.log(upToDateMsg);
-    try {
-      SpreadsheetApp.getUi().alert('Sudah Sinkron', upToDateMsg, SpreadsheetApp.getUi().ButtonSet.OK);
-    } catch(e) {}
   }
+
+  var appendedCount = 0;
+  if (rowsToAppend.length > 0) {
+    shRekap.getRange(actualMaxRow + 1, 1, rowsToAppend.length, rowsToAppend[0].length).setValues(rowsToAppend);
+    appendedCount = rowsToAppend.length;
+  }
+
+  var summaryMsg = 'Sinkronisasi Selesai: ' + updatedCount + ' baris draft berhasil diisi otomatis, ' + appendedCount + ' baris baru ditambahkan.';
+  Logger.log(summaryMsg);
+
+  try {
+    SpreadsheetApp.getUi().alert('⚡ Hasil Integrasi DHP Tembakau', summaryMsg, SpreadsheetApp.getUi().ButtonSet.OK);
+  } catch(e) {}
+
+  return {
+    success: true,
+    updatedCount: updatedCount,
+    appendedCount: appendedCount,
+    message: summaryMsg
+  };
+}
+
+function parseDecimalNumber(val) {
+  if (val === null || val === undefined) return 0;
+  var str = String(val).replace(/[^0-9,.-]/g, '').replace(',', '.');
+  return Number(str) || 0;
+}
+
+/**
+ * Webhook POST untuk dipanggil dari Web App
+ */
+function doPost(e) {
+  try {
+    var result = sinkronkanDhpKeRekap();
+    return ContentService.createTextOutput(JSON.stringify(result))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({
+      success: false,
+      error: err.toString()
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+/**
+ * Webhook GET untuk pemanggilan URL langsung
+ */
+function doGet(e) {
+  var action = (e && e.parameter && e.parameter.action) || '';
+  if (action === 'syncDhp' || action === 'syncDhpToRekap') {
+    var res = sinkronkanDhpKeRekap();
+    return ContentService.createTextOutput(JSON.stringify(res))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+  return ContentService.createTextOutput(JSON.stringify({
+    status: 'GAS Integrasi DHP Tembakau Aktif',
+    instruction: 'Panggil dengan action=syncDhp atau jalankan fungsi sinkronkanDhpKeRekap()'
+  })).setMimeType(ContentService.MimeType.JSON);
 }`;
 
   const handleCopyCode = () => {
@@ -650,13 +757,18 @@ function sinkronkanDhpKeRekap() {
                             </td>
                             <td className="py-2 px-2.5 text-center whitespace-nowrap">
                               {item.alreadyInRekap ? (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-950/80 text-emerald-300 border border-emerald-700/70">
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-950/80 text-emerald-300 border border-emerald-700/70">
                                   <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                                  Sudah Masuk di Rekap
+                                  {item.matchedRow ? `Sudah Masuk di Rekap (Baris ${item.matchedRow})` : 'Sudah Masuk di Rekap'}
+                                </span>
+                              ) : item.matchedRow ? (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-blue-950/90 text-blue-300 border border-blue-500/80 shadow-sm animate-pulse">
+                                  <Sparkles className="w-3 h-3 text-blue-400" />
+                                  Siap Diisi Otomatis (Baris {item.matchedRow})
                                 </span>
                               ) : (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-blue-950/80 text-blue-300 border border-blue-700/70 shadow-sm animate-pulse">
-                                  <Sparkles className="w-3 h-3 text-blue-400" />
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-950/80 text-indigo-300 border border-indigo-700/70 shadow-sm">
+                                  <Layers className="w-3 h-3 text-indigo-400" />
                                   Batch Baru (Siap Masuk)
                                 </span>
                               )}

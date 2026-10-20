@@ -40,9 +40,9 @@ export const INITIAL_SERVER_DASHBOARD = {
     ],
     jenisProses: ["SKM", "SKT"]
   },
-  entriTerkini: "6 Oktober 2026",
+  entriTerkini: "20 Oktober 2026",
   ringkasanTahunan: {
-    jumlahData: 1500,
+    jumlahData: 1526,
     baku: 1499990.9,
     hasil: 1364410.8,
     susutKg: 135580.1,

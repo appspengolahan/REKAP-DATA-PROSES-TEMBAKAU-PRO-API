@@ -16,7 +16,9 @@ async function startServer() {
     try {
       const spreadsheetId = (req.query.spreadsheetId as string) || '1LnixFRQXFjDaR_LYoOUvsj84Y_Lb5W8samFOPWrDSC0';
       const sheet = (req.query.sheet as string) || '_CACHE_REKAP_TBK';
-      const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheet)}`;
+      const range = (req.query.range as string) || '';
+      const rangeQuery = range ? `&range=${encodeURIComponent(range)}` : '';
+      const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheet)}${rangeQuery}`;
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 12000);

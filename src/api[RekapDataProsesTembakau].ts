@@ -147,9 +147,9 @@ export class RekapDataProsesTembakauService {
   }
 
   public static getRawData(): RawRowData[] {
-    if (this.cachedRows && this.cachedRows.length > 0) {
-      const has2025 = this.cachedRows.some(r => r.tahun === '2025');
-      if (has2025 && this.cachedRows.length >= 500) {
+    if (this.cachedRows && this.cachedRows.length >= INITIAL_DATA_RAW.length) {
+      const hasLatest = this.cachedRows.some(r => r.tanggal?.includes('2026-10-20') || r.tanggal?.includes('20 Okt'));
+      if (hasLatest) {
         return this.cachedRows;
       }
     }
@@ -158,17 +158,20 @@ export class RekapDataProsesTembakauService {
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          const has2025 = parsed.some((r: any) => r.tahun === '2025');
-          if (has2025 && parsed.length >= 500) {
+          const hasLatest = parsed.some((r: any) => r.tanggal?.includes('2026-10-20') || r.tanggal?.includes('20 Okt'));
+          if (hasLatest && parsed.length >= INITIAL_DATA_RAW.length) {
             this.cachedRows = parsed;
             return parsed;
           }
-          // Merge parsed rows with historical 2025 rows so 2025 is never lost
-          const rows2025 = INITIAL_DATA_RAW.filter(r => r.tahun === '2025');
+          // Merge parsed rows with latest INITIAL_DATA_RAW so latest dates are never missed
           const merged = [...parsed];
-          for (const r25 of rows2025) {
-            if (!merged.some((p: any) => p.batchNo === r25.batchNo || (p.tanggal === r25.tanggal && p.jenisTembakau === r25.jenisTembakau && p.baku === r25.baku))) {
-              merged.push(r25);
+          for (const initRow of INITIAL_DATA_RAW) {
+            const exists = merged.some((p: any) => 
+              (initRow.srcRow && p.srcRow === initRow.srcRow) || 
+              (p.tanggal === initRow.tanggal && p.jenisTembakau?.trim().toLowerCase() === initRow.jenisTembakau?.trim().toLowerCase())
+            );
+            if (!exists) {
+              merged.push(initRow);
             }
           }
           this.cachedRows = merged;
@@ -482,6 +485,53 @@ export class RekapDataProsesTembakauService {
         }
       }
 
+      // Mode 3: ALWAYS fetch the active latest range (A1500:N1600) from operational REKAP SUSUT TEMBAKAU
+      // so any active transactions (e.g. from 7 Oktober to 20 Oktober 2026 and beyond) are ALWAYS merged!
+      try {
+        let activeCsv = '';
+        try {
+          const proxyResp = await fetch(`/api/pull-sheet?spreadsheetId=${spreadsheetId}&sheet=REKAP%20SUSUT%20TEMBAKAU&range=A1500:N1600`);
+          if (proxyResp.ok) {
+            const data = await proxyResp.json();
+            if (data?.success && data?.csv) {
+              activeCsv = data.csv;
+            }
+          }
+        } catch (e) {}
+
+        if (!activeCsv) {
+          const directUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv&sheet=REKAP%20SUSUT%20TEMBAKAU&range=A1500:N1600`;
+          const resp = await fetch(directUrl, { method: 'GET' });
+          if (resp.ok) {
+            const text = await resp.text();
+            if (text && !text.includes('google-signin') && !text.includes('<!DOCTYPE html>')) {
+              activeCsv = text;
+            }
+          }
+        }
+
+        if (activeCsv) {
+          const activeRows = this.parseActiveRekapRangeCSV(activeCsv, 1500);
+          if (activeRows.length > 0) {
+            for (const act of activeRows) {
+              const idx = rows.findIndex(r => 
+                (r.srcRow && r.srcRow === act.srcRow) || 
+                (r.tanggal === act.tanggal && r.jenisTembakau?.trim().toLowerCase() === act.jenisTembakau?.trim().toLowerCase())
+              );
+              if (idx !== -1) {
+                rows[idx] = { ...rows[idx], ...act };
+              } else {
+                rows.push(act);
+              }
+            }
+            if (!tabUsed) tabUsed = 'REKAP SUSUT TEMBAKAU (Live)';
+            else tabUsed += ' + REKAP SUSUT (Live)';
+          }
+        }
+      } catch (actErr) {
+        console.warn('Notice fetching active range from REKAP SUSUT TEMBAKAU:', actErr);
+      }
+
       if (rows.length === 0) {
         // Use existing cached/initial rows without throwing
         const cached = this.getRawData();
@@ -523,6 +573,88 @@ export class RekapDataProsesTembakauService {
         tabUsed: 'Cache Lokal'
       };
     }
+  }
+
+  public static parseActiveRekapRangeCSV(text: string, startRowNumber: number = 1500): RawRowData[] {
+    const lines = this.parseRawCSVGrid(text);
+    const parseNum = (val: string): number => {
+      if (!val) return 0;
+      let clean = String(val).replace(/Kg/gi, '').replace(/%/gi, '').trim();
+      if (clean.includes(',') && clean.includes('.')) {
+        clean = clean.replace(/\./g, '').replace(',', '.');
+      } else if (clean.includes(',')) {
+        clean = clean.replace(',', '.');
+      }
+      const n = parseFloat(clean);
+      return isNaN(n) ? 0 : Math.round(n * 100) / 100;
+    };
+
+    const bulanIndoMap: Record<string, string> = {
+      januari: '01', februari: '02', maret: '03', april: '04',
+      mei: '05', juni: '06', juli: '07', agustus: '08',
+      september: '09', oktober: '10', november: '11', desember: '12',
+      jan: '01', feb: '02', mar: '03', apr: '04',
+      jul: '07', agu: '08', ags: '08', sep: '09', okt: '10', nov: '11', des: '12'
+    };
+
+    const formatIsoDate = (tgl: string, bln: string, thn: string): string => {
+      if (!tgl) return '';
+      const clean = tgl.replace(/^[a-zA-Z]+,\s*/, '').trim();
+      const parts = clean.split(/\s+/);
+      if (parts.length >= 3) {
+        const d = parts[0].padStart(2, '0');
+        const m = bulanIndoMap[parts[1].toLowerCase()] || '01';
+        const y = parts[2];
+        return `${y}-${m}-${d}`;
+      }
+      if (parts.length === 1 && !isNaN(Number(parts[0])) && bln && thn) {
+        const d = parts[0].padStart(2, '0');
+        const m = bulanIndoMap[bln.toLowerCase()] || '01';
+        return `${thn}-${m}-${d}`;
+      }
+      return tgl;
+    };
+
+    const rows: RawRowData[] = [];
+    lines.forEach((r, idx) => {
+      const srcRow = startRowNumber + idx;
+      const tgl = r[1] ? r[1].trim() : '';
+      const bln = r[2] ? r[2].trim() : 'Oktober';
+      const thn = r[3] ? r[3].trim() : '2026';
+      const jenis = r[5] ? r[5].trim() : '';
+      const proses = r[6] ? r[6].trim() : 'SKT';
+      const baku = parseNum(r[7]);
+      const hasil = parseNum(r[8]);
+      const susutKg = parseNum(r[9]) || (baku - hasil);
+      const susutPct = baku > 0 ? Math.round(((susutKg / baku) * 100) * 100) / 100 : 0;
+      const gagang = parseNum(r[11]);
+      const air = parseNum(r[12]);
+      const debu = parseNum(r[13]);
+      const debuAirKg = Math.round((air + debu) * 10) / 10;
+
+      if (tgl && jenis && (baku > 0 || hasil > 0)) {
+        rows.push({
+          srcRow,
+          batchNo: `TBK-${thn}-${srcRow}`,
+          tanggal: formatIsoDate(tgl, bln, thn),
+          bulan: bln,
+          tahun: thn,
+          jenisTembakau: jenis,
+          jenisProses: proses,
+          baku,
+          hasil,
+          susutKg: Math.round(susutKg * 10) / 10,
+          susutPct,
+          gagangKg: gagang,
+          airKg: air,
+          debuKg: debu,
+          debuAirKg,
+          status: 'Selesai'
+        });
+      }
+    });
+
+    return rows;
   }
 
   public static parseRekapSusutTembakauCSV(text: string): RawRowData[] {
@@ -1094,14 +1226,27 @@ export class RekapDataProsesTembakauService {
 
     const currentRows = existingRows || this.getRawData();
     
-    // Siapkan set kunci yang sudah ada di Rekap untuk pencocokan anti-duplikasi
-    const existingKeys = new Set<string>();
+    // Siapkan peta data yang sudah ada di Rekap untuk pencocokan pintar (Smart Match & Fill)
+    interface RekapRowRef {
+      srcRow?: number;
+      tanggal: string;
+      jenisTembakau: string;
+      baku: number;
+      hasil: number;
+    }
+
+    const rekapMap = new Map<string, RekapRowRef>();
     currentRows.forEach(r => {
       const tglClean = (r.tanggal || '').trim().toLowerCase();
-      const jenisClean = (r.jenisTembakau || '').trim().toLowerCase();
-      const bakuFix = Number(r.baku || 0).toFixed(1);
-      if (tglClean && bakuFix !== '0.0') {
-        existingKeys.add(`${tglClean}|${jenisClean}|${bakuFix}`);
+      const jenisClean = (r.jenisTembakau || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (tglClean && jenisClean) {
+        rekapMap.set(`${tglClean}|${jenisClean}`, {
+          srcRow: r.srcRow,
+          tanggal: r.tanggal,
+          jenisTembakau: r.jenisTembakau,
+          baku: r.baku || 0,
+          hasil: r.hasil || 0
+        });
       }
     });
 
@@ -1184,10 +1329,15 @@ export class RekapDataProsesTembakauService {
       if (!jenis || rawBaku <= 0) continue;
 
       const isoDate = parseToIsoDate(rawTgl);
-      const matchKeyIso = `${isoDate}|${jenis.toLowerCase()}|${rawBaku.toFixed(1)}`;
-      const matchKeyRaw = `${rawTgl.toLowerCase()}|${jenis.toLowerCase()}|${rawBaku.toFixed(1)}`;
+      const cleanJenis = jenis.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const matchKeyIso = `${isoDate}|${cleanJenis}`;
+      const matchKeyRaw = `${rawTgl.toLowerCase()}|${cleanJenis}`;
       
-      const alreadyInRekap = existingKeys.has(matchKeyIso) || existingKeys.has(matchKeyRaw);
+      const matchedRekap = rekapMap.get(matchKeyIso) || rekapMap.get(matchKeyRaw);
+      
+      // Jika hasil di Rekap sudah terisi dan > 0, dianggap terverifikasi lengkap
+      const isAlreadyFilledInRekap = !!(matchedRekap && matchedRekap.hasil > 0);
+      const matchedRowNumber = matchedRekap?.srcRow;
 
       const gagangKg = parseNumber(row[5]);
       const airKg = parseNumber(row[6]);
@@ -1199,10 +1349,17 @@ export class RekapDataProsesTembakauService {
 
       const jalur: 'SKT' | 'SKM' = jenis.toUpperCase().includes('SKM') ? 'SKM' : 'SKT';
 
-      if (alreadyInRekap) {
+      if (isAlreadyFilledInRekap) {
         terverifikasiCount++;
       }
       totalBakuKg += rawBaku;
+
+      let statusIntegrasi = 'Batch Baru (Siap Masuk)';
+      if (isAlreadyFilledInRekap) {
+        statusIntegrasi = matchedRowNumber ? `Sudah Masuk di Rekap (Baris ${matchedRowNumber})` : 'Sudah Masuk di Rekap';
+      } else if (matchedRekap) {
+        statusIntegrasi = matchedRowNumber ? `Siap Diisi Otomatis (Baris ${matchedRowNumber})` : 'Siap Diisi Otomatis';
+      }
 
       items.push({
         rowNumber: i + 1, // Nomor baris di sheet DHP
@@ -1218,8 +1375,9 @@ export class RekapDataProsesTembakauService {
         gagangKg: Math.round(gagangKg * 10) / 10,
         airKg: Math.round(airKg * 10) / 10,
         debuKg: Math.round(debuKg * 10) / 10,
-        statusIntegrasi: alreadyInRekap ? 'Sudah Masuk di Rekap' : 'Batch Baru (Siap Masuk)',
-        alreadyInRekap,
+        statusIntegrasi: statusIntegrasi as any,
+        alreadyInRekap: isAlreadyFilledInRekap,
+        matchedRow: matchedRowNumber,
         matchKey: matchKeyIso
       });
     }

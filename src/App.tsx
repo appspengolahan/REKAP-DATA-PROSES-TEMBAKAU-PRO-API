@@ -584,12 +584,40 @@ export default function App() {
         existingRows={rows}
         onTarikDatasheetRekap={() => handleTarikDatasheet('AUTO')}
         onAppendRecordsToRekap={(newRecords) => {
-          const updated = [...rows, ...newRecords];
+          const updated = [...rows];
+          newRecords.forEach((rec) => {
+            const idx = updated.findIndex((r) => {
+              if (rec.srcRow && r.srcRow === rec.srcRow) return true;
+              const rTgl = (r.tanggal || '').trim().toLowerCase();
+              const recTgl = (rec.tanggal || '').trim().toLowerCase();
+              const rJenis = (r.jenisTembakau || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+              const recJenis = (rec.jenisTembakau || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+              return rTgl === recTgl && rJenis === recJenis;
+            });
+
+            if (idx !== -1) {
+              updated[idx] = {
+                ...updated[idx],
+                baku: updated[idx].baku > 0 ? updated[idx].baku : rec.baku,
+                hasil: rec.hasil,
+                susutKg: rec.susutKg,
+                susutPct: rec.susutPct,
+                gagangKg: rec.gagangKg,
+                airKg: rec.airKg,
+                debuKg: rec.debuKg,
+                debuAirKg: rec.debuAirKg,
+                srcRow: updated[idx].srcRow || rec.srcRow
+              };
+            } else {
+              updated.push(rec);
+            }
+          });
+
           setRows(updated);
           RekapDataProsesTembakauService.saveRawData(updated);
           setToastNotification({
             type: 'success',
-            message: `Berhasil membukukan ${newRecords.length} batch dari DHP Tembakau ke Rekap!`
+            message: `Berhasil membukukan dan memperbarui data batch DHP Tembakau ke Rekap Susut!`
           });
         }}
         gasConfig={gasConfig}
