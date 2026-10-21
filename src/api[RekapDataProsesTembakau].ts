@@ -601,7 +601,9 @@ export class RekapDataProsesTembakauService {
             for (const act of activeRows) {
               const idx = rows.findIndex(r => 
                 (r.srcRow && r.srcRow === act.srcRow) || 
-                (r.tanggal === act.tanggal && r.jenisTembakau?.trim().toLowerCase() === act.jenisTembakau?.trim().toLowerCase())
+                (r.tanggal === act.tanggal && 
+                 r.jenisTembakau?.trim().toLowerCase() === act.jenisTembakau?.trim().toLowerCase() &&
+                 (r.jenisProses === act.jenisProses || Math.abs((r.baku || 0) - (act.baku || 0)) < 1))
               );
               if (idx !== -1) {
                 rows[idx] = { ...rows[idx], ...act };
@@ -1328,20 +1330,38 @@ export class RekapDataProsesTembakauService {
       jenisTembakau: string;
       baku: number;
       hasil: number;
+      jalur: string;
     }
 
     const rekapMap = new Map<string, RekapRowRef>();
     currentRows.forEach(r => {
       const tglClean = (r.tanggal || '').trim().toLowerCase();
       const jenisClean = (r.jenisTembakau || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+      const jalurClean = (r.jenisProses || '').trim().toLowerCase();
+      const bakuRound = Math.round((r.baku || 0) * 10) / 10;
+
+      const ref: RekapRowRef = {
+        srcRow: r.srcRow,
+        tanggal: r.tanggal,
+        jenisTembakau: r.jenisTembakau,
+        baku: r.baku || 0,
+        hasil: r.hasil || 0,
+        jalur: r.jenisProses || 'SKT'
+      };
+
       if (tglClean && jenisClean) {
-        rekapMap.set(`${tglClean}|${jenisClean}`, {
-          srcRow: r.srcRow,
-          tanggal: r.tanggal,
-          jenisTembakau: r.jenisTembakau,
-          baku: r.baku || 0,
-          hasil: r.hasil || 0
-        });
+        // 1. Kunci spesifik: Tanggal + Jenis + Jalur (misal "2026-10-21|madura2024batr|skm")
+        if (jalurClean) {
+          rekapMap.set(`${tglClean}|${jenisClean}|${jalurClean}`, ref);
+        }
+        // 2. Kunci spesifik: Tanggal + Jenis + Nilai Baku (misal "2026-10-21|madura2024batr|396.7")
+        if (bakuRound > 0) {
+          rekapMap.set(`${tglClean}|${jenisClean}|${bakuRound}`, ref);
+        }
+        // 3. Fallback: Tanggal + Jenis
+        if (!rekapMap.has(`${tglClean}|${jenisClean}`)) {
+          rekapMap.set(`${tglClean}|${jenisClean}`, ref);
+        }
       }
     });
 
@@ -1388,13 +1408,12 @@ export class RekapDataProsesTembakauService {
 
     const parseToIsoDate = (rawStr: string): string => {
       if (!rawStr) return '';
-      const clean = rawStr.replace(/^[a-zA-Z]+,\s*/, '').trim();
-      const parts = clean.split(/\s+/);
-      if (parts.length >= 3) {
-        const d = parts[0].padStart(2, '0');
-        const m = bulanIndoMap[parts[1].toLowerCase()] || '01';
-        const y = parts[2];
-        return `${y}-${m}-${d}`;
+      const d = parseIndonesianDate(rawStr);
+      if (d) {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
       }
       return '';
     };
@@ -1411,7 +1430,18 @@ export class RekapDataProsesTembakauService {
     let totalBakuKg = 0;
     let terverifikasiCount = 0;
 
-    // Baris 0 adalah summary total, baris 1 adalah header ('JENIS TEMBAKAU', 'WAKTU')
+    // Temukan index kolom 'PERLAKUAN PROSES' secara dinamis dari header
+    let perlakuanColIdx = 13; // default Kolom N (index 13)
+    if (parsedRows.length > 1) {
+      const headerRow = parsedRows[1];
+      const foundIdx = headerRow.findIndex(h => /perlakuan\s*proses/i.test(h.trim()));
+      if (foundIdx !== -1) {
+        perlakuanColIdx = foundIdx;
+      }
+    }
+
+    // Parse CSV baris per baris
+    // Baris 0 adalah summary total, baris 1 adalah header ('JENIS TEMBAKAU', 'WAKTU', 'PERLAKUAN PROSES')
     // Data aktif berada di baris 2 sampai akhir
     for (let i = 2; i < parsedRows.length; i++) {
       const row = parsedRows[i];
@@ -1423,12 +1453,32 @@ export class RekapDataProsesTembakauService {
 
       if (!jenis || rawBaku <= 0) continue;
 
+      // Ambil Jalur Proses dari Kolom PERLAKUAN PROSES (DHP)
+      const rawPerlakuan = (row[perlakuanColIdx] || row[13] || '').trim().toUpperCase();
+      let jalur: 'SKT' | 'SKM' = 'SKT';
+      if (rawPerlakuan.includes('SKM') || jenis.toUpperCase().includes('SKM')) {
+        jalur = 'SKM';
+      } else if (rawPerlakuan.includes('SKT') || jenis.toUpperCase().includes('SKT')) {
+        jalur = 'SKT';
+      }
+
       const isoDate = parseToIsoDate(rawTgl);
       const cleanJenis = jenis.toLowerCase().replace(/[^a-z0-9]/g, '');
-      const matchKeyIso = `${isoDate}|${cleanJenis}`;
-      const matchKeyRaw = `${rawTgl.toLowerCase()}|${cleanJenis}`;
-      
-      const matchedRekap = rekapMap.get(matchKeyIso) || rekapMap.get(matchKeyRaw);
+      const cleanJalur = jalur.toLowerCase();
+      const bakuRound = Math.round(rawBaku * 10) / 10;
+      const matchKeyIso = `${isoDate}|${cleanJenis}|${cleanJalur}`;
+
+      // Pencocokan pintar berjenjang (prioritaskan bobot baku jika ada beberapa batch di tanggal yang sama):
+      // 1. Tanggal + Jenis + Nilai Baku (sangat presisi untuk membedakan batch SKM 396.7 Kg vs SKT 7568.8 Kg)
+      // 2. Tanggal + Jenis + Jalur
+      // 3. Tanggal + Jenis
+      const matchedRekap = 
+        rekapMap.get(`${isoDate}|${cleanJenis}|${bakuRound}`) ||
+        rekapMap.get(`${rawTgl.toLowerCase()}|${cleanJenis}|${bakuRound}`) ||
+        rekapMap.get(`${isoDate}|${cleanJenis}|${cleanJalur}`) ||
+        rekapMap.get(`${rawTgl.toLowerCase()}|${cleanJenis}|${cleanJalur}`) ||
+        rekapMap.get(`${isoDate}|${cleanJenis}`) ||
+        rekapMap.get(`${rawTgl.toLowerCase()}|${cleanJenis}`);
       
       // Jika hasil di Rekap sudah terisi dan > 0, dianggap terverifikasi lengkap
       const isAlreadyFilledInRekap = !!(matchedRekap && matchedRekap.hasil > 0);
@@ -1441,8 +1491,6 @@ export class RekapDataProsesTembakauService {
       const susutKg = parseNumber(row[9]) || (rawBaku - hasil);
       const susutPct = rawBaku > 0 ? (susutKg / rawBaku) * 100 : 0;
       const waktu = (row[12] || '-').trim();
-
-      const jalur: 'SKT' | 'SKM' = jenis.toUpperCase().includes('SKM') ? 'SKM' : 'SKT';
 
       if (isAlreadyFilledInRekap) {
         terverifikasiCount++;

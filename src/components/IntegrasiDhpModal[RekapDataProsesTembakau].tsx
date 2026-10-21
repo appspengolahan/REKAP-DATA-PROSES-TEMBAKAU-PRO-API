@@ -255,6 +255,17 @@ function sinkronkanDhpKeRekap() {
   
   // Baris 1: Summary, Baris 2: Header, Data mulai baris 3
   var dhpValues = shDhp.getRange(3, 1, lastRowDhp - 2, shDhp.getLastColumn()).getValues();
+
+  // Deteksi kolom PERLAKUAN PROSES secara dinamis dari baris 2 DHP
+  var headerDhp = shDhp.getRange(2, 1, 1, shDhp.getLastColumn()).getValues()[0];
+  var perlakuanColIndex = 13; // default Kolom N (0-indexed 13)
+  for (var h = 0; h < headerDhp.length; h++) {
+    var hText = String(headerDhp[h] || '').toLowerCase();
+    if (hText.indexOf('perlakuan') !== -1 && hText.indexOf('proses') !== -1) {
+      perlakuanColIndex = h;
+      break;
+    }
+  }
   // Kamus & Parser Tanggal Berbasis Locale Indonesia
   var INDO_MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
   var INDO_MONTH_MAP = {
@@ -319,6 +330,8 @@ function sinkronkanDhpKeRekap() {
     return y + '-' + m + '-' + day;
   }
 
+  var dhpBatches = [];
+
   for (var j = 0; j < dhpValues.length; j++) {
     var row = dhpValues[j];
     var rawTgl = row[2]; // Kolom C: Tanggal (misal: "Selasa, 20 Oktober 2026")
@@ -336,7 +349,10 @@ function sinkronkanDhpKeRekap() {
 
       var dateLabel = formatKolomBTanggal(dateObj); // "20 Okt 2026" (Format Kolom B Sheet Rekap)
       var isoDate = formatIsoDateStr(dateObj); // "2026-10-20"
-      var jalur = rawJenis.toUpperCase().includes('SKM') ? 'SKM' : 'SKT';
+      
+      // Ambil Jalur Proses dari Kolom PERLAKUAN PROSES (DHP)
+      var rawPerlakuan = String(row[perlakuanColIndex] || row[13] || '').trim().toUpperCase();
+      var jalur = (rawPerlakuan.indexOf('SKM') !== -1 || rawJenis.toUpperCase().indexOf('SKM') !== -1) ? 'SKM' : 'SKT';
 
       dhpBatches.push({
         dateObj: dateObj,
@@ -376,8 +392,9 @@ function sinkronkanDhpKeRekap() {
   for (var k = 0; k < rekapValues.length; k++) {
     var rowIdx = CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW + k;
     var rRow = rekapValues[k];
-    var rTgl = rRow[1]; // Kolom B: Tanggal (misal: "20 Okt 2026")
+    var rTgl = rRow[1]; // Kolom B: Tanggal (misal: "21 Okt 2026")
     var rJenis = String(rRow[5] || '').trim(); // Kolom F: Jenis Tembakau
+    var rJalur = String(rRow[6] || '').trim().toUpperCase(); // Kolom G: Jenis/Jalur (SKT / SKM)
     var rBaku = parseDecimalNumber(rRow[7]); // Kolom H: Netto Baku
     var rHasil = parseDecimalNumber(rRow[8]); // Kolom I: Netto Hasil
 
@@ -390,27 +407,31 @@ function sinkronkanDhpKeRekap() {
 
       // Cocokkan dengan batch DHP
       for (var b = 0; b < dhpBatches.length; b++) {
+        if (matchedDhpIndices.has(b)) continue;
         var batch = dhpBatches[b];
         var matchTgl = (rIso === batch.isoDate) || 
                        (rLabel === batch.dateLabel.toLowerCase()) ||
                        (cleanStr(rTgl).includes(cleanStr(batch.dateLabel)));
         var matchJenis = cleanStr(rJenis) === cleanStr(batch.jenis);
 
-        if (matchTgl && matchJenis) {
+        // Cocok jika bobot baku sama persis (< 5 Kg) ATAU jika jalur & jenis sama pada tanggal tsb
+        var matchBaku = (rBaku > 0 && Math.abs(rBaku - batch.baku) < 5);
+        var matchJalur = (rJalur === batch.jalur);
+
+        if (matchTgl && matchJenis && (matchBaku || matchJalur)) {
           matchedDhpIndices.add(b);
 
-          // Cek apakah baris ini perlu diisi (Hasil masih kosong / 0)
-          var needsFill = (rHasil === 0) || (rRow[8] === '' || rRow[8] === null);
+          // ========================================================
+          // 📌 KETENTUAN: SHEET TUJUAN REKAP MENGIKUTI APA YG TERCANTUM PADA DHP
+          // Update Kolom G (Col 7) agar persis mengikuti jalur DHP (SKT atau SKM)
+          // ========================================================
+          shRekap.getRange(rowIdx, 7).setValue(batch.jalur);
+
+          // Cek apakah baris ini perlu diisi / diperbarui dengan data akhir DHP
+          var needsFill = (rHasil === 0) || (rRow[8] === '' || rRow[8] === null) || (Math.abs(rHasil - batch.hasil) > 0.01);
 
           if (needsFill) {
-            // ========================================================
-            // ⚠️ ATURAN KETAT: JANGAN MENIMPA KOLOM C, D, E, J, DAN K!
-            // Kolom C, D, E, J, dan K sudah berisi formula/rumus bawaan.
-            // Rumus tersebut akan berhitung secara otomatis.
-            // HANYA update kolom data input murni:
-            // ========================================================
-
-            // Kolom H (Col 8): Netto Baku (isi hanya jika di rekap masih kosong / 0)
+            // Kolom H (Col 8): Netto Baku (isi jika di rekap masih kosong / 0)
             if (rBaku === 0 && batch.baku > 0) {
               shRekap.getRange(rowIdx, 8).setValue(batch.baku);
             }
@@ -434,7 +455,7 @@ function sinkronkanDhpKeRekap() {
             // SANGAT PENTING:
             // - Kolom C (3): JANGAN DISENTUH (Formula Bulan otomatis)
             // - Kolom D (4): JANGAN DISENTUH (Formula Tahun otomatis)
-            // - Kolom E (5): JANGAN DISENTUH (Formula JOIN Jenis/Perlakuan)
+            // - Kolom E (5): JANGAN DISENTUH (Formula JOIN Jenis/Perlakuan berhitung otomatis)
             // - Kolom J (10): JANGAN DISENTUH (Formula Susut Kg otomatis)
             // - Kolom K (11): JANGAN DISENTUH (Formula Susut % format persen otomatis)
 
@@ -972,11 +993,15 @@ function doGet(e) {
                       <td className="py-2.5 px-3 text-blue-300 font-mono">DHP Kolom D</td>
                       <td className="py-2.5 px-3 text-slate-400">Nama murni jenis tembakau (misal: Paiton 2024 (VJI))</td>
                     </tr>
-                    <tr>
-                      <td className="py-2.5 px-3 font-mono font-bold text-slate-400">Kolom G</td>
-                      <td className="py-2.5 px-3 font-medium text-white">Jenis (Jalur)</td>
-                      <td className="py-2.5 px-3 text-blue-300 font-mono">DHP Deteksi</td>
-                      <td className="py-2.5 px-3 text-slate-400">SKT atau SKM</td>
+                    <tr className="bg-blue-950/20">
+                      <td className="py-2.5 px-3 font-mono font-bold text-blue-400">Kolom G</td>
+                      <td className="py-2.5 px-3 font-bold text-blue-300">Jenis (Jalur Proses)</td>
+                      <td className="py-2.5 px-3 text-blue-300 font-mono">
+                        DHP Kolom &quot;PERLAKUAN PROSES&quot;
+                      </td>
+                      <td className="py-2.5 px-3 text-blue-200">
+                        Mengikuti apa yang tercantum pada DHP (<strong>SKT</strong> atau <strong>SKM</strong>). Nilai ini diisikan ke Kolom G Rekap, sehingga rumus di Kolom E otomatis menyusun nama bahan dan jalur proses secara presisi (contoh: <em>Madura 2024 (BAT) R SKM</em> atau <em>Madura 2024 (BAT) R SKT</em>).
+                      </td>
                     </tr>
                     <tr className="bg-emerald-950/20">
                       <td className="py-2.5 px-3 font-mono font-bold text-emerald-400">Kolom H</td>
