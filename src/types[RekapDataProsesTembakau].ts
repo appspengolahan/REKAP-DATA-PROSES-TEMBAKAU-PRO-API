@@ -12,6 +12,7 @@ export interface RawRowData {
   srcRow: number;
   batchNo?: string;
   tanggal: string; // yyyy-MM-dd
+  tanggalDisplay?: string; // Format tampilan bahasa Indonesia (misal: "20 Okt 2026")
   bulan: string;   // e.g. "Januari", "Februari"
   tahun: string;   // e.g. "2026"
   jenisPerlakuan?: string;

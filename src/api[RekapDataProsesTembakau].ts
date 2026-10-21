@@ -64,56 +64,141 @@ export function generateSheetFormulaSusutPct(bakuCell: string, susutCell: string
   return `=IF(${bakuCell}>0; (${susutCell}/${bakuCell})*100; 0)`;
 }
 
-// 4. Indonesian Locale Date & Time Formatter
+// 4. Indonesian Locale Date & Time Formatter Engine
+export const HARI_INDONESIA = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+export const BULAN_INDONESIA_LENGKAP = [
+  'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+  'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+];
+export const BULAN_INDONESIA_SINGKAT = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
+  'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'
+];
+
+export const BULAN_MAP_INDO: Record<string, number> = {
+  januari: 0, jan: 0,
+  februari: 1, feb: 1,
+  maret: 2, mar: 2,
+  april: 3, apr: 3,
+  mei: 4, may: 4,
+  juni: 5, jun: 5,
+  juli: 6, jul: 6,
+  agustus: 7, agu: 7, ags: 7, aug: 7,
+  september: 8, sep: 8,
+  oktober: 9, okt: 9, oct: 9,
+  november: 10, nov: 10,
+  desember: 11, des: 11, dec: 11
+};
+
+/**
+ * Universal Indonesian Date Parser
+ * Mampu membaca:
+ * - "20 Okt 2026" (Format Kolom B Sheet Rekap)
+ * - "Selasa, 20 Oktober 2026" (Format DHP)
+ * - "2026-10-20" (ISO)
+ * - "20/10/2026" atau "20-10-2026"
+ * - Date object
+ */
+export function parseIndonesianDate(val: string | Date | null | undefined): Date | null {
+  if (!val) return null;
+  if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
+  const s = String(val).replace(/^[a-zA-Z]+,\s*/, '').trim();
+
+  // 1. Pola: "20 Okt 2026" atau "20 Oktober 2026"
+  const textMonthMatch = s.match(/^(\d{1,2})\s+([a-zA-Z]+)\s+(\d{4})/);
+  if (textMonthMatch) {
+    const day = parseInt(textMonthMatch[1], 10);
+    const mStr = textMonthMatch[2].toLowerCase();
+    const year = parseInt(textMonthMatch[3], 10);
+    if (mStr in BULAN_MAP_INDO) {
+      return new Date(year, BULAN_MAP_INDO[mStr], day);
+    }
+  }
+
+  // 2. Pola: "2026-10-20" (ISO)
+  const isoMatch = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (isoMatch) {
+    const year = parseInt(isoMatch[1], 10);
+    const month = parseInt(isoMatch[2], 10) - 1;
+    const day = parseInt(isoMatch[3], 10);
+    return new Date(year, month, day);
+  }
+
+  // 3. Pola: "20/10/2026" atau "20-10-2026"
+  const slashMatch = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+  if (slashMatch) {
+    const day = parseInt(slashMatch[1], 10);
+    const month = parseInt(slashMatch[2], 10) - 1;
+    const year = parseInt(slashMatch[3], 10);
+    return new Date(year, month, day);
+  }
+
+  const standard = new Date(s);
+  return isNaN(standard.getTime()) ? null : standard;
+}
+
+/**
+ * Parsing tanggal ke timestamp numerik untuk pengurutan presisi
+ */
+export function parseDateValue(val: string | Date | null | undefined): number {
+  const d = parseIndonesianDate(val);
+  return d ? d.getTime() : 0;
+}
+
+/**
+ * Format standar Kolom B Sheet Rekap: "d MMM yyyy" berbasis bahasa Indonesia
+ * Contoh: "20 Okt 2026", "12 Okt 2026"
+ */
+export function formatTanggalRekap(val: string | Date | null | undefined): string {
+  const d = parseIndonesianDate(val);
+  if (!d) return String(val || '-');
+  const day = d.getDate();
+  const month = BULAN_INDONESIA_SINGKAT[d.getMonth()];
+  const year = d.getFullYear();
+  return `${day} ${month} ${year}`;
+}
+
+/**
+ * Format lengkap Hari & Tanggal berbasis Indonesia
+ * Contoh: { full: "Selasa, 20 Oktober 2026", hari: "Selasa", tanggal: "20 Oktober 2026" }
+ */
+export function formatHariTanggalIndo(val: string | Date | null | undefined): { full: string; hari: string; tanggal: string } {
+  const d = parseIndonesianDate(val);
+  if (!d) return { full: String(val || '-'), hari: '', tanggal: String(val || '-') };
+  const hari = HARI_INDONESIA[d.getDay()];
+  const tglStr = `${d.getDate()} ${BULAN_INDONESIA_LENGKAP[d.getMonth()]} ${d.getFullYear()}`;
+  return {
+    hari,
+    tanggal: tglStr,
+    full: `${hari}, ${tglStr}`
+  };
+}
+
 export function formatIndonesianDate(val: string | Date | null | undefined): string {
   if (!val) return '-';
-  try {
-    let d: Date;
-    if (typeof val === 'string') {
-      const trimmed = val.trim();
-      if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-        const [y, m, day] = trimmed.split('-').map(Number);
-        d = new Date(y, m - 1, day);
-      } else {
-        d = new Date(trimmed);
-      }
-    } else {
-      d = val;
-    }
-    if (isNaN(d.getTime())) return String(val);
-    return d.toLocaleDateString('id-ID', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-      timeZone: 'Asia/Jakarta'
-    });
-  } catch (e) {
-    return String(val);
-  }
+  const d = parseIndonesianDate(val);
+  if (!d) return String(val);
+  return `${d.getDate()} ${BULAN_INDONESIA_LENGKAP[d.getMonth()]} ${d.getFullYear()}`;
 }
 
 export function formatIndonesianDateTime(val: string | Date | null | undefined): string {
   if (!val) return '-';
-  try {
-    const d = typeof val === 'string' ? new Date(val) : val;
-    if (isNaN(d.getTime())) return String(val);
-    const dateStr = d.toLocaleDateString('id-ID', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      timeZone: 'Asia/Jakarta'
-    });
-    const timeStr = d.toLocaleTimeString('id-ID', {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false,
-      timeZone: 'Asia/Jakarta'
-    }).replace(/:/g, '.');
-    return `${dateStr}, ${timeStr} WIB`;
-  } catch (e) {
-    return String(val);
-  }
+  const d = parseIndonesianDate(val);
+  if (!d) return String(val);
+  const dateStr = d.toLocaleDateString('id-ID', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    timeZone: 'Asia/Jakarta'
+  });
+  const timeStr = d.toLocaleTimeString('id-ID', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+    timeZone: 'Asia/Jakarta'
+  }).replace(/:/g, '.');
+  return `${dateStr}, ${timeStr} WIB`;
 }
 
 export class RekapDataProsesTembakauService {
@@ -599,18 +684,12 @@ export class RekapDataProsesTembakauService {
 
     const formatIsoDate = (tgl: string, bln: string, thn: string): string => {
       if (!tgl) return '';
-      const clean = tgl.replace(/^[a-zA-Z]+,\s*/, '').trim();
-      const parts = clean.split(/\s+/);
-      if (parts.length >= 3) {
-        const d = parts[0].padStart(2, '0');
-        const m = bulanIndoMap[parts[1].toLowerCase()] || '01';
-        const y = parts[2];
-        return `${y}-${m}-${d}`;
-      }
-      if (parts.length === 1 && !isNaN(Number(parts[0])) && bln && thn) {
-        const d = parts[0].padStart(2, '0');
-        const m = bulanIndoMap[bln.toLowerCase()] || '01';
-        return `${thn}-${m}-${d}`;
+      const d = parseIndonesianDate(tgl) || parseIndonesianDate(`${tgl} ${bln} ${thn}`);
+      if (d) {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
       }
       return tgl;
     };
@@ -632,11 +711,18 @@ export class RekapDataProsesTembakauService {
       const debu = parseNum(r[13]);
       const debuAirKg = Math.round((air + debu) * 10) / 10;
 
+      const dateObj = parseIndonesianDate(tgl) || parseIndonesianDate(`${tgl} ${bln} ${thn}`);
+      const isoDate = dateObj 
+        ? `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`
+        : formatIsoDate(tgl, bln, thn);
+      const tglDisplay = dateObj ? formatTanggalRekap(dateObj) : tgl;
+
       if (tgl && jenis && (baku > 0 || hasil > 0)) {
         rows.push({
           srcRow,
           batchNo: `TBK-${thn}-${srcRow}`,
-          tanggal: formatIsoDate(tgl, bln, thn),
+          tanggal: isoDate,
+          tanggalDisplay: tglDisplay,
           bulan: bln,
           tahun: thn,
           jenisTembakau: jenis,
@@ -690,12 +776,19 @@ export class RekapDataProsesTembakauService {
       const debuKg = parseNum(r[13]);
       const debuAirKg = Math.round((airKg + debuKg) * 10) / 10;
 
+      const dateObj = parseIndonesianDate(tgl) || parseIndonesianDate(`${tgl} ${bln} ${thn}`);
+      const isoDate = dateObj 
+        ? `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`
+        : tgl;
+      const tglDisplay = dateObj ? formatTanggalRekap(dateObj) : tgl;
+
       parsed.push({
         srcRow: i + 1,
         batchNo: `TBK-${thn}-${String(i + 1).padStart(4, '0')}`,
-        tanggal: tgl,
-        bulan: bln,
-        tahun: thn,
+        tanggal: isoDate,
+        tanggalDisplay: tglDisplay,
+        bulan: bln || (dateObj ? BULAN_INDONESIA_LENGKAP[dateObj.getMonth()] : ''),
+        tahun: thn || (dateObj ? String(dateObj.getFullYear()) : ''),
         jenisTembakau: varian,
         jenisProses: proses,
         baku,
@@ -834,17 +927,19 @@ export class RekapDataProsesTembakauService {
 
   public static getEntriTerkini(rows: RawRowData[]): string {
     if (!rows.length) return '-';
-    let maxTanggal = rows[0].tanggal;
+    let maxTime = -Infinity;
+    let latestRow = rows[0];
+
     for (const r of rows) {
-      if (r.tanggal > maxTanggal) maxTanggal = r.tanggal;
+      const t = parseDateValue(r.tanggal);
+      if (t > maxTime) {
+        maxTime = t;
+        latestRow = r;
+      }
     }
-    const parts = maxTanggal.split('-');
-    if (parts.length < 3) return maxTanggal;
-    const tahun = parts[0];
-    const bulanIdx = parseInt(parts[1], 10) - 1;
-    const hari = parseInt(parts[2], 10);
-    const bulanNama = MONTH_NAMES[bulanIdx] || parts[1];
-    return `${hari} ${bulanNama} ${tahun}`;
+
+    if (maxTime <= 0) return latestRow.tanggal || '-';
+    return formatIndonesianDate(latestRow.tanggal);
   }
 
   public static summarize(filtered: RawRowData[], label: string): SummaryKPI {

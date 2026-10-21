@@ -16,7 +16,14 @@ import {
   Send
 } from 'lucide-react';
 import { RawRowData, DhpIntegrationData, DhpBatchItem, GasConfig } from '../types[RekapDataProsesTembakau]';
-import { RekapDataProsesTembakauService, formatKg, formatPct } from '../api[RekapDataProsesTembakau]';
+import {
+  RekapDataProsesTembakauService,
+  formatKg,
+  formatPct,
+  parseIndonesianDate,
+  formatTanggalRekap,
+  BULAN_INDONESIA_LENGKAP
+} from '../api[RekapDataProsesTembakau]';
 
 interface IntegrasiDhpModalProps {
   isOpen: boolean;
@@ -66,25 +73,24 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
     try {
       const itemsToSync = dhpData.items;
 
-      const MONTH_NAMES = [
-        'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-        'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
-      ];
       const currentYear = new Date().getFullYear().toString();
 
       const newRecords: RawRowData[] = itemsToSync.map((item, idx) => {
         const nextSrcRow = item.matchedRow || (existingRows.length + 12 + idx);
         const rawDateStr = item.tanggal || item.tanggalFormatted || item.tanggalRaw;
-        const tglDate = new Date(rawDateStr);
-        const isoDate = !isNaN(tglDate.getTime()) ? tglDate.toISOString().split('T')[0] : (item.tanggalFormatted || '2026-10-20');
-        const bulanName = !isNaN(tglDate.getTime()) ? MONTH_NAMES[tglDate.getMonth()] : 'Oktober';
-        const tahunVal = !isNaN(tglDate.getTime()) ? tglDate.getFullYear().toString() : currentYear;
+        const dObj = parseIndonesianDate(rawDateStr);
+        const isoDate = dObj 
+          ? `${dObj.getFullYear()}-${String(dObj.getMonth() + 1).padStart(2, '0')}-${String(dObj.getDate()).padStart(2, '0')}`
+          : '2026-10-20';
+        const tglDisplay = dObj ? formatTanggalRekap(dObj) : (item.tanggalFormatted || '20 Okt 2026');
+        const bulanName = dObj ? BULAN_INDONESIA_LENGKAP[dObj.getMonth()] : 'Oktober';
+        const tahunVal = dObj ? dObj.getFullYear().toString() : currentYear;
 
         return {
           batchNo: `DHP-${item.rowNumber}-${Date.now().toString().slice(-4)}`,
           srcRow: nextSrcRow,
           tanggal: isoDate,
-          tanggalDisplay: item.tanggalFormatted,
+          tanggalDisplay: tglDisplay,
           bulan: bulanName,
           tahun: tahunVal,
           jenisPerlakuan: `${item.jenisTembakau} ${item.jalur}`,
@@ -184,20 +190,28 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
 
   if (!isOpen) return null;
 
-  // Complete GAS Script with Smart In-Place Fill & Formula Protection
+  // Complete GAS Script with Smart In-Place Fill & Strict Formula Protection
   const gasScriptCode = `/**
  * =====================================================================
  * OTOMATISASI INTEGRASI DATA DHP TEMBAKAU -> REKAP SUSUT TEMBAKAU
  * Divisi Produksi I - PT Batu Karang
  * 
- * FITUR UTAMA:
- * 1. Smart In-Place Fill: Mengisi otomatis baris draft yang sudah ada
- *    (Baris dengan Tanggal & Jenis Tembakau sama yang Hasil/Komponennya masih kosong)
- * 2. Append Baris Baru: Menambah baris baru jika ada batch yang belum tercatat
- * 3. Proteksi Rumus Kolom E: =iferror(JOIN(" ";F...;G...))
- * 4. Rumus Susut Kg (Kolom J) & Susut % (Kolom K) otomatis
- * 5. Menu Otomatis di Google Sheets: "⚡ Integrasi DHP Tembakau"
- * 6. Webhook doPost(e) & doGet(e) untuk sinkronisasi langsung dari tombol Web App
+ * ⚠️ KETENTUAN MUTLAK PROTEKSI FORMULA:
+ * JANGAN MENIMPA KOLOM/BARIS YANG SUDAH BERISI RUMUS/FORMULA!
+ * Kolom-kolom berikut DILARANG DITIMPA karena sudah berisi rumus template:
+ * - Kolom C (Bulan)                 : Formula otomatis dari Kolom B
+ * - Kolom D (Tahun)                 : Formula otomatis dari Kolom B
+ * - Kolom E (Jenis/Perlakuan)       : Formula =iferror(JOIN(" ";F...;G...))
+ * - Kolom J (Susut Kg)              : Formula =H...-I...
+ * - Kolom K (Susut %)               : Formula persentase otomatis (format %)
+ *
+ * SINKRONISASI HANYA MENGISI KOLOM DATA INPUT MURNI:
+ * - Kolom H (Col 8)  : Netto Baku (diisi jika di rekap masih kosong)
+ * - Kolom I (Col 9)  : Netto Hasil
+ * - Kolom L (Col 12) : Gagang
+ * - Kolom M (Col 13) : Air
+ * - Kolom N (Col 14) : Debu
+ * (Dan jika baris baru: Kolom B tanggal, Kolom F jenis, Kolom G jalur)
  * =====================================================================
  */
 
@@ -241,44 +255,93 @@ function sinkronkanDhpKeRekap() {
   
   // Baris 1: Summary, Baris 2: Header, Data mulai baris 3
   var dhpValues = shDhp.getRange(3, 1, lastRowDhp - 2, shDhp.getLastColumn()).getValues();
-  var dhpBatches = [];
-  var MONTH_NAMES = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+  // Kamus & Parser Tanggal Berbasis Locale Indonesia
+  var INDO_MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+  var INDO_MONTH_MAP = {
+    'januari': 0, 'jan': 0,
+    'februari': 1, 'feb': 1,
+    'maret': 2, 'mar': 2,
+    'april': 3, 'apr': 3,
+    'mei': 4, 'may': 4,
+    'juni': 5, 'jun': 5,
+    'juli': 6, 'jul': 6,
+    'agustus': 7, 'agu': 7, 'ags': 7, 'aug': 7,
+    'september': 8, 'sep': 8,
+    'oktober': 9, 'okt': 9, 'oct': 9,
+    'november': 10, 'nov': 10,
+    'desember': 11, 'des': 11, 'dec': 11
+  };
+
+  function parseTanggalIndo(raw) {
+    if (!raw) return null;
+    if (raw instanceof Date) return isNaN(raw.getTime()) ? null : raw;
+    var s = String(raw).replace(/^[a-zA-Z]+,\\s*/, '').trim();
+
+    var mText = s.match(/^(\\d{1,2})\\s+([a-zA-Z]+)\\s+(\\d{4})/);
+    if (mText) {
+      var day = parseInt(mText[1], 10);
+      var mKey = mText[2].toLowerCase();
+      var year = parseInt(mText[3], 10);
+      if (mKey in INDO_MONTH_MAP) {
+        return new Date(year, INDO_MONTH_MAP[mKey], day);
+      }
+    }
+
+    var mIso = s.match(/^(\\d{4})-(\\d{1,2})-(\\d{1,2})/);
+    if (mIso) {
+      return new Date(parseInt(mIso[1], 10), parseInt(mIso[2], 10) - 1, parseInt(mIso[3], 10));
+    }
+
+    var mSlash = s.match(/^(\\d{1,2})[\\/\\-](\\d{1,2})[\\/\\-](\\d{4})/);
+    if (mSlash) {
+      return new Date(parseInt(mSlash[3], 10), parseInt(mSlash[2], 10) - 1, parseInt(mSlash[1], 10));
+    }
+
+    var d = new Date(s);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  function formatKolomBTanggal(d) {
+    if (!d || isNaN(d.getTime())) return '';
+    var day = d.getDate();
+    var mShort = INDO_MONTH_SHORT[d.getMonth()];
+    var y = d.getFullYear();
+    return day + ' ' + mShort + ' ' + y;
+  }
+
+  function formatIsoDateStr(d) {
+    if (!d || isNaN(d.getTime())) return '';
+    var y = d.getFullYear();
+    var m = String(d.getMonth() + 1);
+    if (m.length < 2) m = '0' + m;
+    var day = String(d.getDate());
+    if (day.length < 2) day = '0' + day;
+    return y + '-' + m + '-' + day;
+  }
 
   for (var j = 0; j < dhpValues.length; j++) {
     var row = dhpValues[j];
     var rawTgl = row[2]; // Kolom C: Tanggal (misal: "Selasa, 20 Oktober 2026")
     var rawJenis = String(row[3] || '').trim(); // Kolom D: Jenis Tembakau
-    var rawBaku = parseDecimalNumber(row[4]); // Kolom E
-    var gagang = parseDecimalNumber(row[5]); // Kolom F
-    var air = parseDecimalNumber(row[6]); // Kolom G
-    var debu = parseDecimalNumber(row[7]); // Kolom H
-    var hasil = parseDecimalNumber(row[8]); // Kolom I
+    var rawBaku = parseDecimalNumber(row[4]); // Kolom E: Netto Baku
+    var gagang = parseDecimalNumber(row[5]); // Kolom F: Gagang
+    var air = parseDecimalNumber(row[6]); // Kolom G: Air
+    var debu = parseDecimalNumber(row[7]); // Kolom H: Debu
+    var hasil = parseDecimalNumber(row[8]); // Kolom I: Netto Hasil
     var susut = parseDecimalNumber(row[9]) || (rawBaku - hasil); // Kolom J
 
     if (rawJenis && (rawBaku > 0 || hasil > 0)) {
-      var dateObj = null;
-      var dateLabel = '';
-      if (rawTgl instanceof Date) {
-        dateObj = rawTgl;
-        dateLabel = Utilities.formatDate(dateObj, Session.getScriptTimeZone(), 'd MMM yyyy');
-      } else {
-        var strTgl = String(rawTgl).replace(/^[a-zA-Z]+,\\s*/, '').trim();
-        dateLabel = strTgl;
-        dateObj = new Date(strTgl);
-        if (isNaN(dateObj.getTime())) {
-          dateObj = new Date();
-        }
-      }
+      var dateObj = parseTanggalIndo(rawTgl);
+      if (!dateObj) continue;
 
-      var isoDate = Utilities.formatDate(dateObj, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+      var dateLabel = formatKolomBTanggal(dateObj); // "20 Okt 2026" (Format Kolom B Sheet Rekap)
+      var isoDate = formatIsoDateStr(dateObj); // "2026-10-20"
       var jalur = rawJenis.toUpperCase().includes('SKM') ? 'SKM' : 'SKT';
 
       dhpBatches.push({
         dateObj: dateObj,
         dateLabel: dateLabel,
         isoDate: isoDate,
-        bulan: MONTH_NAMES[dateObj.getMonth()],
-        tahun: String(dateObj.getFullYear()),
         jenis: rawJenis,
         jalur: jalur,
         baku: rawBaku,
@@ -303,7 +366,6 @@ function sinkronkanDhpKeRekap() {
 
   var updatedCount = 0;
   var matchedDhpIndices = new Set();
-  var rowsToAppend = [];
   var actualMaxRow = CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW - 1;
 
   function cleanStr(s) {
@@ -314,33 +376,24 @@ function sinkronkanDhpKeRekap() {
   for (var k = 0; k < rekapValues.length; k++) {
     var rowIdx = CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW + k;
     var rRow = rekapValues[k];
-    var rTgl = rRow[1]; // Kolom B
-    var rJenis = String(rRow[5] || '').trim(); // Kolom F
-    var rBaku = parseDecimalNumber(rRow[7]); // Kolom H
-    var rHasil = parseDecimalNumber(rRow[8]); // Kolom I
+    var rTgl = rRow[1]; // Kolom B: Tanggal (misal: "20 Okt 2026")
+    var rJenis = String(rRow[5] || '').trim(); // Kolom F: Jenis Tembakau
+    var rBaku = parseDecimalNumber(rRow[7]); // Kolom H: Netto Baku
+    var rHasil = parseDecimalNumber(rRow[8]); // Kolom I: Netto Hasil
 
     if (rTgl && String(rTgl).trim() !== '') {
       actualMaxRow = Math.max(actualMaxRow, rowIdx);
 
-      var rIso = '';
-      if (rTgl instanceof Date) {
-        rIso = Utilities.formatDate(rTgl, Session.getScriptTimeZone(), 'yyyy-MM-dd');
-      } else {
-        var str = String(rTgl).trim();
-        var dObj = new Date(str);
-        if (!isNaN(dObj.getTime())) {
-          rIso = Utilities.formatDate(dObj, Session.getScriptTimeZone(), 'yyyy-MM-dd');
-        } else {
-          rIso = str.toLowerCase();
-        }
-      }
+      var rDateObj = parseTanggalIndo(rTgl);
+      var rIso = rDateObj ? formatIsoDateStr(rDateObj) : String(rTgl).trim().toLowerCase();
+      var rLabel = rDateObj ? formatKolomBTanggal(rDateObj).toLowerCase() : String(rTgl).trim().toLowerCase();
 
       // Cocokkan dengan batch DHP
       for (var b = 0; b < dhpBatches.length; b++) {
         var batch = dhpBatches[b];
         var matchTgl = (rIso === batch.isoDate) || 
-                       (String(rTgl).toLowerCase().includes(batch.dateLabel.toLowerCase())) || 
-                       (String(rTgl).toLowerCase().includes(batch.isoDate));
+                       (rLabel === batch.dateLabel.toLowerCase()) ||
+                       (cleanStr(rTgl).includes(cleanStr(batch.dateLabel)));
         var matchJenis = cleanStr(rJenis) === cleanStr(batch.jenis);
 
         if (matchTgl && matchJenis) {
@@ -350,30 +403,40 @@ function sinkronkanDhpKeRekap() {
           var needsFill = (rHasil === 0) || (rRow[8] === '' || rRow[8] === null);
 
           if (needsFill) {
-            // Kolom H: Netto Baku (isi jika di rekap masih kosong)
+            // ========================================================
+            // ⚠️ ATURAN KETAT: JANGAN MENIMPA KOLOM C, D, E, J, DAN K!
+            // Kolom C, D, E, J, dan K sudah berisi formula/rumus bawaan.
+            // Rumus tersebut akan berhitung secara otomatis.
+            // HANYA update kolom data input murni:
+            // ========================================================
+
+            // Kolom H (Col 8): Netto Baku (isi hanya jika di rekap masih kosong / 0)
             if (rBaku === 0 && batch.baku > 0) {
               shRekap.getRange(rowIdx, 8).setValue(batch.baku);
             }
-            // Kolom I: Netto Hasil
+
+            // Kolom I (Col 9): Netto Hasil (dari DHP)
             shRekap.getRange(rowIdx, 9).setValue(batch.hasil);
-            // Kolom J: Susut (Kg) formula
-            shRekap.getRange(rowIdx, 10).setFormula('=H' + rowIdx + '-I' + rowIdx);
-            // Kolom K: Susut (%) formula (dengan pengali 100 sesuai format angka sheet)
-            shRekap.getRange(rowIdx, 11).setFormula('=IF(H' + rowIdx + '>0; (J' + rowIdx + '/H' + rowIdx + ')*100; 0)');
-            // Kolom L: Gagang
+
+            // Kolom L (Col 12): Gagang
             shRekap.getRange(rowIdx, 12).setValue(batch.gagang);
-            // Kolom M: Air
+
+            // Kolom M (Col 13): Air
             if (batch.air > 0) {
               shRekap.getRange(rowIdx, 13).setValue(batch.air);
             } else {
               shRekap.getRange(rowIdx, 13).clearContent();
             }
-            // Kolom N: Debu
+
+            // Kolom N (Col 14): Debu
             shRekap.getRange(rowIdx, 14).setValue(batch.debu);
 
-            // Kolom E: Formula JOIN
-            var formulaJoin = '=iferror(JOIN(" ";F' + rowIdx + ';G' + rowIdx + '))';
-            shRekap.getRange(rowIdx, 5).setFormula(formulaJoin);
+            // SANGAT PENTING:
+            // - Kolom C (3): JANGAN DISENTUH (Formula Bulan otomatis)
+            // - Kolom D (4): JANGAN DISENTUH (Formula Tahun otomatis)
+            // - Kolom E (5): JANGAN DISENTUH (Formula JOIN Jenis/Perlakuan)
+            // - Kolom J (10): JANGAN DISENTUH (Formula Susut Kg otomatis)
+            // - Kolom K (11): JANGAN DISENTUH (Formula Susut % format persen otomatis)
 
             updatedCount++;
           }
@@ -383,37 +446,47 @@ function sinkronkanDhpKeRekap() {
     }
   }
 
-  // 3. Tambahkan baris baru jika ada batch DHP yang belum ada barisnya sama sekali
+  // 3. Tambahkan baris baru HANYA jika ada batch DHP yang belum ada barisnya sama sekali
+  var appendedCount = 0;
   for (var m = 0; m < dhpBatches.length; m++) {
     if (!matchedDhpIndices.has(m)) {
       var item = dhpBatches[m];
-      var newTargetRow = actualMaxRow + 1 + rowsToAppend.length;
-      rowsToAppend.push([
-        '', // A: No
-        item.dateLabel, // B: Tanggal
-        item.bulan, // C: Bulan
-        item.tahun, // D: Tahun
-        '=iferror(JOIN(" ";F' + newTargetRow + ';G' + newTargetRow + '))', // E: Formula JOIN
-        item.jenis, // F: Jenis Tembakau
-        item.jalur, // G: Jalur (SKT/SKM)
-        item.baku, // H: Netto Baku
-        item.hasil, // I: Netto Hasil
-        '=H' + newTargetRow + '-I' + newTargetRow, // J: Susut (Kg)
-        '=IF(H' + newTargetRow + '>0; (J' + newTargetRow + '/H' + newTargetRow + ')*100; 0)', // K: Susut (%)
-        item.gagang, // L: Gagang
-        item.air > 0 ? item.air : '', // M: Air
-        item.debu // N: Debu
-      ]);
+      var targetRow = actualMaxRow + 1;
+      actualMaxRow = targetRow;
+
+      // Isi kolom data murni ke baris baru:
+      shRekap.getRange(targetRow, 2).setValue(item.dateLabel); // B: Tanggal
+      shRekap.getRange(targetRow, 6).setValue(item.jenis);     // F: Jenis Tembakau
+      shRekap.getRange(targetRow, 7).setValue(item.jalur);     // G: Jenis/Jalur (SKT/SKM)
+      shRekap.getRange(targetRow, 8).setValue(item.baku);      // H: Netto Baku
+      shRekap.getRange(targetRow, 9).setValue(item.hasil);     // I: Netto Hasil
+      shRekap.getRange(targetRow, 12).setValue(item.gagang);   // L: Gagang
+      if (item.air > 0) {
+        shRekap.getRange(targetRow, 13).setValue(item.air);    // M: Air
+      }
+      shRekap.getRange(targetRow, 14).setValue(item.debu);     // N: Debu
+
+      // JANGAN MENIMPA RUMUS PADA KOLOM C, D, E, J, K:
+      // Periksa apakah baris target sudah memiliki formula (seperti template baris kosong).
+      // Jika baris target belum memiliki formula, salin formula asli dari baris template atasnya (prevRow)
+      var prevRow = targetRow - 1;
+      var protectedCols = [3, 4, 5, 10, 11]; // C (Bulan), D (Tahun), E (JOIN), J (Susut Kg), K (Susut %)
+      for (var p = 0; p < protectedCols.length; p++) {
+        var colNum = protectedCols[p];
+        var cellTarget = shRekap.getRange(targetRow, colNum);
+        if (cellTarget.getFormula() === '') {
+          var cellSource = shRekap.getRange(prevRow, colNum);
+          if (cellSource.getFormula() !== '') {
+            cellSource.copyTo(cellTarget, SpreadsheetApp.CopyPasteType.PASTE_FORMULA, false);
+          }
+        }
+      }
+
+      appendedCount++;
     }
   }
 
-  var appendedCount = 0;
-  if (rowsToAppend.length > 0) {
-    shRekap.getRange(actualMaxRow + 1, 1, rowsToAppend.length, rowsToAppend[0].length).setValues(rowsToAppend);
-    appendedCount = rowsToAppend.length;
-  }
-
-  var summaryMsg = 'Sinkronisasi Selesai: ' + updatedCount + ' baris draft berhasil diisi otomatis, ' + appendedCount + ' baris baru ditambahkan.';
+  var summaryMsg = 'Sinkronisasi Selesai: ' + updatedCount + ' baris draft berhasil diisi otomatis, ' + appendedCount + ' baris baru ditambahkan. Formula C, D, E, J, dan K terlindungi 100%.';
   Logger.log(summaryMsg);
 
   try {
@@ -845,30 +918,52 @@ function doGet(e) {
                       <td className="py-2.5 px-3 text-slate-400">Otomatis</td>
                       <td className="py-2.5 px-3 text-slate-400">Nomor urut baris</td>
                     </tr>
-                    <tr>
-                      <td className="py-2.5 px-3 font-mono font-bold text-slate-400">Kolom B</td>
-                      <td className="py-2.5 px-3 font-medium text-white">Tanggal</td>
-                      <td className="py-2.5 px-3 text-blue-300 font-mono">DHP Kolom C</td>
-                      <td className="py-2.5 px-3 text-slate-400">Dikonversi ke format: d MMM yyyy (misal: 20 Okt 2026)</td>
+                    <tr className="bg-blue-950/20">
+                      <td className="py-2.5 px-3 font-mono font-bold text-blue-400">Kolom B</td>
+                      <td className="py-2.5 px-3 font-bold text-blue-300">Tanggal Proses</td>
+                      <td className="py-2.5 px-3">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                          FORMAT INDONESIA WAJIB
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-3 text-blue-200">
+                        Wajib format: <code className="font-mono text-[11px] bg-slate-900 px-1 py-0.5 rounded">d MMM yyyy</code> berbasis bahasa Indonesia (contoh: <strong>20 Okt 2026</strong>, bukan 20 Oct 2026). Format ini dijaga 100% agar rumus Kolom C dan Kolom D membaca tanggal secara akurat.
+                      </td>
                     </tr>
-                    <tr>
-                      <td className="py-2.5 px-3 font-mono font-bold text-slate-400">Kolom C</td>
-                      <td className="py-2.5 px-3 font-medium text-white">Bulan</td>
-                      <td className="py-2.5 px-3 text-blue-300 font-mono">Ekstrak Tanggal</td>
-                      <td className="py-2.5 px-3 text-slate-400">Nama bulan Indonesia (Januari - Desember)</td>
+                    <tr className="bg-amber-950/20">
+                      <td className="py-2.5 px-3 font-mono font-bold text-amber-400">Kolom C</td>
+                      <td className="py-2.5 px-3 font-bold text-amber-300">Bulan</td>
+                      <td className="py-2.5 px-3">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                          RUMUS PROTEKSI (JANGAN DITIMPA)
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-3 text-amber-200">
+                        Formula otomatis: <code className="font-mono text-[11px] bg-slate-900 px-1 py-0.5 rounded">=iferror(if(B...=&quot;&quot;;&quot;&quot;;TEXT(B...;&quot;mmmm&quot;)))</code>
+                      </td>
                     </tr>
-                    <tr>
-                      <td className="py-2.5 px-3 font-mono font-bold text-slate-400">Kolom D</td>
-                      <td className="py-2.5 px-3 font-medium text-white">Tahun</td>
-                      <td className="py-2.5 px-3 text-blue-300 font-mono">Ekstrak Tanggal</td>
-                      <td className="py-2.5 px-3 text-slate-400">Angka tahun 4 digit (2025, 2026, dst)</td>
+                    <tr className="bg-amber-950/20">
+                      <td className="py-2.5 px-3 font-mono font-bold text-amber-400">Kolom D</td>
+                      <td className="py-2.5 px-3 font-bold text-amber-300">Tahun</td>
+                      <td className="py-2.5 px-3">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                          RUMUS PROTEKSI (JANGAN DITIMPA)
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-3 text-amber-200">
+                        Formula otomatis: mengekstrak tahun 4 digit dari tanggal di Kolom B
+                      </td>
                     </tr>
                     <tr className="bg-amber-950/20">
                       <td className="py-2.5 px-3 font-mono font-bold text-amber-400">Kolom E</td>
                       <td className="py-2.5 px-3 font-bold text-amber-300">Jenis Tembakau/Perlakuan</td>
-                      <td className="py-2.5 px-3 font-mono text-amber-300">PASTE_FORMULA</td>
+                      <td className="py-2.5 px-3">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                          RUMUS PROTEKSI (JANGAN DITIMPA)
+                        </span>
+                      </td>
                       <td className="py-2.5 px-3 text-amber-200">
-                        <strong>Proteksi Penuh:</strong> =iferror(JOIN(&quot; &quot;;F...;G...)) disalin otomatis dari baris atasnya
+                        Formula otomatis: <code className="font-mono text-[11px] bg-slate-900 px-1 py-0.5 rounded">=iferror(JOIN(&quot; &quot;;F...;G...))</code> menggabungkan Kolom F dan G
                       </td>
                     </tr>
                     <tr>
@@ -883,29 +978,41 @@ function doGet(e) {
                       <td className="py-2.5 px-3 text-blue-300 font-mono">DHP Deteksi</td>
                       <td className="py-2.5 px-3 text-slate-400">SKT atau SKM</td>
                     </tr>
-                    <tr>
-                      <td className="py-2.5 px-3 font-mono font-bold text-slate-400">Kolom H</td>
-                      <td className="py-2.5 px-3 font-medium text-white">Netto Baku (Kg)</td>
-                      <td className="py-2.5 px-3 text-blue-300 font-mono">DHP Kolom E</td>
-                      <td className="py-2.5 px-3 text-slate-400">Bobot timbangan bahan baku awal</td>
+                    <tr className="bg-emerald-950/20">
+                      <td className="py-2.5 px-3 font-mono font-bold text-emerald-400">Kolom H</td>
+                      <td className="py-2.5 px-3 font-medium text-emerald-300">Netto Baku (Kg)</td>
+                      <td className="py-2.5 px-3 text-emerald-300 font-mono">DHP Kolom E</td>
+                      <td className="py-2.5 px-3 text-slate-400">Bobot timbangan bahan baku awal (diisi jika di rekap belum terisi)</td>
                     </tr>
-                    <tr>
-                      <td className="py-2.5 px-3 font-mono font-bold text-slate-400">Kolom I</td>
-                      <td className="py-2.5 px-3 font-medium text-white">Netto Hasil (Kg)</td>
-                      <td className="py-2.5 px-3 text-blue-300 font-mono">DHP Kolom I</td>
-                      <td className="py-2.5 px-3 text-slate-400">Bobot timbangan hasil jadi akhir</td>
+                    <tr className="bg-emerald-950/20">
+                      <td className="py-2.5 px-3 font-mono font-bold text-emerald-400">Kolom I</td>
+                      <td className="py-2.5 px-3 font-bold text-emerald-300">Netto Hasil (Kg)</td>
+                      <td className="py-2.5 px-3 text-emerald-300 font-mono font-bold">DHP Kolom I</td>
+                      <td className="py-2.5 px-3 text-emerald-200">Bobot timbangan hasil akhir (sasaran utama update Smart Fill)</td>
                     </tr>
-                    <tr>
-                      <td className="py-2.5 px-3 font-mono font-bold text-slate-400">Kolom J</td>
-                      <td className="py-2.5 px-3 font-medium text-white">Susut (Kg)</td>
-                      <td className="py-2.5 px-3 text-blue-300 font-mono">DHP Kolom J</td>
-                      <td className="py-2.5 px-3 text-slate-400">Baku - Hasil</td>
+                    <tr className="bg-amber-950/20">
+                      <td className="py-2.5 px-3 font-mono font-bold text-amber-400">Kolom J</td>
+                      <td className="py-2.5 px-3 font-bold text-amber-300">Susut (Kg)</td>
+                      <td className="py-2.5 px-3">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                          RUMUS PROTEKSI (JANGAN DITIMPA)
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-3 text-amber-200">
+                        Formula otomatis: <code className="font-mono text-[11px] bg-slate-900 px-1 py-0.5 rounded">=H...-I...</code> (Baku dikurangi Hasil)
+                      </td>
                     </tr>
-                    <tr>
-                      <td className="py-2.5 px-3 font-mono font-bold text-slate-400">Kolom K</td>
-                      <td className="py-2.5 px-3 font-medium text-white">Susut (%)</td>
-                      <td className="py-2.5 px-3 text-blue-300 font-mono">DHP Kolom K</td>
-                      <td className="py-2.5 px-3 text-slate-400">(Susut Kg / Baku Kg) * 100%</td>
+                    <tr className="bg-amber-950/20">
+                      <td className="py-2.5 px-3 font-mono font-bold text-amber-400">Kolom K</td>
+                      <td className="py-2.5 px-3 font-bold text-amber-300">Susut (%)</td>
+                      <td className="py-2.5 px-3">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                          RUMUS PROTEKSI (JANGAN DITIMPA)
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-3 text-amber-200">
+                        Formula otomatis: persentase susut dengan format sel persen bawaan Google Sheets (%)
+                      </td>
                     </tr>
                     <tr>
                       <td className="py-2.5 px-3 font-mono font-bold text-slate-400">Kolom L</td>

@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { RawRowData, UserRole } from '../types[RekapDataProsesTembakau]';
-import { formatKg, formatPct } from '../api[RekapDataProsesTembakau]';
+import { formatKg, formatPct, formatHariTanggalIndo, parseDateValue } from '../api[RekapDataProsesTembakau]';
 import {
   Search,
   Plus,
@@ -19,88 +19,6 @@ interface DataExplorerProps {
   rows: RawRowData[];
   onAddNewBatch?: (data: any) => void;
   userRole: UserRole;
-}
-
-// Helper format hari dan tanggal ke bahasa Indonesia
-const HARI_INDONESIA = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
-const BULAN_INDONESIA = [
-  'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-  'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
-];
-
-function formatHariTanggal(dateStr: string): { full: string; hari: string; tanggal: string } {
-  if (!dateStr) return { full: '-', hari: '', tanggal: '-' };
-  try {
-    const parts = dateStr.trim().split('-');
-    if (parts.length === 3) {
-      const year = parseInt(parts[0], 10);
-      const month = parseInt(parts[1], 10) - 1;
-      const day = parseInt(parts[2], 10);
-      const d = new Date(year, month, day);
-      if (!isNaN(d.getTime())) {
-        const hari = HARI_INDONESIA[d.getDay()];
-        const tglStr = `${day} ${BULAN_INDONESIA[month]} ${year}`;
-        return {
-          hari,
-          tanggal: tglStr,
-          full: `${hari}, ${tglStr}`
-        };
-      }
-    }
-
-    const slashParts = dateStr.trim().split('/');
-    if (slashParts.length === 3) {
-      const day = parseInt(slashParts[0], 10);
-      const month = parseInt(slashParts[1], 10) - 1;
-      const year = parseInt(slashParts[2], 10);
-      const d = new Date(year, month, day);
-      if (!isNaN(d.getTime())) {
-        const hari = HARI_INDONESIA[d.getDay()];
-        const tglStr = `${day} ${BULAN_INDONESIA[month]} ${year}`;
-        return {
-          hari,
-          tanggal: tglStr,
-          full: `${hari}, ${tglStr}`
-        };
-      }
-    }
-
-    const d = new Date(dateStr);
-    if (!isNaN(d.getTime())) {
-      const hari = HARI_INDONESIA[d.getDay()];
-      const tglStr = `${d.getDate()} ${BULAN_INDONESIA[d.getMonth()]} ${d.getFullYear()}`;
-      return {
-        hari,
-        tanggal: tglStr,
-        full: `${hari}, ${tglStr}`
-      };
-    }
-  } catch (e) {
-    // ignore
-  }
-  return { full: dateStr, hari: '', tanggal: dateStr };
-}
-
-// Helper parsing tanggal ke timestamp numerik untuk pengurutan akurat
-function parseDateValue(dateStr: string): number {
-  if (!dateStr) return 0;
-  const s = String(dateStr).trim();
-  const dashMatch = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-  if (dashMatch) {
-    const y = parseInt(dashMatch[1], 10);
-    const m = parseInt(dashMatch[2], 10) - 1;
-    const d = parseInt(dashMatch[3], 10);
-    return new Date(y, m, d).getTime();
-  }
-  const slashMatch = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
-  if (slashMatch) {
-    const d = parseInt(slashMatch[1], 10);
-    const m = parseInt(slashMatch[2], 10) - 1;
-    const y = parseInt(slashMatch[3], 10);
-    return new Date(y, m, d).getTime();
-  }
-  const parsed = new Date(s).getTime();
-  return isNaN(parsed) ? 0 : parsed;
 }
 
 export const DataExplorerRekapDataProsesTembakau: React.FC<DataExplorerProps> = ({
@@ -135,7 +53,7 @@ export const DataExplorerRekapDataProsesTembakau: React.FC<DataExplorerProps> = 
   const sortedAndFiltered = useMemo(() => {
     const searchLower = searchTerm.trim().toLowerCase();
     const result = rows.filter((r) => {
-      const dateFormatted = formatHariTanggal(r.tanggal);
+      const dateFormatted = formatHariTanggalIndo(r.tanggal);
       const matchSearch =
         !searchLower ||
         r.jenisTembakau.toLowerCase().includes(searchLower) ||
@@ -370,7 +288,7 @@ export const DataExplorerRekapDataProsesTembakau: React.FC<DataExplorerProps> = 
               displayedRows.map((r, idx) => {
                 const isHigh = r.susutPct >= 8.5;
                 const isLow = r.susutPct <= 5.5;
-                const dateInfo = formatHariTanggal(r.tanggal);
+                const dateInfo = formatHariTanggalIndo(r.tanggal);
 
                 return (
                   <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
