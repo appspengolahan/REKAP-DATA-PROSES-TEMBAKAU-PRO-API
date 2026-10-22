@@ -1428,7 +1428,14 @@ export class RekapDataProsesTembakauService {
     const parsedRows = this.parseRawCSVGrid(csvText);
     const items: DhpBatchItem[] = [];
     let totalBakuKg = 0;
+    let totalHasilKg = 0;
+    let totalGagangKg = 0;
+    let totalAirKg = 0;
+    let totalDebuKg = 0;
     let terverifikasiCount = 0;
+    let terverifikasiBakuKg = 0;
+    let terverifikasiHasilKg = 0;
+    let mismatchCount = 0;
 
     // Temukan index kolom 'PERLAKUAN PROSES' secara dinamis dari header
     let perlakuanColIdx = 13; // default Kolom N (index 13)
@@ -1479,10 +1486,10 @@ export class RekapDataProsesTembakauService {
         rekapMap.get(`${rawTgl.toLowerCase()}|${cleanJenis}|${cleanJalur}`) ||
         rekapMap.get(`${isoDate}|${cleanJenis}`) ||
         rekapMap.get(`${rawTgl.toLowerCase()}|${cleanJenis}`);
-      
-      // Jika hasil di Rekap sudah terisi dan > 0, dianggap terverifikasi lengkap
-      const isAlreadyFilledInRekap = !!(matchedRekap && matchedRekap.hasil > 0);
+
       const matchedRowNumber = matchedRekap?.srcRow;
+      const rekapHasil = matchedRekap ? Math.round((matchedRekap.hasil || 0) * 10) / 10 : undefined;
+      const rekapBaku = matchedRekap ? Math.round((matchedRekap.baku || 0) * 10) / 10 : undefined;
 
       const gagangKg = parseNumber(row[5]);
       const airKg = parseNumber(row[6]);
@@ -1492,17 +1499,43 @@ export class RekapDataProsesTembakauService {
       const susutPct = rawBaku > 0 ? (susutKg / rawBaku) * 100 : 0;
       const waktu = (row[12] || '-').trim();
 
-      if (isAlreadyFilledInRekap) {
-        terverifikasiCount++;
-      }
-      totalBakuKg += rawBaku;
+      const roundedHasil = Math.round(hasil * 10) / 10;
+
+      // Deteksi Mismatch / Perubahan Hasil:
+      // Jika di Rekap sudah ada nilai hasil (> 0), namun berbeda dengan hasil di DHP (> 0.05 Kg)
+      const hasHasilMismatch = Boolean(
+        matchedRekap &&
+        rekapHasil !== undefined &&
+        rekapHasil > 0 &&
+        Math.abs(rekapHasil - roundedHasil) > 0.05
+      );
+
+      // Terverifikasi penuh jika sudah ada di rekap dan nilai hasilnya cocok
+      const isAlreadyFilledInRekap = Boolean(
+        matchedRekap &&
+        rekapHasil !== undefined &&
+        rekapHasil > 0 &&
+        !hasHasilMismatch
+      );
 
       let statusIntegrasi = 'Batch Baru (Siap Masuk)';
-      if (isAlreadyFilledInRekap) {
+      if (hasHasilMismatch) {
+        statusIntegrasi = 'Hasil Berubah';
+        mismatchCount++;
+      } else if (isAlreadyFilledInRekap) {
         statusIntegrasi = matchedRowNumber ? `Sudah Masuk di Rekap (Baris ${matchedRowNumber})` : 'Sudah Masuk di Rekap';
+        terverifikasiCount++;
+        terverifikasiBakuKg += rawBaku;
+        terverifikasiHasilKg += roundedHasil;
       } else if (matchedRekap) {
         statusIntegrasi = matchedRowNumber ? `Siap Diisi Otomatis (Baris ${matchedRowNumber})` : 'Siap Diisi Otomatis';
       }
+
+      totalBakuKg += rawBaku;
+      totalHasilKg += roundedHasil;
+      totalGagangKg += gagangKg;
+      totalAirKg += airKg;
+      totalDebuKg += debuKg;
 
       items.push({
         rowNumber: i + 1, // Nomor baris di sheet DHP
@@ -1512,22 +1545,30 @@ export class RekapDataProsesTembakauService {
         jenisTembakau: jenis,
         jalur,
         nettoBaku: Math.round(rawBaku * 10) / 10,
-        hasil: Math.round(hasil * 10) / 10,
+        hasil: roundedHasil,
         susutKg: Math.round(susutKg * 10) / 10,
         susutPct: Math.round(susutPct * 100) / 100,
         gagangKg: Math.round(gagangKg * 10) / 10,
         airKg: Math.round(airKg * 10) / 10,
         debuKg: Math.round(debuKg * 10) / 10,
-        statusIntegrasi: statusIntegrasi as any,
+        statusIntegrasi,
         alreadyInRekap: isAlreadyFilledInRekap,
         matchedRow: matchedRowNumber,
-        matchKey: matchKeyIso
+        matchKey: matchKeyIso,
+        isMismatch: hasHasilMismatch,
+        rekapHasil,
+        rekapBaku
       });
     }
 
     const totalBatch = items.length;
-    const batchBaruCount = totalBatch - terverifikasiCount;
+    const batchBaruCount = items.filter(it => !it.alreadyInRekap && !it.isMismatch).length;
     const terverifikasiPct = totalBatch > 0 ? Math.round((terverifikasiCount / totalBatch) * 100) : 0;
+    const totalSusutKg = Math.round((totalBakuKg - totalHasilKg) * 10) / 10;
+    const totalSusutPct = totalBakuKg > 0 ? Math.round(((totalSusutKg / totalBakuKg) * 100) * 100) / 100 : 0;
+
+    const terverifikasiSusutKg = Math.round((terverifikasiBakuKg - terverifikasiHasilKg) * 10) / 10;
+    const terverifikasiSusutPct = terverifikasiBakuKg > 0 ? Math.round(((terverifikasiSusutKg / terverifikasiBakuKg) * 100) * 100) / 100 : 0;
 
     return {
       sourceSpreadsheetId: dhpSpreadsheetId,
@@ -1536,9 +1577,20 @@ export class RekapDataProsesTembakauService {
       targetSheetName: targetSheetName,
       totalBatch,
       totalBakuKg: Math.round(totalBakuKg * 10) / 10,
+      totalHasilKg: Math.round(totalHasilKg * 10) / 10,
+      totalSusutKg,
+      totalSusutPct,
+      totalGagangKg: Math.round(totalGagangKg * 10) / 10,
+      totalAirKg: Math.round(totalAirKg * 10) / 10,
+      totalDebuKg: Math.round(totalDebuKg * 10) / 10,
       terverifikasiCount,
       terverifikasiPct,
+      terverifikasiBakuKg: Math.round(terverifikasiBakuKg * 10) / 10,
+      terverifikasiHasilKg: Math.round(terverifikasiHasilKg * 10) / 10,
+      terverifikasiSusutKg,
+      terverifikasiSusutPct,
       batchBaruCount,
+      mismatchCount,
       items,
       fetchTimestamp: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
     };

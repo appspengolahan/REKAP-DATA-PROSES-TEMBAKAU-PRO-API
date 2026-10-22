@@ -13,7 +13,10 @@ import {
   Check,
   AlertCircle,
   ExternalLink,
-  Send
+  Send,
+  Pause,
+  Play,
+  Scale
 } from 'lucide-react';
 import { RawRowData, DhpIntegrationData, DhpBatchItem, GasConfig } from '../types[RekapDataProsesTembakau]';
 import {
@@ -50,19 +53,58 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState<boolean>(false);
 
-  // Load data DHP when modal opens
-  const loadDhpData = async () => {
-    setLoading(true);
+  // Smart Live-Sync State (Auto-Tarik Tiap 12 Detik)
+  const [autoPullEnabled, setAutoPullEnabled] = useState<boolean>(true);
+  const [countdown, setCountdown] = useState<number>(12);
+  const [isAutoPulling, setIsAutoPulling] = useState<boolean>(false);
+
+  // Load data DHP with support for silent background refresh
+  const loadDhpData = async (silent = false) => {
+    if (!silent) {
+      setLoading(true);
+    } else {
+      setIsAutoPulling(true);
+    }
     setErrorMsg(null);
     try {
       const data = await RekapDataProsesTembakauService.fetchDhpIntegrationData(existingRows);
       setDhpData(data);
     } catch (err: any) {
-      setErrorMsg(err?.message || 'Gagal mengambil data dari Google Sheets DHP');
+      if (!silent) {
+        setErrorMsg(err?.message || 'Gagal mengambil data dari Google Sheets DHP');
+      }
     } finally {
       setLoading(false);
+      setIsAutoPulling(false);
+      setCountdown(12);
     }
   };
+
+  // Timer countdown 12 detik auto-tarik
+  useEffect(() => {
+    if (isOpen) {
+      loadDhpData();
+      setCountdown(12);
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || !autoPullEnabled) return;
+
+    const timer = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          if (!loading && !isSyncingToRekap && !isAutoPulling) {
+            loadDhpData(true);
+          }
+          return 12;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [isOpen, autoPullEnabled, loading, isSyncingToRekap, isAutoPulling]);
 
   // Handle synchronization from DHP to Sheet Rekap (Direct Automation with Smart In-Place Fill)
   const handleSyncToRekap = async () => {
@@ -72,7 +114,6 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
 
     try {
       const itemsToSync = dhpData.items;
-
       const currentYear = new Date().getFullYear().toString();
 
       const newRecords: RawRowData[] = itemsToSync.map((item, idx) => {
@@ -145,25 +186,40 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
       }
 
       // 3. Mark items as synchronized in modal state
+      const mismatchNum = dhpData.mismatchCount || 0;
+      const batchBaruNum = dhpData.batchBaruCount || 0;
+
       setDhpData((prev) => {
         if (!prev) return null;
         const updatedItems = prev.items.map((it) => ({
           ...it,
           alreadyInRekap: true,
-          statusIntegrasi: (it.matchedRow ? `Sudah Masuk di Rekap (Baris ${it.matchedRow})` : 'Sudah Masuk di Rekap') as any
+          isMismatch: false,
+          statusIntegrasi: (it.matchedRow ? `Sudah Masuk di Rekap (Baris ${it.matchedRow})` : 'Sudah Masuk di Rekap')
         }));
         return {
           ...prev,
           items: updatedItems,
           terverifikasiCount: updatedItems.length,
           terverifikasiPct: 100,
-          batchBaruCount: 0
+          terverifikasiBakuKg: prev.totalBakuKg,
+          terverifikasiHasilKg: prev.totalHasilKg,
+          terverifikasiSusutKg: prev.totalSusutKg,
+          terverifikasiSusutPct: prev.totalSusutPct,
+          batchBaruCount: 0,
+          mismatchCount: 0
         };
       });
 
+      const successMsg = mismatchNum > 0 && batchBaruNum > 0
+        ? `Berhasil membukukan ${batchBaruNum} batch baru dan menyelaraskan ${mismatchNum} data hasil DHP ke Sheet Rekap!`
+        : mismatchNum > 0
+        ? `Berhasil menyelaraskan ${mismatchNum} pembaruan data hasil DHP ke Sheet Rekap secara in-place!`
+        : `Berhasil membukukan data DHP ke Sheet Rekap secara in-place!`;
+
       setSyncNotice({
         type: 'success',
-        message: `Berhasil membukukan data DHP ke baris draft Sheet Rekap (Baris 1531-1537) secara in-place!`
+        message: successMsg
       });
 
       // 4. Trigger auto pull to refresh
@@ -181,12 +237,6 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
       setTimeout(() => setSyncNotice(null), 6000);
     }
   };
-
-  useEffect(() => {
-    if (isOpen) {
-      loadDhpData();
-    }
-  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -600,8 +650,8 @@ function doGet(e) {
           </button>
         </div>
 
-        {/* Source & Target Connection Bar (Compact Bar as in Image 1) */}
-        <div className="px-4 sm:px-5 py-1.5 bg-slate-950/70 border-b border-slate-800/80 flex flex-wrap items-center justify-between gap-1.5 text-xs shrink-0">
+        {/* Source & Target Connection Bar with Smart Live-Sync Toggle (Pembaruan B) */}
+        <div className="px-4 sm:px-5 py-1.5 bg-slate-950/70 border-b border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-xs shrink-0">
           <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-300">
             <span className="inline-flex items-center gap-1 font-semibold text-amber-400">
               <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
@@ -620,15 +670,49 @@ function doGet(e) {
             </span>
           </div>
 
-          <button
-            onClick={loadDhpData}
-            disabled={loading}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-[11px] font-semibold transition-all shadow-sm disabled:opacity-50"
-            title="Perbarui pembacaan lembar DHP"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-blue-400' : ''}`} />
-            <span>Tarik Ulang DHP</span>
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Smart Live-Sync Saklar / Toggle Switch (Pembaruan B) */}
+            <button
+              onClick={() => setAutoPullEnabled(!autoPullEnabled)}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[11px] font-semibold transition-all shadow-sm ${
+                autoPullEnabled
+                  ? 'bg-emerald-950/70 hover:bg-emerald-900/80 border-emerald-700/70 text-emerald-300'
+                  : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-400'
+              }`}
+              title={autoPullEnabled ? 'Klik untuk menjeda Auto-Tarik 12 detik' : 'Klik untuk mengaktifkan kembali Auto-Tarik'}
+            >
+              {autoPullEnabled ? (
+                <>
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </span>
+                  <span>Auto-Tarik: 12s</span>
+                  <span className="font-mono bg-emerald-900/90 text-emerald-200 px-1 py-0.2 rounded text-[10px] font-bold">
+                    {countdown}s
+                  </span>
+                  <Pause className="w-2.5 h-2.5 ml-0.5 text-emerald-400/80" />
+                </>
+              ) : (
+                <>
+                  <Play className="w-3 h-3 text-amber-400" />
+                  <span className="text-slate-300">Auto-Tarik: Jeda</span>
+                  <span className="text-[10px] text-slate-500">(Mati)</span>
+                </>
+              )}
+            </button>
+
+            {/* Manual Refresh Button */}
+            <button
+              onClick={() => loadDhpData(false)}
+              disabled={loading}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-[11px] font-semibold transition-all shadow-sm disabled:opacity-50"
+              title="Perbarui pembacaan lembar DHP secara manual (< 1s)"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loading || isAutoPulling ? 'animate-spin text-blue-400' : ''}`} />
+              <span>Tarik Ulang DHP</span>
+            </button>
+          </div>
         </div>
 
         {/* Sub-Tabs Navigation (Compact as in Image 1) */}
@@ -689,75 +773,144 @@ function doGet(e) {
           {activeTab === 'transaksi' && (
             <div className="space-y-2.5 flex-1 flex flex-col min-h-0">
               
-              {/* 3 KPI Summary Cards - Ultra-Slim Layout as in Image 1 */}
+              {/* 3 KPI Summary Cards (Pembaruan A) */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 flex-shrink-0">
-                {/* Total Batch Aktif */}
-                <div className="px-3 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700/60 flex items-center justify-between shadow-sm">
+                {/* Kartu 1: Total Batch Aktif DHP */}
+                <div className="px-3 py-2 rounded-lg bg-slate-800/60 border border-slate-700/60 flex items-center justify-between shadow-sm">
                   <div className="min-w-0">
                     <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400 truncate">
                       Total Batch Aktif DHP
                     </div>
-                    <div className="text-sm sm:text-base font-black text-white leading-tight flex items-baseline gap-1.5">
+                    <div className="text-sm sm:text-base font-black text-white leading-tight flex items-baseline gap-1.5 mt-0.5">
                       <span>{dhpData?.totalBatch || 0} Batch</span>
-                      <span className="text-[10px] font-normal text-slate-400">
-                        ({formatKg(dhpData?.totalBakuKg || 0)})
+                      <span className="text-[10px] font-normal text-slate-300 bg-slate-700/50 px-1.5 py-0.5 rounded border border-slate-600/50">
+                        {formatKg(dhpData?.totalBakuKg || 0)}
                       </span>
                     </div>
+                    <div className="text-[10px] text-slate-400 truncate mt-0.5">
+                      Bahan baku terinput di DHP
+                    </div>
                   </div>
-                  <div className="w-7 h-7 rounded-md bg-slate-700/60 flex items-center justify-center text-slate-300 flex-shrink-0">
-                    <Layers className="w-3.5 h-3.5" />
+                  <div className="w-8 h-8 rounded-md bg-slate-700/60 flex items-center justify-center text-slate-300 flex-shrink-0 ml-2">
+                    <Layers className="w-4 h-4" />
                   </div>
                 </div>
 
-                {/* Terverifikasi di Rekap */}
-                <div className="px-3 py-1.5 rounded-lg bg-emerald-950/30 border border-emerald-800/50 flex items-center justify-between shadow-sm">
+                {/* Kartu 2: Terverifikasi di Rekap */}
+                <div className="px-3 py-2 rounded-lg bg-emerald-950/30 border border-emerald-800/50 flex items-center justify-between shadow-sm">
                   <div className="min-w-0">
                     <div className="text-[9px] font-bold uppercase tracking-wider text-emerald-400 truncate">
                       Terverifikasi di Rekap
                     </div>
-                    <div className="text-sm sm:text-base font-black text-emerald-300 leading-tight flex items-baseline gap-1.5">
+                    <div className="text-sm sm:text-base font-black text-emerald-300 leading-tight flex items-baseline gap-1.5 mt-0.5">
                       <span>{dhpData?.terverifikasiCount || 0} Batch</span>
-                      <span className="text-[10px] font-semibold text-emerald-400/80">
-                        ({dhpData?.terverifikasiPct || 0}%)
+                      <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-900/70 text-emerald-300 border border-emerald-700/60">
+                        {dhpData?.terverifikasiPct || 0}% Cocok
+                      </span>
+                      <span className="text-[10px] font-semibold text-emerald-200 bg-emerald-900/40 px-1.5 py-0.5 rounded border border-emerald-700/40">
+                        {formatKg(dhpData?.terverifikasiHasilKg || 0)}
                       </span>
                     </div>
+                    <div className="text-[10px] text-emerald-400/90 truncate mt-0.5 font-medium">
+                      Susut: {formatKg(dhpData?.terverifikasiSusutKg || 0)} Kg ({formatPct(dhpData?.terverifikasiSusutPct || 0)}%)
+                    </div>
                   </div>
-                  <div className="w-7 h-7 rounded-md bg-emerald-900/50 flex items-center justify-center text-emerald-400 flex-shrink-0">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
+                  <div className="w-8 h-8 rounded-md bg-emerald-900/50 flex items-center justify-center text-emerald-400 flex-shrink-0 ml-2">
+                    <CheckCircle2 className="w-4 h-4" />
                   </div>
                 </div>
 
-                {/* Batch Baru Siap Masuk */}
-                <div className="px-3 py-1.5 rounded-lg bg-blue-950/30 border border-blue-800/50 flex items-center justify-between shadow-sm">
+                {/* Kartu 3: Batch Baru & Status Sinkronisasi */}
+                <div className={`px-3 py-2 rounded-lg border flex items-center justify-between shadow-sm ${
+                  (dhpData?.mismatchCount || 0) > 0
+                    ? 'bg-amber-950/30 border-amber-800/60'
+                    : (dhpData?.batchBaruCount || 0) === 0
+                    ? 'bg-emerald-950/20 border-emerald-800/40'
+                    : 'bg-blue-950/30 border-blue-800/50'
+                }`}>
                   <div className="min-w-0">
-                    <div className="text-[9px] font-bold uppercase tracking-wider text-blue-400 truncate">
-                      Batch Baru Siap Masuk
+                    <div className={`text-[9px] font-bold uppercase tracking-wider truncate ${
+                      (dhpData?.mismatchCount || 0) > 0
+                        ? 'text-amber-400'
+                        : (dhpData?.batchBaruCount || 0) === 0
+                        ? 'text-emerald-400'
+                        : 'text-blue-400'
+                    }`}>
+                      {(dhpData?.mismatchCount || 0) > 0 ? 'Status: Perlu Penyelarasan' : 'Batch Baru Siap Masuk'}
                     </div>
-                    <div className="text-sm sm:text-base font-black text-blue-300 leading-tight flex items-baseline gap-1.5">
+                    <div className={`text-sm sm:text-base font-black leading-tight flex items-baseline gap-1.5 mt-0.5 ${
+                      (dhpData?.mismatchCount || 0) > 0
+                        ? 'text-amber-300'
+                        : (dhpData?.batchBaruCount || 0) === 0
+                        ? 'text-emerald-300'
+                        : 'text-blue-300'
+                    }`}>
                       <span>{dhpData?.batchBaruCount || 0} Batch</span>
-                      <span className="text-[10px] font-normal text-blue-300/80">
-                        {(dhpData?.batchBaruCount ?? 0) === 0 ? 'Semua tersinkron' : 'Perlu dibukukan'}
-                      </span>
+                      {(dhpData?.mismatchCount || 0) > 0 ? (
+                        <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-900/80 text-amber-200 border border-amber-700/70">
+                          ⚠️ {dhpData?.mismatchCount} Perlu Update
+                        </span>
+                      ) : (dhpData?.batchBaruCount ?? 0) === 0 ? (
+                        <span className="px-1.5 py-0.2 rounded text-[9px] font-semibold bg-emerald-900/50 text-emerald-300 border border-emerald-700/50">
+                          ✓ Semua Tersinkron
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-normal text-blue-300/80">
+                          Perlu dibukukan
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[10px] text-slate-400 truncate mt-0.5">
+                      {(dhpData?.mismatchCount || 0) > 0
+                        ? `${dhpData?.mismatchCount} data hasil di Rekap perlu diselaraskan dengan DHP`
+                        : (dhpData?.batchBaruCount ?? 0) === 0
+                        ? 'Seluruh data proses DHP telah sinkron presisi'
+                        : 'Siap dibukukan ke baris baru Rekap'}
                     </div>
                   </div>
-                  <div className="w-7 h-7 rounded-md bg-blue-900/50 flex items-center justify-center text-blue-400 flex-shrink-0">
-                    <Sparkles className="w-3.5 h-3.5" />
+                  <div className={`w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0 ml-2 ${
+                    (dhpData?.mismatchCount || 0) > 0
+                      ? 'bg-amber-900/50 text-amber-400'
+                      : (dhpData?.batchBaruCount || 0) === 0
+                      ? 'bg-emerald-900/50 text-emerald-400'
+                      : 'bg-blue-900/50 text-blue-400'
+                  }`}>
+                    {(dhpData?.mismatchCount || 0) > 0 ? (
+                      <AlertCircle className="w-4 h-4" />
+                    ) : (
+                      <Sparkles className="w-4 h-4" />
+                    )}
                   </div>
                 </div>
               </div>
 
               {/* Transactions Table Section - Maximized Viewport & Prominent */}
               <div className="bg-slate-900/90 border border-slate-800 rounded-xl overflow-hidden shadow-sm flex-1 flex flex-col min-h-0">
-                <div className="px-3.5 py-1.5 bg-slate-800/40 border-b border-slate-800 flex items-center justify-between flex-shrink-0">
+                {/* Bilah Judul Tabel Transaksi dengan Pill Ringkasan Neraca Instan (Pembaruan A) */}
+                <div className="px-3.5 py-2 bg-slate-800/40 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2 flex-shrink-0">
                   <div className="flex items-center gap-2">
                     <Database className="w-3.5 h-3.5 text-blue-400" />
                     <span className="text-xs font-bold text-slate-200">
                       Daftar Transaksi DHP Terdeteksi (Tab INTEGRASI DATA)
                     </span>
+                    <span className="text-[11px] text-slate-400 font-medium hidden sm:inline">
+                      ({dhpData?.items.length || 0} baris proses aktif)
+                    </span>
                   </div>
-                  <span className="text-[11px] text-slate-400 font-medium">
-                    Menampilkan {dhpData?.items.length || 0} baris proses aktif
-                  </span>
+
+                  {/* Pill Ringkasan Neraca Instan (Pembaruan A) */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <div className="px-2.5 py-0.5 rounded-full bg-slate-950/80 border border-slate-700/80 text-[10px] text-slate-300 font-mono flex items-center gap-1.5 shadow-sm">
+                      <span className="text-slate-400 font-sans font-semibold">Neraca Instan:</span>
+                      <span className="text-slate-200 font-bold">Baku: {formatKg(dhpData?.totalBakuKg || 0)}</span>
+                      <span className="text-slate-600">|</span>
+                      <span className="text-emerald-400 font-bold">Hasil: {formatKg(dhpData?.totalHasilKg || 0)}</span>
+                      <span className="text-slate-600">|</span>
+                      <span className="text-amber-400 font-bold">
+                        Susut: {formatKg(dhpData?.totalSusutKg || 0)} ({formatPct(dhpData?.totalSusutPct || 0)}%)
+                      </span>
+                    </div>
+                  </div>
                 </div>
 
                 {loading ? (
@@ -770,7 +923,7 @@ function doGet(e) {
                     <AlertCircle className="w-8 h-8 mx-auto text-red-400" />
                     <div className="text-sm font-medium">{errorMsg}</div>
                     <button
-                      onClick={loadDhpData}
+                      onClick={() => loadDhpData(false)}
                       className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs"
                     >
                       Coba Lagi
@@ -802,7 +955,9 @@ function doGet(e) {
                         {dhpData?.items.map((item: DhpBatchItem) => (
                           <tr
                             key={item.rowNumber}
-                            className="hover:bg-slate-800/50 transition-colors"
+                            className={`hover:bg-slate-800/50 transition-colors ${
+                              item.isMismatch ? 'bg-amber-950/20' : ''
+                            }`}
                           >
                             <td className="py-2 px-2.5 text-slate-400 font-mono text-[11px]">
                               {item.rowNumber}
@@ -850,7 +1005,13 @@ function doGet(e) {
                               {formatKg(item.debuKg)}
                             </td>
                             <td className="py-2 px-2.5 text-center whitespace-nowrap">
-                              {item.alreadyInRekap ? (
+                              {/* Mismatch Detector Alert (Pembaruan B) */}
+                              {item.isMismatch ? (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-950/90 text-amber-200 border border-amber-500/80 shadow-sm animate-pulse">
+                                  <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                                  <span>⚠️ Hasil Berubah (Rekap: {formatKg(item.rekapHasil || 0)} ➔ DHP: {formatKg(item.hasil)})</span>
+                                </span>
+                              ) : item.alreadyInRekap ? (
                                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-950/80 text-emerald-300 border border-emerald-700/70">
                                   <CheckCircle2 className="w-3 h-3 text-emerald-400" />
                                   {item.matchedRow ? `Sudah Masuk di Rekap (Baris ${item.matchedRow})` : 'Sudah Masuk di Rekap'}
@@ -870,31 +1031,81 @@ function doGet(e) {
                           </tr>
                         ))}
                       </tbody>
+
+                      {/* Sticky Footer tfoot: Total Neraca Permanen (Pembaruan A) */}
+                      <tfoot className="bg-slate-950/95 text-slate-200 border-t-2 border-slate-700/90 sticky bottom-0 z-10 backdrop-blur font-semibold text-xs shadow-lg">
+                        <tr className="divide-x divide-slate-800/60">
+                          <td className="py-2.5 px-2.5 font-mono text-[11px] text-slate-400">Σ</td>
+                          <td className="py-2.5 px-2.5 whitespace-nowrap text-xs font-bold text-slate-300">
+                            {dhpData?.totalBatch || 0} Batch
+                          </td>
+                          <td className="py-2.5 px-2.5 font-bold text-slate-100 uppercase tracking-wider text-[11px]">
+                            TOTAL NERACA DHP
+                          </td>
+                          <td className="py-2.5 px-2 text-center text-slate-500 font-normal">-</td>
+                          <td className="py-2.5 px-2.5 text-right font-black text-white text-xs">
+                            {formatKg(dhpData?.totalBakuKg || 0)}
+                          </td>
+                          <td className="py-2.5 px-2.5 text-right font-black text-emerald-300 text-xs">
+                            {formatKg(dhpData?.totalHasilKg || 0)}
+                          </td>
+                          <td className="py-2.5 px-2.5 text-right font-black text-amber-400 text-xs">
+                            {formatPct(dhpData?.totalSusutPct || 0)}%
+                          </td>
+                          <td className="py-2.5 px-2 text-right font-medium text-amber-200/90 whitespace-nowrap">
+                            {formatKg(dhpData?.totalGagangKg || 0)}
+                          </td>
+                          <td className="py-2.5 px-2 text-right font-medium text-sky-200/90 whitespace-nowrap">
+                            {formatKg(dhpData?.totalAirKg || 0)}
+                          </td>
+                          <td className="py-2.5 px-2 text-right font-medium text-slate-300 whitespace-nowrap">
+                            {formatKg(dhpData?.totalDebuKg || 0)}
+                          </td>
+                          <td className="py-2.5 px-2.5 text-center whitespace-nowrap">
+                            <span className="text-[11px] text-amber-300 font-bold bg-amber-950/60 px-2 py-0.5 rounded border border-amber-700/50">
+                              Susut: {formatKg(dhpData?.totalSusutKg || 0)} Kg
+                            </span>
+                          </td>
+                        </tr>
+                      </tfoot>
                     </table>
                   </div>
                 )}
               </div>
 
-              {/* Bottom Sync Action Banner as in Reference Image 1 */}
+              {/* Bottom Sync Action Banner with Mismatch Alignment Detector (Pembaruan B) */}
               <div className="px-3.5 py-2 bg-gradient-to-r from-blue-950/70 via-indigo-950/60 to-blue-950/70 rounded-xl border border-blue-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shrink-0 shadow-sm">
                 <div className="flex items-center gap-2 text-xs">
                   <ShieldCheck className="w-4 h-4 text-blue-400 shrink-0" />
                   <span className="text-slate-200 font-medium text-[11px]">
-                    {(dhpData?.batchBaruCount ?? 0) > 0
+                    {(dhpData?.mismatchCount || 0) > 0
+                      ? `⚠️ Ditemukan ${dhpData?.mismatchCount} batch dengan data hasil berubah di DHP dan ${dhpData?.batchBaruCount || 0} batch baru yang siap diselaraskan.`
+                      : (dhpData?.batchBaruCount ?? 0) > 0
                       ? `Terdapat ${dhpData?.batchBaruCount} batch baru yang siap dibukukan ke baris baru Sheet Rekap.`
                       : `Semua ${dhpData?.items.length || 0} baris data DHP sudah tersinkronisasi presisi di Sheet Rekap.`}
                   </span>
                 </div>
                 <button
                   onClick={handleSyncToRekap}
-                  disabled={isSyncingToRekap || ((dhpData?.batchBaruCount ?? 0) === 0)}
-                  className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white shadow-md transition-all disabled:opacity-50 disabled:pointer-events-none shrink-0"
-                  title="Sinkronkan data batch DHP ke sheet rekap"
+                  disabled={isSyncingToRekap || (((dhpData?.batchBaruCount ?? 0) === 0) && ((dhpData?.mismatchCount ?? 0) === 0))}
+                  className={`inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white shadow-md transition-all disabled:opacity-50 disabled:pointer-events-none shrink-0 ${
+                    (dhpData?.mismatchCount || 0) > 0
+                      ? 'bg-amber-600 hover:bg-amber-500 active:bg-amber-700'
+                      : 'bg-blue-600 hover:bg-blue-500 active:bg-blue-700'
+                  }`}
+                  title="Sinkronkan dan selaraskan data batch DHP ke sheet rekap"
                 >
                   {isSyncingToRekap ? (
                     <>
                       <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      <span>Sedang Membukukan...</span>
+                      <span>Sedang Menyelaraskan...</span>
+                    </>
+                  ) : (dhpData?.mismatchCount || 0) > 0 ? (
+                    <>
+                      <Send className="w-3.5 h-3.5 text-white" />
+                      <span>
+                        Sinkronkan &amp; Selaraskan ({(dhpData?.batchBaruCount || 0) > 0 ? `${dhpData?.batchBaruCount} Baru, ` : ''}{dhpData?.mismatchCount} Update)
+                      </span>
                     </>
                   ) : (
                     <>

@@ -132,10 +132,13 @@ export interface DhpBatchItem {
   gagangKg: number;
   airKg: number;
   debuKg: number;
-  statusIntegrasi: 'Sudah Masuk di Rekap' | 'Batch Baru (Siap Masuk)';
+  statusIntegrasi: string;
   alreadyInRekap: boolean;
   matchKey: string;
   matchedRow?: number;
+  isMismatch?: boolean;
+  rekapHasil?: number;
+  rekapBaku?: number;
 }
 
 export interface DhpIntegrationData {
@@ -145,9 +148,20 @@ export interface DhpIntegrationData {
   targetSheetName: string;
   totalBatch: number;
   totalBakuKg: number;
+  totalHasilKg: number;
+  totalSusutKg: number;
+  totalSusutPct: number;
+  totalGagangKg: number;
+  totalAirKg: number;
+  totalDebuKg: number;
   terverifikasiCount: number;
   terverifikasiPct: number;
+  terverifikasiBakuKg: number;
+  terverifikasiHasilKg: number;
+  terverifikasiSusutKg: number;
+  terverifikasiSusutPct: number;
   batchBaruCount: number;
+  mismatchCount: number;
   items: DhpBatchItem[];
   fetchTimestamp: string;
 }
