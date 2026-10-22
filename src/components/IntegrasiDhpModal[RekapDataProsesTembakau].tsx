@@ -276,47 +276,64 @@ var CONFIG_INTEGRASI_TEMBAKAU = {
   REKAP_DATA_START_ROW: 7 // Baris data di Rekap Tembakau dimulai dari baris 7
 };
 
-function onOpen() {
-  SpreadsheetApp.getUi()
-    .createMenu('⚡ Integrasi DHP Tembakau')
-    .addItem('▶ Jalankan Sinkronisasi Sekarang (Manual)', 'sinkronkanDhpKeRekapManual')
-    .addSeparator()
-    .addItem('⏰ Aktifkan Auto-Push Latar Belakang (Tiap 5 Menit)', 'aktifkanAutoPush5Menit')
-    .addItem('🛑 Matikan Auto-Push Latar Belakang', 'matikanAutoPush')
-    .addItem('ℹ Cek Status Pemicu Otomatis', 'cekStatusPemicu')
-    .addToUi();
+/**
+ * =========================================================================
+ * FUNGSI UTAMA UNTUK GAS STANDALONE (Dijalankan dari Editor Apps Script)
+ * =========================================================================
+ */
+
+/**
+ * 1. PILIH INI LALU KLIK "JALANKAN (RUN)" UNTUK TEST SINKRONISASI MANUAL
+ */
+function TEST_SINKRON_SEKARANG() {
+  Logger.log('Memulai eksekusi manual sinkronisasi DHP ke Rekap...');
+  var res = sinkronkanDhpKeRekap(true);
+  Logger.log('Hasil Sinkronisasi: ' + JSON.stringify(res));
+  return res;
 }
 
 /**
- * Pemicu Otomatis: Aktifkan Sinkronisasi Tiap 5 Menit (100% Aman Kuota Google)
+ * 2. PILIH INI LALU KLIK "JALANKAN (RUN)" UNTUK AKTIFKAN AUTO-PUSH 5 MENIT
+ * Menjadwalkan pemicu cloud Google yang berjalan 24 jam non-stop (100% aman kuota).
  */
-function aktifkanAutoPush5Menit() {
+function AKTIFKAN_AUTO_PUSH_5_MENIT() {
   matikanAutoPushSilent();
   ScriptApp.newTrigger('sinkronkanDhpKeRekapOtomatis')
     .timeBased()
     .everyMinutes(5)
     .create();
-  try {
-    SpreadsheetApp.getUi().alert(
-      '✅ Auto-Push 5 Menit Berhasil Diaktifkan!',
-      'Sinkronisasi DHP ke Rekap kini akan berjalan otomatis setiap 5 menit di server Google 24 jam non-stop (tanpa perlu membuka web app atau laptop).\\n\\nJeda 5 menit ini menggunakan kuota sangat hemat (~4 menit dari batas 90 menit/hari), sehingga 100% aman dari pemblokiran akun Google.',
-      SpreadsheetApp.getUi().ButtonSet.OK
-    );
-  } catch(e) {}
+  Logger.log('===================================================================');
+  Logger.log('✅ SUKSES: Auto-Push Tiap 5 Menit Berhasil Diaktifkan!');
+  Logger.log('Data DHP akan otomatis diselaraskan ke Rekap tiap 5 menit di Cloud.');
+  Logger.log('Batas kuota aman: Hanya terpakai ~5% dari limit harian akun Google.');
+  Logger.log('===================================================================');
 }
 
 /**
- * Matikan Pemicu Otomatis
+ * 3. PILIH INI LALU KLIK "JALANKAN (RUN)" UNTUK MEMATIKAN AUTO-PUSH
  */
-function matikanAutoPush() {
+function MATIKAN_AUTO_PUSH() {
   matikanAutoPushSilent();
-  try {
-    SpreadsheetApp.getUi().alert(
-      '🛑 Auto-Push Dinonaktifkan',
-      'Pemicu otomatis berhasil dihentikan. Sinkronisasi sekarang hanya berjalan secara manual saat tombol ditekan.',
-      SpreadsheetApp.getUi().ButtonSet.OK
-    );
-  } catch(e) {}
+  Logger.log('🛑 SUKSES: Pemicu Auto-Push latar belakang telah dinonaktifkan.');
+}
+
+/**
+ * 4. PILIH INI LALU KLIK "JALANKAN (RUN)" UNTUK CEK STATUS PEMICU
+ */
+function CEK_STATUS_PEMICU() {
+  var triggers = ScriptApp.getProjectTriggers();
+  var count = 0;
+  for (var i = 0; i < triggers.length; i++) {
+    var fn = triggers[i].getHandlerFunction();
+    if (fn === 'sinkronkanDhpKeRekap' || fn === 'sinkronkanDhpKeRekapOtomatis') {
+      count++;
+    }
+  }
+  if (count > 0) {
+    Logger.log('🟢 STATUS: Auto-Push 5 Menit SEDANG AKTIF (' + count + ' pemicu berjalan).');
+  } else {
+    Logger.log('⚪ STATUS: Auto-Push TIDAK AKTIF (0 pemicu terpasang).');
+  }
 }
 
 function matikanAutoPushSilent() {
@@ -329,29 +346,28 @@ function matikanAutoPushSilent() {
   }
 }
 
-function cekStatusPemicu() {
-  var triggers = ScriptApp.getProjectTriggers();
-  var count = 0;
-  for (var i = 0; i < triggers.length; i++) {
-    var fn = triggers[i].getHandlerFunction();
-    if (fn === 'sinkronkanDhpKeRekap' || fn === 'sinkronkanDhpKeRekapOtomatis') {
-      count++;
-    }
-  }
-  var statusText = count > 0 
-    ? '🟢 AKTIF: Auto-Push tiap 5 menit sedang berjalan mandiri di background Google Cloud.' 
-    : '⚪ NONAKTIF: Tidak ada pemicu otomatis yang berjalan.';
-  try {
-    SpreadsheetApp.getUi().alert('Status Pemicu Auto-Push', statusText, SpreadsheetApp.getUi().ButtonSet.OK);
-  } catch(e) {}
-}
-
 function sinkronkanDhpKeRekapManual() {
   return sinkronkanDhpKeRekap(true);
 }
 
 function sinkronkanDhpKeRekapOtomatis() {
   return sinkronkanDhpKeRekap(false);
+}
+
+// Menu khusus jika sewaktu-waktu script dipasang di dalam Spreadsheet
+function onOpen() {
+  try {
+    SpreadsheetApp.getUi()
+      .createMenu('⚡ Integrasi DHP Tembakau')
+      .addItem('▶ Jalankan Sinkronisasi Sekarang', 'sinkronkanDhpKeRekapManual')
+      .addSeparator()
+      .addItem('⏰ Aktifkan Auto-Push 5 Menit', 'AKTIFKAN_AUTO_PUSH_5_MENIT')
+      .addItem('🛑 Matikan Auto-Push', 'MATIKAN_AUTO_PUSH')
+      .addItem('ℹ Cek Status Pemicu', 'CEK_STATUS_PEMICU')
+      .addToUi();
+  } catch(e) {
+    // Abaikan jika standalone (tidak memiliki UI container spreadsheet)
+  }
 }
 
 function sinkronkanDhpKeRekap(isManual) {
@@ -1387,23 +1403,25 @@ function doGet(e) {
               </div>
 
               {/* Instructions */}
-              <div className="p-4 rounded-xl bg-slate-800/40 border border-slate-700/60 text-xs space-y-2 text-slate-300">
+              <div className="p-4 rounded-xl bg-slate-800/40 border border-slate-700/60 text-xs space-y-2.5 text-slate-300">
                 <div className="font-bold text-white text-xs uppercase tracking-wider flex items-center justify-between">
-                  <span>Cara Pasang &amp; Aktifkan Auto-Push 5 Menit (100% Aman Kuota):</span>
-                  <span className="text-[11px] text-emerald-400 font-normal">Hemat Kuota: ~5% dari limit harian</span>
+                  <span>Panduan untuk GAS Standalone (Script Terpisah / script.google.com):</span>
+                  <span className="text-[11px] text-emerald-400 font-normal">Koneksi via openById(SS_ID)</span>
+                </div>
+                <div className="p-2.5 rounded-lg bg-blue-950/40 border border-blue-500/30 text-blue-200 text-[11px] leading-relaxed">
+                  💡 <strong>Keunggulan GAS Standalone:</strong> Kode kita sejak awal sudah menggunakan ID Spreadsheet langsung (<code className="bg-slate-900 px-1 py-0.5 rounded text-blue-300 font-mono">openById</code>), sehingga script standalone dapat mengakses dan menyinkronkan <strong>DHP</strong> ke <strong>Rekap</strong> secara independen tanpa perlu menempel pada dokumen.
                 </div>
                 <ol className="list-decimal pl-5 space-y-1.5 text-slate-300">
-                  <li>Buka Spreadsheet Google Sheets <strong>REKAP SUSUT TEMBAKAU</strong> Anda.</li>
-                  <li>Klik menu <strong className="text-white">Ekstensi &gt; Apps Script</strong> di menu bar atas.</li>
-                  <li>Buka atau buat file script <code className="bg-slate-900 px-1 py-0.5 rounded text-blue-300">IntegrasiDHP.gs</code>.</li>
-                  <li>Tempel (*paste*) kode di atas lalu klik tombol <strong className="text-white">Simpan (Ctrl+S)</strong>.</li>
-                  <li>Muat ulang (refresh) tab Google Sheets Anda. Di menu bar atas akan muncul menu baru: <strong className="text-amber-300">⚡ Integrasi DHP Tembakau</strong>.</li>
+                  <li>Buka proyek GAS Standalone Anda di <strong className="text-white">script.google.com</strong>.</li>
+                  <li>Tempel (*paste*) kode skrip terbaru di atas lalu klik tombol <strong className="text-white">Simpan (Ctrl+S)</strong>.</li>
                   <li>
-                    Klik menu <strong className="text-emerald-400">⚡ Integrasi DHP Tembakau &gt; ⏰ Aktifkan Auto-Push Latar Belakang (Tiap 5 Menit)</strong>.
+                    <strong>Uji Coba Eksekusi:</strong> Pada dropdown nama fungsi di toolbar atas editor, pilih <code className="bg-slate-900 px-1.5 py-0.5 rounded text-amber-300 font-mono">TEST_SINKRON_SEKARANG</code> lalu klik tombol <strong className="text-white">▶ Jalankan (Run)</strong>. Pantau log di bagian bawah.
+                  </li>
+                  <li>
+                    <strong>Aktifkan Auto-Push 5 Menit:</strong> Pada dropdown yang sama, pilih <code className="bg-slate-900 px-1.5 py-0.5 rounded text-emerald-300 font-mono">AKTIFKAN_AUTO_PUSH_5_MENIT</code> lalu klik <strong className="text-white">▶ Jalankan (Run)</strong>.
                     <div className="text-[11px] text-slate-400 mt-1 pl-1 border-l-2 border-emerald-500/50 space-y-0.5">
-                      <p>✓ <strong>Otomatis 24 Jam Non-Stop:</strong> Data timbangan baru &amp; hasil susut DHP langsung diselaraskan ke Rekap di server Google (tanpa perlu membuka web app atau menyalakan laptop).</p>
-                      <p>✓ <strong>100% Bebas Blokir:</strong> Jeda 5 menit hanya menggunakan ~4 menit waktu eksekusi per hari (jauh di bawah batas kuota Google 90 menit/hari).</p>
-                      <p>✓ <strong>Proteksi Formula Penuh:</strong> Rumus kolom C, D, E, J, dan K tidak pernah ditimpa.</p>
+                      <p>✓ Pemicu waktu cloud otomatis terdaftar di project Standalone Anda dan akan mengeksekusi sinkronisasi tiap 5 menit 24 jam non-stop.</p>
+                      <p>✓ <strong>100% Bebas Blokir:</strong> Sangat hemat kuota (~4 menit eksekusi per hari dari limit 90 menit/hari).</p>
                     </div>
                   </li>
                 </ol>
