@@ -16,7 +16,8 @@ import {
   Send,
   Pause,
   Play,
-  Scale
+  Scale,
+  Download
 } from 'lucide-react';
 import { RawRowData, DhpIntegrationData, DhpBatchItem, GasConfig } from '../types[RekapDataProsesTembakau]';
 import {
@@ -1375,26 +1376,38 @@ function doGet(e) {
                   </p>
                 </div>
 
-                <button
-                  onClick={handleCopyCode}
-                  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold shadow-sm transition-all ${
-                    copiedCode
-                      ? 'bg-emerald-600 text-white'
-                      : 'bg-blue-600 hover:bg-blue-700 text-white'
-                  }`}
-                >
-                  {copiedCode ? (
-                    <>
-                      <Check className="w-3.5 h-3.5" />
-                      <span>Tersalin!</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-3.5 h-3.5" />
-                      <span>Salin Kode GAS</span>
-                    </>
-                  )}
-                </button>
+                <div className="flex items-center gap-2">
+                  <a
+                    href="/api/download-panduan-pdf"
+                    download="PANDUAN_TEKNIS_AUTO_PUSH_GAS.pdf"
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm transition-all"
+                    title="Unduh Panduan Teknis Arsitektur & Batasan Kuota GAS (Format PDF)"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Unduh PDF Panduan</span>
+                  </a>
+
+                  <button
+                    onClick={handleCopyCode}
+                    className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold shadow-sm transition-all ${
+                      copiedCode
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-blue-600 hover:bg-blue-700 text-white'
+                    }`}
+                  >
+                    {copiedCode ? (
+                      <>
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Tersalin!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>Salin Kode GAS</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
 
               {/* Code Box */}

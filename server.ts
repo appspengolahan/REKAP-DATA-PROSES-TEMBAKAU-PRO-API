@@ -103,10 +103,19 @@ async function startServer() {
     }
   });
 
+  // API Route: Download PDF Panduan Teknis
+  app.get('/api/download-panduan-pdf', (_req, res) => {
+    const filePath = path.resolve(__dirname, 'public', 'PANDUAN_TEKNIS_AUTO_PUSH_GAS.pdf');
+    res.download(filePath, 'PANDUAN_TEKNIS_AUTO_PUSH_GAS.pdf');
+  });
+
   // Health check
   app.get('/api/health', (_req, res) => {
     res.json({ status: 'ok', time: new Date().toISOString() });
   });
+
+  // Serve public folder statically (for generated PDFs, assets, etc.)
+  app.use(express.static(path.resolve(__dirname, 'public')));
 
   // Vite middleware in dev or static serve in prod
   if (process.env.NODE_ENV === 'production') {
