@@ -37,8 +37,6 @@ export const GasCenterModalRekapDataProsesTembakau: React.FC<GasCenterModalProps
   isPullingDatasheet,
   cachedCount
 }) => {
-  if (!isOpen) return null;
-
   const [inputUrl, setInputUrl] = useState(config.apiUrl || DEFAULT_GAS_URL);
   const [selectedSheetTab, setSelectedSheetTab] = useState<'AUTO' | '_CACHE_REKAP_TBK' | 'REKAP SUSUT TEMBAKAU'>('AUTO');
   const [pullResult, setPullResult] = useState<{ success: boolean; message: string; count?: number; tabUsed?: string } | null>(null);
@@ -156,6 +154,8 @@ export const GasCenterModalRekapDataProsesTembakau: React.FC<GasCenterModalProps
     setIsCopied(true);
     setTimeout(() => setIsCopied(false), 2500);
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="no-print fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200">

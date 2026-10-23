@@ -53,6 +53,7 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
   const [dhpData, setDhpData] = useState<DhpIntegrationData | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState<boolean>(false);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState<boolean>(false);
 
   // Smart Live-Sync State (Auto-Tarik Tiap 12 Detik)
   const [autoPullEnabled, setAutoPullEnabled] = useState<boolean>(true);
@@ -700,8 +701,6 @@ function doGet(e) {
     instruction: 'Panggil dengan action=syncDhp atau jalankan fungsi sinkronkanDhpKeRekap()'
   })).setMimeType(ContentService.MimeType.JSON);
 }`;
-
-  const [isDownloadingPdf, setIsDownloadingPdf] = useState<boolean>(false);
 
   const handleCopyCode = () => {
     navigator.clipboard.writeText(gasScriptCode);
