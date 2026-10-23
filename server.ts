@@ -1,6 +1,8 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
+import { generatePanduanPdf } from './scripts/generate_pdf.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -103,10 +105,38 @@ async function startServer() {
     }
   });
 
-  // API Route: Download PDF Panduan Teknis
-  app.get('/api/download-panduan-pdf', (_req, res) => {
-    const filePath = path.resolve(__dirname, 'public', 'PANDUAN_TEKNIS_AUTO_PUSH_GAS.pdf');
-    res.download(filePath, 'PANDUAN_TEKNIS_AUTO_PUSH_GAS.pdf');
+  // API Route: Download PDF Panduan Teknis (dengan auto-generate jika belum ada)
+  app.get('/api/download-panduan-pdf', async (_req, res) => {
+    try {
+      const filePath = path.resolve(__dirname, 'public', 'PANDUAN_TEKNIS_AUTO_PUSH_GAS.pdf');
+      if (!fs.existsSync(filePath)) {
+        await generatePanduanPdf();
+      }
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'attachment; filename="PANDUAN_TEKNIS_AUTO_PUSH_GAS.pdf"');
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+      const fileStream = fs.createReadStream(filePath);
+      fileStream.pipe(res);
+    } catch (err: any) {
+      console.error('Error serving PDF download:', err);
+      res.status(500).json({ success: false, error: 'Gagal mengunduh file PDF' });
+    }
+  });
+
+  // API Route: View PDF Panduan Teknis di Browser
+  app.get('/api/view-panduan-pdf', async (_req, res) => {
+    try {
+      const filePath = path.resolve(__dirname, 'public', 'PANDUAN_TEKNIS_AUTO_PUSH_GAS.pdf');
+      if (!fs.existsSync(filePath)) {
+        await generatePanduanPdf();
+      }
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'inline; filename="PANDUAN_TEKNIS_AUTO_PUSH_GAS.pdf"');
+      const fileStream = fs.createReadStream(filePath);
+      fileStream.pipe(res);
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: 'Gagal membuka file PDF' });
+    }
   });
 
   // Health check

@@ -701,10 +701,36 @@ function doGet(e) {
   })).setMimeType(ContentService.MimeType.JSON);
 }`;
 
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState<boolean>(false);
+
   const handleCopyCode = () => {
     navigator.clipboard.writeText(gasScriptCode);
     setCopiedCode(true);
     setTimeout(() => setCopiedCode(false), 3000);
+  };
+
+  const handleDownloadPdf = async () => {
+    setIsDownloadingPdf(true);
+    try {
+      const response = await fetch('/api/download-panduan-pdf');
+      if (!response.ok) {
+        throw new Error('Gagal mengambil file PDF dari server');
+      }
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = 'PANDUAN_TEKNIS_AUTO_PUSH_GAS.pdf';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => window.URL.revokeObjectURL(blobUrl), 3000);
+    } catch (err) {
+      console.warn('Direct fetch download failed, fallback to direct link:', err);
+      window.open('/api/download-panduan-pdf', '_blank');
+    } finally {
+      setIsDownloadingPdf(false);
+    }
   };
 
   return (
@@ -1377,14 +1403,25 @@ function doGet(e) {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <a
-                    href="/api/download-panduan-pdf"
-                    download="PANDUAN_TEKNIS_AUTO_PUSH_GAS.pdf"
-                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm transition-all"
+                  <button
+                    onClick={handleDownloadPdf}
+                    disabled={isDownloadingPdf}
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white shadow-sm transition-all cursor-pointer"
                     title="Unduh Panduan Teknis Arsitektur & Batasan Kuota GAS (Format PDF)"
                   >
-                    <Download className="w-3.5 h-3.5" />
-                    <span>Unduh PDF Panduan</span>
+                    <Download className={`w-3.5 h-3.5 ${isDownloadingPdf ? 'animate-bounce' : ''}`} />
+                    <span>{isDownloadingPdf ? 'Mengunduh...' : 'Unduh PDF Panduan'}</span>
+                  </button>
+
+                  <a
+                    href="/api/view-panduan-pdf"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 shadow-sm transition-all"
+                    title="Buka / Baca Dokumen PDF Langsung di Tab Baru"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
+                    <span>Buka PDF</span>
                   </a>
 
                   <button
