@@ -12,7 +12,8 @@ import {
   Cable,
   Sparkles,
   Menu,
-  X
+  X,
+  TrendingUp
 } from 'lucide-react';
 import { ActiveTabType } from '../types[RekapDataProsesTembakau]';
 
@@ -69,6 +70,12 @@ export const SidebarRekapDataProsesTembakau: React.FC<SidebarProps> = ({
       label: 'Log Data Harian',
       sublabel: 'Verifikasi & Audit Baris Mentah',
       icon: Database
+    },
+    {
+      id: 'analisis-deviasi' as ActiveTabType,
+      label: 'Analisis Deviasi & Acuan',
+      sublabel: 'Evaluasi Riil vs Standar Mutu',
+      icon: TrendingUp
     },
     {
       id: 'switch-app' as ActiveTabType,

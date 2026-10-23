@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   X,
   Database,
@@ -17,9 +17,16 @@ import {
   Pause,
   Play,
   Scale,
-  Download
+  Download,
+  TrendingUp,
+  Droplets,
+  Wind,
+  Printer,
+  Info,
+  Calendar
 } from 'lucide-react';
 import { RawRowData, DhpIntegrationData, DhpBatchItem, GasConfig } from '../types[RekapDataProsesTembakau]';
+import { StandarSusutService } from '../services/standarSusutService';
 import {
   RekapDataProsesTembakauService,
   formatKg,
@@ -46,7 +53,7 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
   onAppendRecordsToRekap,
   gasConfig
 }) => {
-  const [activeTab, setActiveTab] = useState<'transaksi' | 'pemetaan' | 'gas'>('transaksi');
+  const [activeTab, setActiveTab] = useState<'transaksi' | 'analisis_harian' | 'pemetaan' | 'gas'>('transaksi');
   const [loading, setLoading] = useState<boolean>(true);
   const [isSyncingToRekap, setIsSyncingToRekap] = useState<boolean>(false);
   const [syncNotice, setSyncNotice] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -54,6 +61,20 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState<boolean>(false);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState<boolean>(false);
+  const [selectedAnalisisTanggal, setSelectedAnalisisTanggal] = useState<string>('');
+
+  // Daftar tanggal unik dari DHP
+  const availableAnalisisDates = useMemo(() => {
+    if (!dhpData || !dhpData.items) return [];
+    const setDates = new Set(dhpData.items.map(it => it.tanggalFormatted || it.tanggalRaw).filter(Boolean));
+    return Array.from(setDates);
+  }, [dhpData]);
+
+  // Hitung Analisis Harian Komparatif secara reaktif
+  const analisisHarian = useMemo(() => {
+    if (!dhpData || !dhpData.items || dhpData.items.length === 0) return null;
+    return StandarSusutService.computeAnalisisHarian(dhpData.items, selectedAnalisisTanggal, existingRows);
+  }, [dhpData, selectedAnalisisTanggal, existingRows]);
 
   // Smart Live-Sync State (Auto-Tarik Tiap 12 Detik)
   const [autoPullEnabled, setAutoPullEnabled] = useState<boolean>(true);
@@ -829,6 +850,21 @@ function doGet(e) {
           </button>
 
           <button
+            onClick={() => setActiveTab('analisis_harian')}
+            className={`flex items-center gap-1.5 py-2 px-3 text-xs font-semibold border-b-2 transition-all ${
+              activeTab === 'analisis_harian'
+                ? 'border-amber-500 text-amber-400 bg-amber-500/10'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <TrendingUp className="w-3.5 h-3.5 text-amber-400" />
+            <span>Laporan Analisis Harian</span>
+            <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+              Deviasi
+            </span>
+          </button>
+
+          <button
             onClick={() => setActiveTab('pemetaan')}
             className={`flex items-center gap-1.5 py-2 px-3 text-xs font-semibold border-b-2 transition-all ${
               activeTab === 'pemetaan'
@@ -1232,7 +1268,288 @@ function doGet(e) {
             </div>
           )}
 
-          {/* TAB 2: PEMETAAN KOLOM */}
+          {/* TAB 2: LAPORAN ANALISIS HARIAN (KOMPARASI ACUAN & RESUME SELURUH BAHAN) */}
+          {activeTab === 'analisis_harian' && (
+            <div className="space-y-3.5">
+              
+              {/* Header Kontrol Tanggal & Tombol Cetak */}
+              <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700/80 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                    <Calendar className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                      <span>Pilih Tanggal Pengolahan:</span>
+                      <span className="text-[10px] font-normal text-amber-400 bg-amber-950/60 px-2 py-0.5 rounded border border-amber-500/30">
+                        {availableAnalisisDates.length} Tanggal Tersedia
+                      </span>
+                    </h3>
+                    <p className="text-[11px] text-slate-400">
+                      Menganalisis resume seluruh jenis bahan yang masuk dan diproses pada tanggal ini
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <select
+                    value={analisisHarian?.tanggal || selectedAnalisisTanggal}
+                    onChange={(e) => setSelectedAnalisisTanggal(e.target.value)}
+                    className="px-3 py-1.5 rounded-lg border border-slate-600 bg-slate-900 text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer"
+                  >
+                    {availableAnalisisDates.map(tgl => (
+                      <option key={tgl} value={tgl}>{tgl}</option>
+                    ))}
+                  </select>
+
+                  <button
+                    onClick={() => window.print()}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-700 hover:bg-slate-600 text-slate-200 border border-slate-600 shadow-sm transition-all cursor-pointer"
+                    title="Cetak Laporan Resume Harian Ini"
+                  >
+                    <Printer className="w-3.5 h-3.5 text-slate-300" />
+                    <span>Cetak Resume</span>
+                  </button>
+                </div>
+              </div>
+
+              {!analisisHarian ? (
+                <div className="p-8 text-center text-slate-400 bg-slate-900/50 rounded-xl border border-slate-800">
+                  <p className="text-xs">Data transaksi untuk tanggal ini belum tersedia atau DHP belum ditarik.</p>
+                </div>
+              ) : (
+                <>
+                  {/* 1. Resume Konsolidasi Harian (4 Kartu Eksekutif) */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+                    
+                    {/* Total Baku Masuk */}
+                    <div className="bg-slate-800/60 p-3 rounded-xl border border-slate-700/60">
+                      <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                        Total Baku Masuk
+                      </div>
+                      <div className="text-base font-black text-white mt-0.5">
+                        {formatKg(analisisHarian.totalBakuKg)} <span className="text-xs font-normal text-slate-400">Kg</span>
+                      </div>
+                      <div className="text-[10px] text-slate-400 mt-0.5">
+                        Hasil Jadi: <strong className="text-slate-200">{formatKg(analisisHarian.totalHasilKg)} Kg</strong>
+                      </div>
+                    </div>
+
+                    {/* Susut Riil Hari Ini */}
+                    <div className="bg-slate-800/60 p-3 rounded-xl border border-slate-700/60">
+                      <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                        Susut Riil Hari Ini
+                      </div>
+                      <div className="text-base font-black text-blue-400 mt-0.5">
+                        {formatPct(analisisHarian.susutRiilWeightedPct)}
+                      </div>
+                      <div className="text-[10px] text-slate-400 mt-0.5">
+                        Total Susut: <strong className="text-slate-200">{formatKg(analisisHarian.totalSusutKg)} Kg</strong>
+                      </div>
+                    </div>
+
+                    {/* Acuan Standar */}
+                    <div className="bg-slate-800/60 p-3 rounded-xl border border-slate-700/60">
+                      <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                        Rata-Rata Acuan
+                      </div>
+                      <div className="text-base font-black text-amber-400 mt-0.5">
+                        {formatPct(analisisHarian.acuanWeightedPct)}
+                      </div>
+                      <div className="text-[10px] text-slate-400 mt-0.5">
+                        Standar Tertimbang Variasi
+                      </div>
+                    </div>
+
+                    {/* Net Deviasi Harian */}
+                    <div className={`p-3 rounded-xl border ${
+                      analisisHarian.statusAgregat === 'kritis'
+                        ? 'bg-rose-950/50 border-rose-600/60 text-rose-200'
+                        : analisisHarian.statusAgregat === 'toleransi'
+                        ? 'bg-amber-950/50 border-amber-600/60 text-amber-200'
+                        : 'bg-emerald-950/50 border-emerald-600/60 text-emerald-200'
+                    }`}>
+                      <div className="text-[10px] font-bold uppercase tracking-wider">
+                        Deviasi Agregat Hari Ini
+                      </div>
+                      <div className="text-base font-black mt-0.5">
+                        {analisisHarian.deviasiAgregatPct >= 0 ? '+' : ''}{formatPct(analisisHarian.deviasiAgregatPct)}
+                      </div>
+                      <div className="text-[10px] font-semibold mt-0.5 flex items-center gap-1.5">
+                        <span className={`w-2 h-2 rounded-full ${
+                          analisisHarian.statusAgregat === 'kritis' ? 'bg-rose-500 animate-pulse' :
+                          analisisHarian.statusAgregat === 'toleransi' ? 'bg-amber-400' : 'bg-emerald-400'
+                        }`}></span>
+                        <span>
+                          {analisisHarian.statusAgregat === 'kritis' ? 'PERHATIAN OOS' :
+                           analisisHarian.statusAgregat === 'toleransi' ? 'TOLERANSI WAJAR' : 'ON-TARGET (NORMAL)'}
+                        </span>
+                      </div>
+                    </div>
+
+                  </div>
+
+                  {/* 2. Dekomposisi Akumulasi Fraksi Limbah Harian */}
+                  <div className="bg-slate-900/80 p-3 rounded-xl border border-slate-800 text-xs">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-bold text-slate-300 text-[11px] uppercase tracking-wider flex items-center gap-1.5">
+                        <Layers className="w-3.5 h-3.5 text-blue-400" />
+                        Akumulasi Limbah Terbuang Hari Ini ({analisisHarian.tanggalFormatted})
+                      </span>
+                      <span className="text-[11px] text-slate-400">
+                        Total Limbah: <strong className="text-white">{formatKg(analisisHarian.totalGagangKg + analisisHarian.totalAirKg + analisisHarian.totalDebuKg)} Kg</strong>
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <div className="p-2 bg-slate-800/50 rounded-lg border border-slate-700/60 flex items-center justify-between">
+                        <div>
+                          <div className="text-[10px] text-slate-400">Total Fraksi Gagang</div>
+                          <div className="text-xs font-bold text-white">{formatKg(analisisHarian.totalGagangKg)} Kg</div>
+                        </div>
+                        <div className="text-xs font-mono font-bold text-slate-300">
+                          {analisisHarian.totalBakuKg > 0 ? ((analisisHarian.totalGagangKg / analisisHarian.totalBakuKg) * 100).toFixed(2) : 0}%
+                        </div>
+                      </div>
+
+                      <div className="p-2 bg-sky-950/40 rounded-lg border border-sky-800/50 flex items-center justify-between">
+                        <div>
+                          <div className="text-[10px] text-sky-300 flex items-center gap-1">
+                            <Droplets className="w-3 h-3 text-sky-400" />
+                            Total Penguapan Air
+                          </div>
+                          <div className="text-xs font-bold text-sky-100">{formatKg(analisisHarian.totalAirKg)} Kg</div>
+                        </div>
+                        <div className="text-xs font-mono font-bold text-sky-300">
+                          {analisisHarian.totalBakuKg > 0 ? ((analisisHarian.totalAirKg / analisisHarian.totalBakuKg) * 100).toFixed(2) : 0}%
+                        </div>
+                      </div>
+
+                      <div className="p-2 bg-amber-950/40 rounded-lg border border-amber-800/50 flex items-center justify-between">
+                        <div>
+                          <div className="text-[10px] text-amber-300 flex items-center gap-1">
+                            <Wind className="w-3 h-3 text-amber-400" />
+                            Total Pemisahan Debu
+                          </div>
+                          <div className="text-xs font-bold text-amber-100">{formatKg(analisisHarian.totalDebuKg)} Kg</div>
+                        </div>
+                        <div className="text-xs font-mono font-bold text-amber-300">
+                          {analisisHarian.totalBakuKg > 0 ? ((analisisHarian.totalDebuKg / analisisHarian.totalBakuKg) * 100).toFixed(2) : 0}%
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 3. Matriks Komparasi per Jenis Tembakau yang Masuk Hari Itu */}
+                  <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
+                    <div className="px-3.5 py-2.5 border-b border-slate-800 flex items-center justify-between bg-slate-850">
+                      <div>
+                        <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+                          Rincian Komparasi Seluruh Bahan yang Diproses Hari Ini
+                        </h4>
+                        <p className="text-[10px] text-slate-400 mt-0.5">
+                          Setiap jenis tembakau langsung dikomparasikan terhadap acuan standar spesifiknya
+                        </p>
+                      </div>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                        {analisisHarian.items.length} Jenis Tembakau
+                      </span>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr className="bg-slate-800/80 text-slate-400 font-semibold border-b border-slate-700 text-[11px]">
+                            <th className="py-2 px-3">Jenis Tembakau</th>
+                            <th className="py-2 px-2.5 text-center">Jalur</th>
+                            <th className="py-2 px-2.5 text-right">Baku (Kg)</th>
+                            <th className="py-2 px-2.5 text-right">Hasil (Kg)</th>
+                            <th className="py-2 px-2.5 text-right text-white">Susut Riil</th>
+                            <th className="py-2 px-2.5 text-right text-amber-400">Acuan</th>
+                            <th className="py-2 px-2.5 text-right font-bold">Deviasi (Δ)</th>
+                            <th className="py-2 px-2.5 text-center">Status</th>
+                            <th className="py-2 px-3">Faktor Dominan / Diagnosa</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800">
+                          {analisisHarian.items.map((it, idx) => (
+                            <tr key={idx} className="hover:bg-slate-800/40 transition-colors">
+                              <td className="py-2 px-3 font-bold text-white text-[11px]">
+                                {it.jenisTembakau}
+                              </td>
+                              <td className="py-2 px-2.5 text-center">
+                                <span className={`px-1.5 py-0.2 rounded text-[10px] font-bold ${
+                                  it.jenisProses === 'SKM' 
+                                    ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' 
+                                    : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                                }`}>
+                                  {it.jenisProses}
+                                </span>
+                              </td>
+                              <td className="py-2 px-2.5 text-right font-mono text-slate-300 text-[11px]">
+                                {formatKg(it.bakuKg)}
+                              </td>
+                              <td className="py-2 px-2.5 text-right font-mono text-slate-300 text-[11px]">
+                                {formatKg(it.hasilKg)}
+                              </td>
+                              <td className="py-2 px-2.5 text-right font-mono font-bold text-white text-[11px]">
+                                {formatPct(it.susutPct)}
+                              </td>
+                              <td className="py-2 px-2.5 text-right font-mono text-amber-300 font-semibold text-[11px]">
+                                {formatPct(it.standarAcuanPct)}
+                              </td>
+                              <td className="py-2 px-2.5 text-right font-mono font-black text-[11px]">
+                                <span className={
+                                  it.status === 'kritis' ? 'text-rose-400' :
+                                  it.status === 'toleransi' ? 'text-amber-400' : 'text-emerald-400'
+                                }>
+                                  {it.deviasiPct >= 0 ? '+' : ''}{formatPct(it.deviasiPct)}
+                                </span>
+                              </td>
+                              <td className="py-2 px-2.5 text-center">
+                                <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold inline-flex items-center gap-1 ${
+                                  it.status === 'kritis' ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40' :
+                                  it.status === 'toleransi' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' :
+                                  'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                                }`}>
+                                  <span className={`w-1.5 h-1.5 rounded-full ${
+                                    it.status === 'kritis' ? 'bg-rose-400' :
+                                    it.status === 'toleransi' ? 'bg-amber-400' : 'bg-emerald-400'
+                                  }`}></span>
+                                  {it.status === 'kritis' ? 'OOS' :
+                                   it.status === 'toleransi' ? 'Toleransi' : 'Normal'}
+                                </span>
+                              </td>
+                              <td className="py-2 px-3">
+                                <div className="font-semibold text-slate-200 text-[11px]">{it.faktorDominan}</div>
+                                <div className="text-[10px] text-slate-400 leading-tight" title={it.penjelasan}>
+                                  {it.penjelasan}
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* 4. Kotak Diagnosa & Temuan Operasional Cerdas */}
+                  <div className="bg-gradient-to-r from-amber-950/40 via-slate-900 to-indigo-950/40 p-3.5 rounded-xl border border-amber-500/40 text-xs">
+                    <div className="flex items-center gap-2 text-amber-300 font-bold uppercase tracking-wider text-[11px] mb-1.5">
+                      <Info className="w-4 h-4 text-amber-400" />
+                      <span>Temuan Operasional Harian Otomatis:</span>
+                    </div>
+                    <p className="text-slate-200 text-xs leading-relaxed">
+                      {analisisHarian.kesimpulanOtomatis}
+                    </p>
+                  </div>
+                </>
+              )}
+
+            </div>
+          )}
+
+          {/* TAB 3: PEMETAAN KOLOM */}
           {activeTab === 'pemetaan' && (
             <div className="space-y-4">
               <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700/60 text-xs leading-relaxed text-slate-300 space-y-2">

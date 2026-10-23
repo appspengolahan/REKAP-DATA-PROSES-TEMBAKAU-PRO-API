@@ -166,4 +166,71 @@ export interface DhpIntegrationData {
   fetchTimestamp: string;
 }
 
-export type ActiveTabType = 'dashboard' | 'rekap-bulan' | 'rekap-jenis' | 'matriks-skt-skm' | 'data-explorer' | 'switch-app';
+export type ActiveTabType = 'dashboard' | 'rekap-bulan' | 'rekap-jenis' | 'matriks-skt-skm' | 'data-explorer' | 'analisis-deviasi' | 'switch-app';
+
+export interface StandarSusutItem {
+  id: string;
+  jenisTembakau: string;
+  jenisProses: 'SKT' | 'SKM' | 'Semua';
+  standarSusutPct: number; // e.g. 5.20
+  toleransiPct: number;    // e.g. 1.00 (+/- batas wajar)
+  periodeAcuan: string;    // e.g. "Agustus - September 2026"
+  keterangan?: string;
+  updatedAt?: string;
+}
+
+export interface AnalisisDeviasiItem {
+  jenisTembakau: string;
+  jenisProses: 'SKT' | 'SKM' | string;
+  bakuKg: number;
+  hasilKg: number;
+  susutKg: number;
+  susutPct: number;
+  standarAcuanPct: number;
+  deviasiPct: number; // susutPct - standarAcuanPct
+  status: 'normal' | 'toleransi' | 'kritis';
+  gagangKg: number;
+  gagangPct: number;
+  airKg: number;
+  airPct: number;
+  debuKg: number;
+  debuPct: number;
+  faktorDominan: string;
+  penjelasan: string;
+}
+
+export interface AnalisisHarianSummary {
+  tanggal: string;
+  tanggalFormatted: string;
+  totalBakuKg: number;
+  totalHasilKg: number;
+  totalSusutKg: number;
+  susutRiilWeightedPct: number;
+  acuanWeightedPct: number;
+  deviasiAgregatPct: number;
+  statusAgregat: 'normal' | 'toleransi' | 'kritis';
+  totalGagangKg: number;
+  totalAirKg: number;
+  totalDebuKg: number;
+  items: AnalisisDeviasiItem[];
+  kesimpulanOtomatis: string;
+}
+
+export interface AnalisisBulananSummary {
+  bulan: string;
+  tahun: string;
+  totalBatch: number;
+  totalBakuKg: number;
+  totalHasilKg: number;
+  totalSusutKg: number;
+  susutRiilWeightedPct: number;
+  acuanWeightedPct: number;
+  deviasiAgregatPct: number;
+  statusAgregat: 'normal' | 'toleransi' | 'kritis';
+  totalGagangKg: number;
+  totalAirKg: number;
+  totalDebuKg: number;
+  items: AnalisisDeviasiItem[];
+  kesimpulanOtomatis: string;
+  rekomendasiManajerial: string[];
+}

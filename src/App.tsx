@@ -24,6 +24,7 @@ import { RekapBulanViewRekapDataProsesTembakau } from './components/RekapBulanVi
 import { RekapJenisViewRekapDataProsesTembakau } from './components/RekapJenisView[RekapDataProsesTembakau]';
 import { MatriksSktSkmRekapDataProsesTembakau } from './components/MatriksSktSkm[RekapDataProsesTembakau]';
 import { DataExplorerRekapDataProsesTembakau } from './components/DataExplorer[RekapDataProsesTembakau]';
+import { AnalisisDeviasiView } from './components/AnalisisDeviasiView';
 import { SwitchBoardModalRekapDataProsesTembakau } from './components/SwitchBoardModal[RekapDataProsesTembakau]';
 import { SwitchAppBoardView } from './components/SwitchAppBoardView';
 import { GasCenterModalRekapDataProsesTembakau } from './components/GasCenterModal[RekapDataProsesTembakau]';
@@ -461,7 +462,17 @@ export default function App() {
               </div>
             )}
 
-            {/* View 6: Switch App Board (Synchronized with Header Dropdown Switch App) */}
+            {/* View 6: Analisis Deviasi & Acuan (Evaluasi Seluruh Bahan Bulanan & Acuan) */}
+            {activeTab === 'analisis-deviasi' && (
+              <AnalisisDeviasiView
+                rows={rows}
+                selectedTahun={selectedTahun}
+                selectedBulan={selectedBulanRingkasan}
+                onExportPdf={() => handleExportPdf('Laporan_Analisis_Deviasi_Bulanan')}
+              />
+            )}
+
+            {/* View 7: Switch App Board (Synchronized with Header Dropdown Switch App) */}
             {activeTab === 'switch-app' && (
               <SwitchAppBoardView />
             )}
