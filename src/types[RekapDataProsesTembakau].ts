@@ -175,6 +175,8 @@ export interface StandarSusutItem {
   standarSusutPct: number; // e.g. 5.20
   toleransiPct: number;    // e.g. 1.00 (+/- batas wajar)
   periodeAcuan: string;    // e.g. "Agustus - September 2026"
+  totalBakuKg?: number;    // Total tonase bahan baku pada periode acuan
+  batchCount?: number;     // Jumlah batch pada periode acuan
   keterangan?: string;
   updatedAt?: string;
 }

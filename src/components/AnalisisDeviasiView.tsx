@@ -26,7 +26,9 @@ import {
   Droplets,
   Wind,
   ShieldCheck,
-  Building2
+  Building2,
+  Search,
+  Check
 } from 'lucide-react';
 
 interface AnalisisDeviasiViewProps {
@@ -49,7 +51,7 @@ export const AnalisisDeviasiView: React.FC<AnalisisDeviasiViewProps> = ({
   const [filterTahun, setFilterTahun] = useState<string>(initialTahun === 'Semua' ? '2026' : initialTahun);
   const [filterBulan, setFilterBulan] = useState<string>(initialBulan === 'Semua' ? 'Oktober' : initialBulan);
 
-  // 3. Standar Registry State
+  // 3. Standar Registry State (Aktif Sistem)
   const [standarList, setStandarList] = useState<StandarSusutItem[]>(() => 
     StandarSusutService.getStandarList(rows)
   );
@@ -64,6 +66,9 @@ export const AnalisisDeviasiView: React.FC<AnalisisDeviasiViewProps> = ({
   const [baselineBulanMulai, setBaselineBulanMulai] = useState<string>('Agustus');
   const [baselineBulanAkhir, setBaselineBulanAkhir] = useState<string>('September');
   const [baselineTahun, setBaselineTahun] = useState<string>('2026');
+  const [baselineSearchQuery, setBaselineSearchQuery] = useState<string>('');
+  const [baselineJalurFilter, setBaselineJalurFilter] = useState<'Semua' | 'SKT' | 'SKM'>('Semua');
+  const [acuanViewMode, setAcuanViewMode] = useState<'periode-terpilih' | 'acuan-aktif'>('periode-terpilih');
   const [noticeMessage, setNoticeMessage] = useState<{ text: string; type: 'success' | 'info' } | null>(null);
 
   // Kumpulan Bulan & Tahun unik dari rows
@@ -77,42 +82,86 @@ export const AnalisisDeviasiView: React.FC<AnalisisDeviasiViewProps> = ({
     'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
   ];
 
-  // Hitung Analisis Bulanan secara reaktif
+  // Daftar bulan yang dipilih secara inklusif (inklusif berurutan)
+  const baselinePeriodMonths = useMemo(() => {
+    const months = [
+      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+    ];
+    const idxStart = months.indexOf(baselineBulanMulai);
+    const idxEnd = months.indexOf(baselineBulanAkhir);
+
+    if (idxStart === -1 || idxEnd === -1) return [baselineBulanMulai];
+    if (idxStart <= idxEnd) {
+      return months.slice(idxStart, idxEnd + 1);
+    } else {
+      return months.slice(idxEnd, idxStart + 1);
+    }
+  }, [baselineBulanMulai, baselineBulanAkhir]);
+
+  const baselinePeriodLabel = useMemo(() => {
+    if (baselineBulanMulai === baselineBulanAkhir) {
+      return `${baselineBulanMulai} ${baselineTahun}`;
+    }
+    return `${baselineBulanMulai} - ${baselineBulanAkhir} ${baselineTahun}`;
+  }, [baselineBulanMulai, baselineBulanAkhir, baselineTahun]);
+
+  // Perhitungan dinamis & reaktif seluruh varian tembakau pada rentang periode yang dipilih
+  const periodCalculatedStandards: StandarSusutItem[] = useMemo(() => {
+    return StandarSusutService.calculateBaselineFromPeriod(
+      rows,
+      baselinePeriodMonths,
+      baselineTahun,
+      baselinePeriodLabel,
+      false // Jangan otomatis overwrite localStorage sampai pengguna menetapkan
+    );
+  }, [rows, baselinePeriodMonths, baselineTahun, baselinePeriodLabel]);
+
+  // Cek apakah standar acuan aktif sistem saat ini sama dengan periode yang sedang dipilih
+  const isCurrentPeriodActive = useMemo(() => {
+    if (standarList.length === 0) return false;
+    return standarList.some(s => s.periodeAcuan === baselinePeriodLabel);
+  }, [standarList, baselinePeriodLabel]);
+
+  // Daftar yang ditampilkan di tabel (berdasarkan mode tampilan & filter)
+  const baseItemsToDisplay = acuanViewMode === 'periode-terpilih'
+    ? periodCalculatedStandards
+    : standarList;
+
+  const filteredStandarList = useMemo(() => {
+    return baseItemsToDisplay.filter(item => {
+      const matchSearch = !baselineSearchQuery || 
+        item.jenisTembakau.toLowerCase().includes(baselineSearchQuery.toLowerCase());
+      const matchJalur = baselineJalurFilter === 'Semua' || 
+        item.jenisProses === baselineJalurFilter || 
+        item.jenisProses === 'Semua';
+      return matchSearch && matchJalur;
+    });
+  }, [baseItemsToDisplay, baselineSearchQuery, baselineJalurFilter]);
+
+  // Hitung Analisis Bulanan secara reaktif dengan acuan standar aktif
   const analisisBulanan: AnalisisBulananSummary = useMemo(() => {
-    return StandarSusutService.computeAnalisisBulanan(rows, filterBulan, filterTahun);
+    return StandarSusutService.computeAnalisisBulanan(rows, filterBulan, filterTahun, standarList);
   }, [rows, filterBulan, filterTahun, standarList]);
 
-  // Handler: Hitung Baseline Otomatis dari Periode Tertentu
-  const handleCalculateBaseline = () => {
-    const bulanRange: string[] = [];
-    const idxStart = BULAN_LIST.indexOf(baselineBulanMulai);
-    const idxEnd = BULAN_LIST.indexOf(baselineBulanAkhir);
-
-    if (idxStart !== -1 && idxEnd !== -1 && idxStart <= idxEnd) {
-      for (let i = idxStart; i <= idxEnd; i++) {
-        if (BULAN_LIST[i] !== 'Semua') bulanRange.push(BULAN_LIST[i]);
-      }
-    } else {
-      bulanRange.push(baselineBulanMulai);
-    }
-
-    const label = `${baselineBulanMulai} - ${baselineBulanAkhir} ${baselineTahun}`;
-    const newItems = StandarSusutService.calculateBaselineFromPeriod(rows, bulanRange, baselineTahun, label);
-    setStandarList(newItems);
+  // Handler: Tetapkan Standar dari Periode Ini Sebagai Acuan Aktif Sistem
+  const handleApplyPeriodAsActive = () => {
+    StandarSusutService.saveStandarList(periodCalculatedStandards);
+    setStandarList(periodCalculatedStandards);
     setNoticeMessage({
-      text: `Standar acuan berhasil dihitung dan diperbarui dari rata-rata tertimbang ${label}!`,
+      text: `Berhasil! Seluruh ${periodCalculatedStandards.length} standar acuan tembakau periode ${baselinePeriodLabel} telah ditetapkan sebagai acuan aktif sistem.`,
       type: 'success'
     });
     setTimeout(() => setNoticeMessage(null), 5000);
   };
 
-  // Handler: Reset ke Default
+  // Handler: Reset ke Default Pabrik
   const handleResetStandar = () => {
-    if (confirm('Apakah Anda yakin ingin mengembalikan seluruh standar acuan ke nilai default pabrik?')) {
-      const def = StandarSusutService.resetToDefault();
+    if (confirm('Apakah Anda yakin ingin mengembalikan seluruh standar acuan ke nilai default pabrik (Agustus - September 2026)?')) {
+      const def = StandarSusutService.resetToDefault(rows);
       setStandarList(def);
       setNoticeMessage({
-        text: 'Standar acuan susut telah dikembalikan ke nilai default pabrik.',
+        text: 'Standar acuan susut telah dikembalikan ke nilai default pabrik (Agustus - September 2026).',
         type: 'info'
       });
       setTimeout(() => setNoticeMessage(null), 4000);
@@ -138,8 +187,8 @@ export const AnalisisDeviasiView: React.FC<AnalisisDeviasiViewProps> = ({
       return;
     }
 
-    const updated = standarList.map(s => {
-      if (s.id === editingItem.id) {
+    let updated = standarList.map(s => {
+      if (s.id === editingItem.id || (s.jenisTembakau === editingItem.jenisTembakau && s.jenisProses === editingItem.jenisProses)) {
         return {
           ...s,
           standarSusutPct: Math.round(numStd * 100) / 100,
@@ -150,6 +199,21 @@ export const AnalisisDeviasiView: React.FC<AnalisisDeviasiViewProps> = ({
       }
       return s;
     });
+
+    // Jika item baru berasal dari perhitungan periode terpilih dan belum ada di standar aktif
+    const exists = updated.some(s => s.jenisTembakau === editingItem.jenisTembakau && s.jenisProses === editingItem.jenisProses);
+    if (!exists) {
+      updated = [
+        ...updated,
+        {
+          ...editingItem,
+          standarSusutPct: Math.round(numStd * 100) / 100,
+          toleransiPct: !isNaN(numTol) ? Math.round(numTol * 100) / 100 : editingItem.toleransiPct,
+          keterangan: editKeterangan,
+          updatedAt: new Date().toISOString().split('T')[0]
+        }
+      ];
+    }
 
     setStandarList(updated);
     StandarSusutService.saveStandarList(updated);
@@ -235,7 +299,7 @@ export const AnalisisDeviasiView: React.FC<AnalisisDeviasiViewProps> = ({
           }`}
         >
           <Sliders className="w-4 h-4" />
-          <span>Manajemen Standar Acuan Susut ({standarList.length} Aturan)</span>
+          <span>Manajemen Standar Acuan Susut ({periodCalculatedStandards.length} Varian Terhitung)</span>
         </button>
       </div>
 
@@ -566,35 +630,52 @@ export const AnalisisDeviasiView: React.FC<AnalisisDeviasiViewProps> = ({
       {subTab === 'manajemen-acuan' && (
         <div className="space-y-4">
           
-          {/* Card 1: Generator Otomatis Acuan dari Data Historis */}
-          <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-300/60 rounded-2xl p-4 bg-white shadow-xs">
+          {/* Card 1: Penentuan Rentang Periode Acuan Standar */}
+          <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-300/70 rounded-2xl p-4 bg-white shadow-xs">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-3">
               <div>
                 <h3 className="text-xs font-bold text-amber-950 uppercase tracking-wider flex items-center gap-1.5">
                   <RotateCcw className="w-3.5 h-3.5 text-amber-600" />
-                  Hitung Standar Acuan Baru dari Rata-Rata Historis
+                  Kalkulasi Standar Acuan dari Periode Produksi Nyata
                 </h3>
                 <p className="text-[11px] text-slate-600 mt-0.5">
-                  Sistem akan menghitung rata-rata tertimbang bobot (weighted average) per jenis tembakau untuk dijadikan standar referensi baru.
+                  Pilih rentang bulan dan tahun acuan. Sistem secara otomatis menghitung rata-rata tertimbang seluruh tembakau yang diproses pada rentang tersebut.
                 </p>
               </div>
               
-              <button
-                onClick={handleCalculateBaseline}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white shadow-xs transition-all self-start md:self-auto cursor-pointer"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                <span>Tetapkan Standar dari Periode Ini</span>
-              </button>
+              <div className="flex items-center gap-2 self-start md:self-auto">
+                <button
+                  onClick={handleApplyPeriodAsActive}
+                  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold text-white shadow-xs transition-all cursor-pointer ${
+                    isCurrentPeriodActive
+                      ? 'bg-emerald-600 hover:bg-emerald-700'
+                      : 'bg-amber-600 hover:bg-amber-700'
+                  }`}
+                  title="Gunakan hasil kalkulasi periode ini sebagai acuan pembanding pada seluruh sistem"
+                >
+                  {isCurrentPeriodActive ? (
+                    <>
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Acuan Periode Ini Aktif (Perbarui)</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-3.5 h-3.5" />
+                      <span>Tetapkan Periode Ini Sebagai Acuan Aktif Sistem</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-amber-200/60 text-xs">
+            {/* Filter Bar Periode Acuan */}
+            <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-amber-200/70 text-xs">
               <div className="flex items-center gap-1.5">
-                <span className="text-slate-600 font-semibold">Bulan Mulai:</span>
+                <span className="text-slate-700 font-bold">Bulan Mulai:</span>
                 <select
                   value={baselineBulanMulai}
                   onChange={(e) => setBaselineBulanMulai(e.target.value)}
-                  className="px-2.5 py-1 rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-800"
+                  className="px-2.5 py-1 rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
                 >
                   {BULAN_LIST.filter(b => b !== 'Semua').map(b => (
                     <option key={b} value={b}>{b}</option>
@@ -603,11 +684,11 @@ export const AnalisisDeviasiView: React.FC<AnalisisDeviasiViewProps> = ({
               </div>
 
               <div className="flex items-center gap-1.5">
-                <span className="text-slate-600 font-semibold">Sampai Bulan:</span>
+                <span className="text-slate-700 font-bold">Sampai Bulan:</span>
                 <select
                   value={baselineBulanAkhir}
                   onChange={(e) => setBaselineBulanAkhir(e.target.value)}
-                  className="px-2.5 py-1 rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-800"
+                  className="px-2.5 py-1 rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
                 >
                   {BULAN_LIST.filter(b => b !== 'Semua').map(b => (
                     <option key={b} value={b}>{b}</option>
@@ -616,11 +697,11 @@ export const AnalisisDeviasiView: React.FC<AnalisisDeviasiViewProps> = ({
               </div>
 
               <div className="flex items-center gap-1.5">
-                <span className="text-slate-600 font-semibold">Tahun:</span>
+                <span className="text-slate-700 font-bold">Tahun:</span>
                 <select
                   value={baselineTahun}
                   onChange={(e) => setBaselineTahun(e.target.value)}
-                  className="px-2.5 py-1 rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-800"
+                  className="px-2.5 py-1 rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
                 >
                   {availableTahun.filter(t => t !== 'Semua').map(t => (
                     <option key={t} value={t}>{t}</option>
@@ -628,34 +709,155 @@ export const AnalisisDeviasiView: React.FC<AnalisisDeviasiViewProps> = ({
                 </select>
               </div>
 
-              <span className="text-[11px] text-amber-900 bg-amber-100/80 px-2.5 py-0.5 rounded-full font-medium ml-auto">
-                Acuan terpilih akan otomatis menjadi pembanding pada laporan harian DHP &amp; bulanan
-              </span>
+              <div className="ml-auto flex items-center gap-2">
+                <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-200">
+                  {periodCalculatedStandards.length} Jenis Tembakau Terhitung Otomatis
+                </span>
+                {isCurrentPeriodActive && (
+                  <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                    Aktif di Sistem
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
-          {/* Card 2: Tabel Standar Acuan Terdaftar */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-            <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-              <div>
-                <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                  Daftar Standar Acuan Susut Aktif
-                </h3>
-                <p className="text-[11px] text-slate-500 mt-0.5">
-                  Nilai acuan ini digunakan sebagai patokan pembanding susut riil harian dan bulanan
-                </p>
+          {/* Card 2: Ringkasan Metrik Periode Terpilih */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-xs">
+              <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                Jenis Tembakau Ada Data
               </div>
-              
-              <button
-                onClick={handleResetStandar}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 transition-colors cursor-pointer"
-                title="Kembalikan ke standar acuan bawaan pabrik"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>Reset ke Default</span>
-              </button>
+              <div className="text-base sm:text-lg font-black text-slate-900 mt-0.5">
+                {periodCalculatedStandards.filter(s => s.jenisTembakau !== 'Semua / Umum').length} Varian
+              </div>
+              <div className="text-[10px] text-slate-400 mt-0.5">
+                Total {periodCalculatedStandards.length} aturan proses
+              </div>
             </div>
 
+            <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-xs">
+              <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                Total Batch Terolah
+              </div>
+              <div className="text-base sm:text-lg font-black text-blue-700 mt-0.5 font-mono">
+                {periodCalculatedStandards.reduce((acc, s) => acc + (s.batchCount || 0), 0)} Batch
+              </div>
+              <div className="text-[10px] text-slate-400 mt-0.5">
+                Periode {baselinePeriodLabel}
+              </div>
+            </div>
+
+            <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-xs">
+              <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                Total Bahan Baku Diolah
+              </div>
+              <div className="text-base sm:text-lg font-black text-slate-900 mt-0.5 font-mono">
+                {formatKg(periodCalculatedStandards.reduce((acc, s) => acc + (s.totalBakuKg || 0), 0))}
+              </div>
+              <div className="text-[10px] text-slate-400 mt-0.5">
+                Dasar pembobotan susut
+              </div>
+            </div>
+
+            <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-xs">
+              <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                Rata-rata Susut Agregat
+              </div>
+              <div className="text-base sm:text-lg font-black text-amber-700 mt-0.5 font-mono">
+                {(periodCalculatedStandards.find(s => s.jenisTembakau === 'Semua / Umum')?.standarSusutPct || 5.50).toFixed(2)}%
+              </div>
+              <div className="text-[10px] text-slate-400 mt-0.5">
+                Toleransi wajar ±1.20%
+              </div>
+            </div>
+          </div>
+
+          {/* Card 3: Tabel Standar Acuan Terdaftar */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+            
+            {/* Header Toolbar: Tab Mode, Search & Filter */}
+            <div className="px-4 py-3 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-3 bg-slate-50">
+              
+              {/* Switch View Mode */}
+              <div className="flex items-center gap-1 bg-slate-200/70 p-1 rounded-xl">
+                <button
+                  onClick={() => setAcuanViewMode('periode-terpilih')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    acuanViewMode === 'periode-terpilih'
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Tembakau Periode Ini ({periodCalculatedStandards.length})
+                </button>
+                <button
+                  onClick={() => setAcuanViewMode('acuan-aktif')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    acuanViewMode === 'acuan-aktif'
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Acuan Aktif Sistem ({standarList.length})
+                </button>
+              </div>
+
+              {/* Search & Filter Toolbar */}
+              <div className="flex flex-wrap items-center gap-2">
+                
+                {/* Search Bar */}
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    value={baselineSearchQuery}
+                    onChange={(e) => setBaselineSearchQuery(e.target.value)}
+                    placeholder="Cari jenis tembakau..."
+                    className="pl-8 pr-3 py-1 text-xs rounded-lg border border-slate-300 bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 w-44 sm:w-56"
+                  />
+                  {baselineSearchQuery && (
+                    <button
+                      onClick={() => setBaselineSearchQuery('')}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+
+                {/* Filter Jalur */}
+                <div className="flex items-center gap-1 bg-white border border-slate-300 rounded-lg p-0.5 text-xs font-semibold">
+                  {(['Semua', 'SKT', 'SKM'] as const).map(j => (
+                    <button
+                      key={j}
+                      onClick={() => setBaselineJalurFilter(j)}
+                      className={`px-2 py-0.5 rounded text-[11px] font-bold transition-all ${
+                        baselineJalurFilter === j
+                          ? 'bg-slate-800 text-white'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      {j}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Reset to Default */}
+                <button
+                  onClick={handleResetStandar}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 transition-colors cursor-pointer ml-auto"
+                  title="Kembalikan ke standar acuan bawaan pabrik (Agustus - September 2026)"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Reset Default</span>
+                </button>
+              </div>
+
+            </div>
+
+            {/* Table Area */}
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
@@ -665,54 +867,96 @@ export const AnalisisDeviasiView: React.FC<AnalisisDeviasiViewProps> = ({
                     <th className="py-2.5 px-3 text-center">Jalur</th>
                     <th className="py-2.5 px-3 text-right">Standar Susut (%)</th>
                     <th className="py-2.5 px-3 text-right">Toleransi (±%)</th>
+                    <th className="py-2.5 px-3 text-right">Total Baku (Kg)</th>
+                    <th className="py-2.5 px-3 text-center">Jumlah Batch</th>
                     <th className="py-2.5 px-3">Periode Acuan</th>
                     <th className="py-2.5 px-3">Keterangan / Rationale</th>
                     <th className="py-2.5 px-3 text-center">Aksi</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {standarList.map((item, idx) => (
-                    <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-2.5 px-3 text-slate-400 font-mono text-[11px]">{idx + 1}</td>
-                      <td className="py-2.5 px-3 font-bold text-slate-900">
-                        {item.jenisTembakau}
-                      </td>
-                      <td className="py-2.5 px-3 text-center">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                          item.jenisProses === 'SKM' 
-                            ? 'bg-purple-100 text-purple-700' 
-                            : item.jenisProses === 'SKT'
-                            ? 'bg-blue-100 text-blue-700'
-                            : 'bg-slate-100 text-slate-700'
-                        }`}>
-                          {item.jenisProses}
-                        </span>
-                      </td>
-                      <td className="py-2.5 px-3 text-right font-mono font-black text-amber-700 text-sm">
-                        {item.standarSusutPct.toFixed(2)}%
-                      </td>
-                      <td className="py-2.5 px-3 text-right font-mono text-slate-600">
-                        ±{item.toleransiPct.toFixed(2)}%
-                      </td>
-                      <td className="py-2.5 px-3 text-slate-600 font-medium">
-                        {item.periodeAcuan}
-                      </td>
-                      <td className="py-2.5 px-3 text-slate-500 text-[11px]">
-                        {item.keterangan || '-'}
-                      </td>
-                      <td className="py-2.5 px-3 text-center">
-                        <button
-                          onClick={() => handleStartEdit(item)}
-                          className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-slate-100 hover:bg-blue-50 text-blue-600 border border-slate-200 hover:border-blue-300 transition-colors cursor-pointer"
-                        >
-                          Ubah Standar
-                        </button>
+                  {filteredStandarList.length === 0 ? (
+                    <tr>
+                      <td colSpan={10} className="py-8 text-center text-slate-500">
+                        <div className="font-semibold text-sm">Tidak ada varian tembakau yang cocok</div>
+                        <p className="text-xs text-slate-400 mt-1">
+                          {baselineSearchQuery 
+                            ? `Tidak ada jenis tembakau yang cocok dengan kata kunci "${baselineSearchQuery}".`
+                            : `Tidak ada data produksi tembakau pada rentang ${baselinePeriodLabel}.`}
+                        </p>
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    filteredStandarList.map((item, idx) => (
+                      <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="py-2.5 px-3 text-slate-400 font-mono text-[11px]">{idx + 1}</td>
+                        <td className="py-2.5 px-3 font-bold text-slate-900">
+                          <div className="flex items-center gap-1.5">
+                            <span>{item.jenisTembakau}</span>
+                            {item.jenisTembakau === 'Semua / Umum' && (
+                              <span className="px-1.5 py-0.2 rounded text-[9px] bg-slate-200 text-slate-700 font-normal">
+                                Fallback Agregat
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-2.5 px-3 text-center">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                            item.jenisProses === 'SKM' 
+                              ? 'bg-purple-100 text-purple-700' 
+                              : item.jenisProses === 'SKT'
+                              ? 'bg-blue-100 text-blue-700'
+                              : 'bg-slate-100 text-slate-700'
+                          }`}>
+                            {item.jenisProses}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-mono font-black text-amber-700 text-sm">
+                          {item.standarSusutPct.toFixed(2)}%
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-mono text-slate-600">
+                          ±{item.toleransiPct.toFixed(2)}%
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-mono text-slate-700 font-medium">
+                          {item.totalBakuKg !== undefined ? formatKg(item.totalBakuKg) : '-'}
+                        </td>
+                        <td className="py-2.5 px-3 text-center font-mono text-slate-600">
+                          {item.batchCount !== undefined ? `${item.batchCount} batch` : '-'}
+                        </td>
+                        <td className="py-2.5 px-3 text-slate-600 font-medium">
+                          <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-mono text-[10px]">
+                            {item.periodeAcuan}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 text-slate-500 text-[11px]">
+                          {item.keterangan || '-'}
+                        </td>
+                        <td className="py-2.5 px-3 text-center">
+                          <button
+                            onClick={() => handleStartEdit(item)}
+                            className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-slate-100 hover:bg-blue-50 text-blue-600 border border-slate-200 hover:border-blue-300 transition-colors cursor-pointer"
+                          >
+                            Ubah Standar
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
+
+            {/* Table Footer Count */}
+            <div className="px-4 py-2.5 border-t border-slate-200 bg-slate-50 flex items-center justify-between text-xs text-slate-500">
+              <div>
+                Menampilkan <strong className="text-slate-800">{filteredStandarList.length}</strong> dari {baseItemsToDisplay.length} jenis tembakau
+                {baselineSearchQuery && ` (difilter dari "${baselineSearchQuery}")`}
+              </div>
+              <div className="text-[11px] text-slate-400">
+                Data historis dihitung dari {periodCalculatedStandards.reduce((a, b) => a + (b.batchCount || 0), 0)} batch produksi PT Batu Karang
+              </div>
+            </div>
+
           </div>
 
           {/* Modal Edit Standar */}

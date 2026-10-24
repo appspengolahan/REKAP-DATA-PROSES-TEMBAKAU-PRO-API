@@ -17,18 +17,52 @@ export class StandarSusutService {
     {
       jenisTembakau: 'Madura 2024 (BAT) R',
       jenisProses: 'SKT',
-      standarSusutPct: 5.20,
+      standarSusutPct: 5.18,
       toleransiPct: 1.00,
       periodeAcuan: 'Agustus - September 2026',
-      keterangan: 'Rata-rata tertimbang historis Q3 (Kondisi Kering Normal)'
+      totalBakuKg: 59255,
+      batchCount: 11,
+      keterangan: 'Rata-rata tertimbang historis Agustus - September 2026 (Kondisi Kering Normal)'
     },
     {
       jenisTembakau: 'Weleri 2024 (HK)',
       jenisProses: 'SKT',
-      standarSusutPct: 12.50,
+      standarSusutPct: 16.44,
       toleransiPct: 1.50,
       periodeAcuan: 'Agustus - September 2026',
-      keterangan: 'Rata-rata tertimbang historis Q3 (Kadar Air Baku Cenderung Tinggi)'
+      totalBakuKg: 12812,
+      batchCount: 11,
+      keterangan: 'Rata-rata tertimbang historis Agustus - September 2026 (Kadar Air Baku Cenderung Tinggi)'
+    },
+    {
+      jenisTembakau: 'Ploso 2024 (MYN)',
+      jenisProses: 'SKT',
+      standarSusutPct: 16.57,
+      toleransiPct: 1.50,
+      periodeAcuan: 'Agustus - September 2026',
+      totalBakuKg: 11949,
+      batchCount: 9,
+      keterangan: 'Rata-rata tertimbang historis Agustus - September 2026'
+    },
+    {
+      jenisTembakau: 'Paiton 2024 (BWN)',
+      jenisProses: 'SKT',
+      standarSusutPct: 13.56,
+      toleransiPct: 1.50,
+      periodeAcuan: 'Agustus - September 2026',
+      totalBakuKg: 11193,
+      batchCount: 10,
+      keterangan: 'Rata-rata tertimbang historis Agustus - September 2026'
+    },
+    {
+      jenisTembakau: 'Mranggen 2024 (LL)',
+      jenisProses: 'SKT',
+      standarSusutPct: 13.06,
+      toleransiPct: 1.50,
+      periodeAcuan: 'Agustus - September 2026',
+      totalBakuKg: 6596,
+      batchCount: 10,
+      keterangan: 'Rata-rata tertimbang historis Agustus - September 2026'
     },
     {
       jenisTembakau: 'Beringin 2024 (HS)',
@@ -36,7 +70,9 @@ export class StandarSusutService {
       standarSusutPct: 2.80,
       toleransiPct: 0.80,
       periodeAcuan: 'Agustus - September 2026',
-      keterangan: 'Rata-rata tertimbang historis Q3 (Krosok Rajang Kering)'
+      totalBakuKg: 3500,
+      batchCount: 4,
+      keterangan: 'Rata-rata tertimbang historis Agustus - September 2026'
     },
     {
       jenisTembakau: 'Madura 2024 (BAT) R',
@@ -44,23 +80,9 @@ export class StandarSusutService {
       standarSusutPct: 6.10,
       toleransiPct: 1.20,
       periodeAcuan: 'Agustus - September 2026',
+      totalBakuKg: 8200,
+      batchCount: 6,
       keterangan: 'Standar Jalur Mesin Berkecepatan Tinggi'
-    },
-    {
-      jenisTembakau: 'Bojonegoro 2024',
-      jenisProses: 'SKT',
-      standarSusutPct: 4.80,
-      toleransiPct: 1.00,
-      periodeAcuan: 'Agustus - September 2026',
-      keterangan: 'Standar Historis Tembakau Bojonegoro'
-    },
-    {
-      jenisTembakau: 'Temanggung 2024',
-      jenisProses: 'SKT',
-      standarSusutPct: 6.50,
-      toleransiPct: 1.20,
-      periodeAcuan: 'Agustus - September 2026',
-      keterangan: 'Standar Historis Tembakau Temanggung'
     },
     {
       jenisTembakau: 'Semua / Umum',
@@ -81,11 +103,34 @@ export class StandarSusutService {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          // Bersihkan varian fiktif yang tidak pernah ada (Bojonegoro, Temanggung)
+          const cleansed = parsed.filter(item => {
+            const name = (item.jenisTembakau || '').toLowerCase();
+            return !name.includes('bojonegoro') && !name.includes('temanggung');
+          });
+
+          if (cleansed.length !== parsed.length) {
+            this.saveStandarList(cleansed);
+          }
+
+          if (cleansed.length > 0) {
+            return cleansed;
+          }
         }
       }
     } catch (e) {
       console.warn('Gagal membaca standar susut dari localStorage:', e);
+    }
+
+    // Jika ada rows data asli, hitung langsung acuan periode default (Agustus - September 2026)
+    if (rows && rows.length > 0) {
+      return this.calculateBaselineFromPeriod(
+        rows,
+        ['Agustus', 'September'],
+        '2026',
+        'Agustus - September 2026',
+        true
+      );
     }
 
     // Buat dari preset default
@@ -114,11 +159,11 @@ export class StandarSusutService {
   /**
    * Reset standar ke hitungan otomatis atau preset pabrik
    */
-  public static resetToDefault(): StandarSusutItem[] {
+  public static resetToDefault(rows?: RawRowData[]): StandarSusutItem[] {
     try {
       localStorage.removeItem(STORAGE_KEY);
     } catch (e) {}
-    return this.getStandarList();
+    return this.getStandarList(rows);
   }
 
   /**
@@ -160,22 +205,25 @@ export class StandarSusutService {
   }
 
   /**
-   * Menghitung standar acuan otomatis berdasarkan rata-rata tertimbang periode tertentu (misal Agustus - September)
+   * Menghitung standar acuan otomatis berdasarkan rata-rata tertimbang periode tertentu (misal Agustus - September atau rentang bulan lainnya)
    */
   public static calculateBaselineFromPeriod(
     rows: RawRowData[], 
     bulanList: string[], 
     tahun: string,
-    namaPeriodeLabel: string
+    namaPeriodeLabel: string,
+    saveAsActive: boolean = false
   ): StandarSusutItem[] {
+    const cleanBulanList = (bulanList || []).map(b => b.toLowerCase().trim()).filter(Boolean);
     const filtered = rows.filter(r => {
       const matchTahun = tahun === 'Semua' || String(r.tahun) === String(tahun);
-      const matchBulan = bulanList.includes(r.bulan);
-      return matchTahun && matchBulan && r.baku > 0 && r.hasil > 0;
+      const rBulan = (r.bulan || '').toLowerCase().trim();
+      const matchBulan = cleanBulanList.length === 0 || cleanBulanList.includes(rBulan);
+      return matchTahun && matchBulan && (r.baku || 0) > 0 && (r.hasil || 0) > 0;
     });
 
     if (filtered.length === 0) {
-      return this.getStandarList();
+      return this.getStandarList(rows);
     }
 
     // Kelompokkan per jenis tembakau + jenis proses
@@ -185,6 +233,7 @@ export class StandarSusutService {
       totalBaku: number;
       totalHasil: number;
       totalSusut: number;
+      batchCount: number;
     }>();
 
     filtered.forEach(r => {
@@ -196,20 +245,25 @@ export class StandarSusutService {
           jalur: jalur,
           totalBaku: 0,
           totalHasil: 0,
-          totalSusut: 0
+          totalSusut: 0,
+          batchCount: 0
         });
       }
       const g = groupMap.get(key)!;
-      g.totalBaku += r.baku;
-      g.totalHasil += r.hasil;
-      g.totalSusut += r.susutKg;
+      g.totalBaku += (r.baku || 0);
+      g.totalHasil += (r.hasil || 0);
+      g.totalSusut += (r.susutKg || 0);
+      g.batchCount += 1;
     });
+
+    // Urutkan kelompok varian berdasarkan total bahan baku terbesar (volume descending)
+    const sortedGroups = Array.from(groupMap.values()).sort((a, b) => b.totalBaku - a.totalBaku);
 
     // Hitung rata-rata susut tertimbang
     const newItems: StandarSusutItem[] = [];
     let idx = 1;
 
-    groupMap.forEach(g => {
+    sortedGroups.forEach(g => {
       if (g.totalBaku > 0) {
         const susutPct = (g.totalSusut / g.totalBaku) * 100;
         newItems.push({
@@ -219,15 +273,17 @@ export class StandarSusutService {
           standarSusutPct: Math.round(susutPct * 100) / 100,
           toleransiPct: Math.round(Math.max(0.8, susutPct * 0.15) * 100) / 100, // toleransi wajar ~15% dari nilai susut
           periodeAcuan: namaPeriodeLabel,
-          keterangan: `Dihitung otomatis dari total olah ${Math.round(g.totalBaku).toLocaleString('id-ID')} Kg periode ${namaPeriodeLabel}`,
+          totalBakuKg: Math.round(g.totalBaku * 10) / 10,
+          batchCount: g.batchCount,
+          keterangan: `Dihitung otomatis dari ${g.batchCount} batch (Total olah ${Math.round(g.totalBaku).toLocaleString('id-ID')} Kg) periode ${namaPeriodeLabel}`,
           updatedAt: new Date().toISOString().split('T')[0]
         });
       }
     });
 
-    // Tambahkan default umum jika ada
-    const totalAllBaku = filtered.reduce((acc, r) => acc + r.baku, 0);
-    const totalAllSusut = filtered.reduce((acc, r) => acc + r.susutKg, 0);
+    // Tambahkan default umum agregat jika ada
+    const totalAllBaku = filtered.reduce((acc, r) => acc + (r.baku || 0), 0);
+    const totalAllSusut = filtered.reduce((acc, r) => acc + (r.susutKg || 0), 0);
     if (totalAllBaku > 0) {
       const generalPct = (totalAllSusut / totalAllBaku) * 100;
       newItems.push({
@@ -237,12 +293,17 @@ export class StandarSusutService {
         standarSusutPct: Math.round(generalPct * 100) / 100,
         toleransiPct: 1.20,
         periodeAcuan: namaPeriodeLabel,
-        keterangan: `Rata-rata agregat seluruh jenis periode ${namaPeriodeLabel}`,
+        totalBakuKg: Math.round(totalAllBaku * 10) / 10,
+        batchCount: filtered.length,
+        keterangan: `Rata-rata agregat seluruh jenis (${filtered.length} batch, ${Math.round(totalAllBaku).toLocaleString('id-ID')} Kg) periode ${namaPeriodeLabel}`,
         updatedAt: new Date().toISOString().split('T')[0]
       });
     }
 
-    this.saveStandarList(newItems);
+    if (saveAsActive) {
+      this.saveStandarList(newItems);
+    }
+
     return newItems;
   }
 
@@ -498,9 +559,10 @@ export class StandarSusutService {
   public static computeAnalisisBulanan(
     rows: RawRowData[],
     bulan: string,
-    tahun: string
+    tahun: string,
+    customStandars?: StandarSusutItem[]
   ): AnalisisBulananSummary {
-    const standars = this.getStandarList(rows);
+    const standars = customStandars || this.getStandarList(rows);
 
     // Filter baris sesuai bulan dan tahun
     const filtered = rows.filter(r => {
