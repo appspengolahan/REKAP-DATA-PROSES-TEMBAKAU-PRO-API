@@ -139,6 +139,24 @@ async function startServer() {
     }
   });
 
+  // API Route: Download Template Excel DHP Tembakau Admin Proses
+  app.get('/api/download-template-dhp-excel', (_req, res) => {
+    try {
+      const filePath = path.resolve(__dirname, 'public', 'TEMPLATE_DHP_TEMBAKAU_ADMIN_PROSES.xlsx');
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ success: false, error: 'File template Excel belum tersedia' });
+      }
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', 'attachment; filename="TEMPLATE_DHP_TEMBAKAU_ADMIN_PROSES.xlsx"');
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+      const fileStream = fs.createReadStream(filePath);
+      fileStream.pipe(res);
+    } catch (err: any) {
+      console.error('Error serving Excel template download:', err);
+      res.status(500).json({ success: false, error: 'Gagal mengunduh file Excel template' });
+    }
+  });
+
   // Health check
   app.get('/api/health', (_req, res) => {
     res.json({ status: 'ok', time: new Date().toISOString() });

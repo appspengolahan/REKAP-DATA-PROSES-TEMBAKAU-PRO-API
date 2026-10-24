@@ -24,7 +24,9 @@ import {
   Printer,
   Info,
   Calendar,
-  FileText
+  FileText,
+  Table,
+  FileSpreadsheet
 } from 'lucide-react';
 import { RawRowData, DhpIntegrationData, DhpBatchItem, GasConfig } from '../types[RekapDataProsesTembakau]';
 import { StandarSusutService } from '../services/standarSusutService';
@@ -55,13 +57,14 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
   onAppendRecordsToRekap,
   gasConfig
 }) => {
-  const [activeTab, setActiveTab] = useState<'transaksi' | 'analisis_harian' | 'pemetaan' | 'gas'>('transaksi');
+  const [activeTab, setActiveTab] = useState<'transaksi' | 'analisis_harian' | 'pemetaan' | 'gas' | 'template_dhp'>('transaksi');
   const [loading, setLoading] = useState<boolean>(true);
   const [isSyncingToRekap, setIsSyncingToRekap] = useState<boolean>(false);
   const [syncNotice, setSyncNotice] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [dhpData, setDhpData] = useState<DhpIntegrationData | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState<boolean>(false);
+  const [copiedTsv, setCopiedTsv] = useState<boolean>(false);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState<boolean>(false);
   const [selectedAnalisisTanggal, setSelectedAnalisisTanggal] = useState<string>('');
 
@@ -755,6 +758,19 @@ function doGet(e) {
     }
   };
 
+  const GOOGLE_SHEETS_TSV = `TIMESTAMP_ENTRI\tNO_BATCH\tTANGGAL_PROSES\tSHIFT\tJALUR_PROSES\tJENIS_TEMBAKAU\tNETTO_BAKU_KG\tNETTO_HASIL_KG\tSUSUT_KG\tSUSUT_PCT\tFRAKSI_GAGANG_KG\tFRAKSI_AIR_KG\tFRAKSI_DEBU_KG\tSELISIH_NERACA_KG\tOPERATOR_ADMIN\tSTATUS_PROSES\tCATATAN_KENDALA
+2026-10-24 08:30:00\tBTH-202610-001\t2026-10-24\tShift 1\tSKM\tVirginia FC\t1250.00\t1185.50\t=G2-H2\t=IF(G2>0; (G2-H2)/G2; 0)\t38.20\t18.50\t7.80\t=I2-(K2+L2+M2)\tAhmad Faisal\tCOMPLETED\tBatch normal, kelembaban inlet 13.8%
+2026-10-24 10:45:00\tBTH-202610-002\t2026-10-24\tShift 1\tSKT\tKasturi Super\t850.00\t804.20\t=G3-H3\t=IF(G3>0; (G3-H3)/G3; 0)\t28.50\t12.30\t5.00\t=I3-(K3+L3+M3)\tAhmad Faisal\tCOMPLETED\tSortir gagang halus manual optimal
+2026-10-24 14:15:00\tBTH-202610-003\t2026-10-24\tShift 2\tSKM\tMadura Rajang\t1400.00\t1326.00\t=G4-H4\t=IF(G4>0; (G4-H4)/G4; 0)\t44.00\t21.00\t9.00\t=I4-(K4+L4+M4)\tBudi Santoso\tCOMPLETED\tKadar air bahan baku sedikit tinggi (14.2%)
+2026-10-24 16:30:00\tBTH-202610-004\t2026-10-24\tShift 2\tSKT\tBoyolali Gurih\t920.00\t871.50\t=G5-H5\t=IF(G5>0; (G5-H5)/G5; 0)\t31.00\t12.50\t5.00\t=I5-(K5+L5+M5)\tBudi Santoso\tCOMPLETED\tKondisi pisau rajang baru di-asah
+2026-10-24 21:00:00\tBTH-202610-005\t2026-10-24\tShift 3\tSKM\tTemanggung Asli\t1100.00\t1039.50\t=G6-H6\t=IF(G6>0; (G6-H6)/G6; 0)\t35.50\t17.00\t8.00\t=I6-(K6+L6+M6)\tDian Pratama\tCOMPLETED\tShift malam lancar, neraca massa seimbang`;
+
+  const handleCopyTsv = () => {
+    navigator.clipboard.writeText(GOOGLE_SHEETS_TSV);
+    setCopiedTsv(true);
+    setTimeout(() => setCopiedTsv(false), 3000);
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-slate-50 border border-slate-300 rounded-2xl shadow-2xl max-w-7xl w-full h-[94vh] max-h-[94vh] flex flex-col overflow-hidden text-slate-800">
@@ -838,57 +854,86 @@ function doGet(e) {
         </div>
 
         {/* Sub-Tabs Navigation (Clean Light Style - Matching Reference Gambar 2) */}
-        <div className="px-4 sm:px-5 border-b border-slate-200 flex items-center gap-1 sm:gap-2 bg-white shrink-0">
-          <button
-            onClick={() => setActiveTab('transaksi')}
-            className={`flex items-center gap-1.5 py-2.5 px-3 text-xs font-bold border-b-2 transition-all cursor-pointer ${
-              activeTab === 'transaksi'
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <Layers className="w-3.5 h-3.5" />
-            <span>Pratinjau &amp; Transaksi ({dhpData?.totalBatch ?? 0} Batch)</span>
-          </button>
+        <div className="px-4 sm:px-5 border-b border-slate-200 flex items-center justify-between gap-2 bg-white shrink-0 overflow-x-auto">
+          <div className="flex items-center gap-1 sm:gap-2">
+            <button
+              onClick={() => setActiveTab('transaksi')}
+              className={`flex items-center gap-1.5 py-2.5 px-3 text-xs font-bold border-b-2 transition-all cursor-pointer ${
+                activeTab === 'transaksi'
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>Pratinjau &amp; Transaksi ({dhpData?.totalBatch ?? 0} Batch)</span>
+            </button>
 
-          <button
-            onClick={() => setActiveTab('analisis_harian')}
-            className={`flex items-center gap-1.5 py-2.5 px-3 text-xs font-bold border-b-2 transition-all cursor-pointer ${
-              activeTab === 'analisis_harian'
-                ? 'border-amber-500 text-amber-700 bg-amber-50/50'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <TrendingUp className="w-3.5 h-3.5 text-amber-600" />
-            <span>Laporan Analisis Harian</span>
-            <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
-              Deviasi
-            </span>
-          </button>
+            <button
+              onClick={() => setActiveTab('analisis_harian')}
+              className={`flex items-center gap-1.5 py-2.5 px-3 text-xs font-bold border-b-2 transition-all cursor-pointer ${
+                activeTab === 'analisis_harian'
+                  ? 'border-amber-500 text-amber-700 bg-amber-50/50'
+                  : 'border-transparent text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <TrendingUp className="w-3.5 h-3.5 text-amber-600" />
+              <span>Laporan Analisis Harian</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                Deviasi
+              </span>
+            </button>
 
-          <button
-            onClick={() => setActiveTab('pemetaan')}
-            className={`flex items-center gap-1.5 py-2.5 px-3 text-xs font-bold border-b-2 transition-all cursor-pointer ${
-              activeTab === 'pemetaan'
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <ShieldCheck className="w-3.5 h-3.5" />
-            <span>Pemetaan Kolom &amp; Proteksi Rumus</span>
-          </button>
+            <button
+              onClick={() => setActiveTab('pemetaan')}
+              className={`flex items-center gap-1.5 py-2.5 px-3 text-xs font-bold border-b-2 transition-all cursor-pointer ${
+                activeTab === 'pemetaan'
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>Pemetaan Kolom &amp; Proteksi Rumus</span>
+            </button>
 
-          <button
-            onClick={() => setActiveTab('gas')}
-            className={`flex items-center gap-1.5 py-2.5 px-3 text-xs font-bold border-b-2 transition-all cursor-pointer ${
-              activeTab === 'gas'
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <Code className="w-3.5 h-3.5" />
-            <span>Skrip Otomasi GAS</span>
-          </button>
+            <button
+              onClick={() => setActiveTab('gas')}
+              className={`flex items-center gap-1.5 py-2.5 px-3 text-xs font-bold border-b-2 transition-all cursor-pointer ${
+                activeTab === 'gas'
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <Code className="w-3.5 h-3.5" />
+              <span>Skrip Otomasi GAS</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('template_dhp')}
+              className={`flex items-center gap-1.5 py-2.5 px-3 text-xs font-bold border-b-2 transition-all cursor-pointer ${
+                activeTab === 'template_dhp'
+                  ? 'border-emerald-600 text-emerald-700 bg-emerald-50/50'
+                  : 'border-transparent text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Template Excel &amp; Spreadsheet</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                Baru
+              </span>
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <a
+              href="/api/download-template-dhp-excel"
+              download="TEMPLATE_DHP_TEMBAKAU_ADMIN_PROSES.xlsx"
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold text-emerald-800 bg-emerald-100/80 hover:bg-emerald-200 border border-emerald-300 transition-colors shadow-xs shrink-0"
+              title="Unduh File Template Excel (.xlsx) untuk formulir DHP"
+            >
+              <Download className="w-3.5 h-3.5 text-emerald-700" />
+              <span>Unduh Template (.xlsx)</span>
+            </a>
+          </div>
         </div>
 
         {/* Modal Scrollable Body */}
@@ -1744,6 +1789,360 @@ function doGet(e) {
                   </li>
                 </ol>
               </div>
+            </div>
+          )}
+
+          {/* TAB 5: TEMPLATE EXCEL & SPREADSHEET FORMULIR DHP */}
+          {activeTab === 'template_dhp' && (
+            <div className="space-y-4 flex-1 flex flex-col min-h-0 text-slate-800 pb-2">
+              
+              {/* Header Action Banner */}
+              <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-900 via-teal-900 to-slate-900 text-white shadow-md border border-emerald-700/50 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="p-1.5 rounded-lg bg-emerald-500/20 border border-emerald-400/30 text-emerald-300">
+                      <FileSpreadsheet className="w-5 h-5" />
+                    </span>
+                    <h3 className="text-sm font-bold tracking-tight text-white">
+                      Template Spreadsheet &amp; Formulir Web: DHP Tembakau Admin Proses
+                    </h3>
+                  </div>
+                  <p className="text-xs text-emerald-100/90 leading-relaxed max-w-2xl">
+                    Dirancang dengan <strong>arsitektur tabel datar (flat table)</strong> tanpa sel gabungan (merged cells). Struktur ini siap pakai untuk entri form di web apps, validasi database relasional, serta otomasi rumus neraca massa tembakau.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  <a
+                    href="/api/download-template-dhp-excel"
+                    download="TEMPLATE_DHP_TEMBAKAU_ADMIN_PROSES.xlsx"
+                    className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-900 bg-emerald-400 hover:bg-emerald-300 shadow-md transition-all cursor-pointer"
+                  >
+                    <Download className="w-4 h-4 text-slate-900" />
+                    <span>Unduh Excel (.xlsx)</span>
+                  </a>
+
+                  <button
+                    onClick={handleCopyTsv}
+                    className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-white/10 hover:bg-white/20 border border-white/20 shadow-sm transition-all cursor-pointer"
+                    title="Salin data mentah untuk ditempel (Ctrl+V) langsung ke Google Sheets"
+                  >
+                    {copiedTsv ? (
+                      <>
+                        <Check className="w-4 h-4 text-emerald-300" />
+                        <span className="text-emerald-300">Berhasil Disalin!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-4 h-4" />
+                        <span>Salin ke Google Sheets</span>
+                      </>
+                    )}
+                  </button>
+
+                  <a
+                    href="https://sheets.new"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium text-emerald-200 bg-emerald-950/50 hover:bg-emerald-900/60 border border-emerald-700/50 transition-colors"
+                    title="Buka lembar kerja Google Sheets baru"
+                  >
+                    <span>Buka sheets.new</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                </div>
+              </div>
+
+              {/* 3 Karakteristik Kunci Desain */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="p-3 rounded-xl bg-white border border-slate-200 shadow-xs space-y-1.5">
+                  <div className="flex items-center gap-2 text-xs font-bold text-blue-700">
+                    <span className="w-2 h-2 rounded-full bg-blue-600"></span>
+                    1 Baris = 1 Transaksi Batch
+                  </div>
+                  <p className="text-[11px] text-slate-600 leading-normal">
+                    Menghilangkan merged cells yang kerap mematahkan parsing API. Seluruh kolom atribut (waktu, batch, shift, jalur) melekat pada tiap baris.
+                  </p>
+                </div>
+
+                <div className="p-3 rounded-xl bg-white border border-slate-200 shadow-xs space-y-1.5">
+                  <div className="flex items-center gap-2 text-xs font-bold text-amber-700">
+                    <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                    Neraca Massa Tertutup (Mass Balance)
+                  </div>
+                  <p className="text-[11px] text-slate-600 leading-normal">
+                    Rumus neraca massa otomatis: <code className="bg-slate-100 px-1 py-0.5 rounded text-amber-900 font-mono text-[10px]">Selisih = Susut - (Gagang + Air + Debu)</code>. Idealnya bernilai 0.00 Kg.
+                  </p>
+                </div>
+
+                <div className="p-3 rounded-xl bg-white border border-slate-200 shadow-xs space-y-1.5">
+                  <div className="flex items-center gap-2 text-xs font-bold text-emerald-700">
+                    <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
+                    Master Data Terpisah (Normalized)
+                  </div>
+                  <p className="text-[11px] text-slate-600 leading-normal">
+                    Tab referensi terpisah untuk dropdown form web (Jenis Tembakau, Jalur SKM/SKT, Shift, Acuan Susut Maks), mencegah salah ketik nama tembakau.
+                  </p>
+                </div>
+              </div>
+
+              {/* Sheet 1 Preview: DHP_INPUT_PROSES (17 Kolom) */}
+              <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden flex flex-col">
+                <div className="px-4 py-2.5 bg-slate-100 border-b border-slate-200 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Table className="w-4 h-4 text-emerald-600" />
+                    <span className="text-xs font-bold text-slate-800">
+                      Sheet 1: DHP_INPUT_PROSES (17 Kolom Standar)
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800">
+                      Flat Architecture
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-slate-500">
+                    Format rumus Excel / Google Sheets telah aktif di file unduhan
+                  </span>
+                </div>
+
+                <div className="overflow-x-auto max-h-80">
+                  <table className="w-full text-[11px] text-left border-collapse">
+                    <thead className="sticky top-0 bg-slate-900 text-white z-10 font-bold uppercase tracking-wider text-[10px]">
+                      <tr>
+                        <th className="px-3 py-2 border-r border-slate-800 whitespace-nowrap bg-blue-950 text-blue-200">A: TIMESTAMP_ENTRI</th>
+                        <th className="px-3 py-2 border-r border-slate-800 whitespace-nowrap bg-blue-950 text-blue-200">B: NO_BATCH</th>
+                        <th className="px-3 py-2 border-r border-slate-800 whitespace-nowrap bg-blue-950 text-blue-200">C: TANGGAL_PROSES</th>
+                        <th className="px-3 py-2 border-r border-slate-800 whitespace-nowrap bg-blue-950 text-blue-200">D: SHIFT</th>
+                        <th className="px-3 py-2 border-r border-slate-800 whitespace-nowrap bg-blue-950 text-blue-200">E: JALUR_PROSES</th>
+                        <th className="px-3 py-2 border-r border-slate-800 whitespace-nowrap bg-blue-950 text-blue-200">F: JENIS_TEMBAKAU</th>
+                        <th className="px-3 py-2 border-r border-slate-800 whitespace-nowrap bg-emerald-950 text-emerald-200 text-right">G: NETTO_BAKU_KG</th>
+                        <th className="px-3 py-2 border-r border-slate-800 whitespace-nowrap bg-emerald-950 text-emerald-200 text-right">H: NETTO_HASIL_KG</th>
+                        <th className="px-3 py-2 border-r border-slate-800 whitespace-nowrap bg-amber-950 text-amber-200 text-right">I: SUSUT_KG (=G-H)</th>
+                        <th className="px-3 py-2 border-r border-slate-800 whitespace-nowrap bg-amber-950 text-amber-200 text-right">J: SUSUT_PCT (=I/G)</th>
+                        <th className="px-3 py-2 border-r border-slate-800 whitespace-nowrap bg-purple-950 text-purple-200 text-right">K: FRAKSI_GAGANG_KG</th>
+                        <th className="px-3 py-2 border-r border-slate-800 whitespace-nowrap bg-purple-950 text-purple-200 text-right">L: FRAKSI_AIR_KG</th>
+                        <th className="px-3 py-2 border-r border-slate-800 whitespace-nowrap bg-purple-950 text-purple-200 text-right">M: FRAKSI_DEBU_KG</th>
+                        <th className="px-3 py-2 border-r border-slate-800 whitespace-nowrap bg-rose-950 text-rose-200 text-right">N: SELISIH_NERACA (=I-(K+L+M))</th>
+                        <th className="px-3 py-2 border-r border-slate-800 whitespace-nowrap">O: OPERATOR_ADMIN</th>
+                        <th className="px-3 py-2 border-r border-slate-800 whitespace-nowrap">P: STATUS_PROSES</th>
+                        <th className="px-3 py-2 whitespace-nowrap">Q: CATATAN_KENDALA</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 font-mono text-[11px]">
+                      <tr className="hover:bg-slate-50 transition-colors">
+                        <td className="px-3 py-2 text-slate-600 whitespace-nowrap">2026-10-24 08:30:00</td>
+                        <td className="px-3 py-2 font-bold text-blue-700 whitespace-nowrap">BTH-202610-001</td>
+                        <td className="px-3 py-2 text-slate-700 whitespace-nowrap">2026-10-24</td>
+                        <td className="px-3 py-2 text-slate-700 whitespace-nowrap">Shift 1</td>
+                        <td className="px-3 py-2 font-bold text-slate-800 whitespace-nowrap">SKM</td>
+                        <td className="px-3 py-2 font-medium text-slate-900 whitespace-nowrap">Virginia FC</td>
+                        <td className="px-3 py-2 text-right font-bold text-emerald-700 whitespace-nowrap">1,250.00</td>
+                        <td className="px-3 py-2 text-right font-bold text-emerald-800 whitespace-nowrap">1,185.50</td>
+                        <td className="px-3 py-2 text-right font-bold text-amber-800 bg-amber-50/50 whitespace-nowrap">64.50</td>
+                        <td className="px-3 py-2 text-right font-bold text-amber-800 bg-amber-50/50 whitespace-nowrap">5.16%</td>
+                        <td className="px-3 py-2 text-right text-slate-700 whitespace-nowrap">38.20</td>
+                        <td className="px-3 py-2 text-right text-slate-700 whitespace-nowrap">18.50</td>
+                        <td className="px-3 py-2 text-right text-slate-700 whitespace-nowrap">7.80</td>
+                        <td className="px-3 py-2 text-right font-bold text-emerald-700 bg-emerald-50 whitespace-nowrap">0.00</td>
+                        <td className="px-3 py-2 text-slate-700 whitespace-nowrap">Ahmad Faisal</td>
+                        <td className="px-3 py-2 whitespace-nowrap"><span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">COMPLETED</span></td>
+                        <td className="px-3 py-2 text-slate-600 whitespace-nowrap">Batch normal, kelembaban inlet 13.8%</td>
+                      </tr>
+
+                      <tr className="hover:bg-slate-50 transition-colors">
+                        <td className="px-3 py-2 text-slate-600 whitespace-nowrap">2026-10-24 10:45:00</td>
+                        <td className="px-3 py-2 font-bold text-blue-700 whitespace-nowrap">BTH-202610-002</td>
+                        <td className="px-3 py-2 text-slate-700 whitespace-nowrap">2026-10-24</td>
+                        <td className="px-3 py-2 text-slate-700 whitespace-nowrap">Shift 1</td>
+                        <td className="px-3 py-2 font-bold text-slate-800 whitespace-nowrap">SKT</td>
+                        <td className="px-3 py-2 font-medium text-slate-900 whitespace-nowrap">Kasturi Super</td>
+                        <td className="px-3 py-2 text-right font-bold text-emerald-700 whitespace-nowrap">850.00</td>
+                        <td className="px-3 py-2 text-right font-bold text-emerald-800 whitespace-nowrap">804.20</td>
+                        <td className="px-3 py-2 text-right font-bold text-amber-800 bg-amber-50/50 whitespace-nowrap">45.80</td>
+                        <td className="px-3 py-2 text-right font-bold text-amber-800 bg-amber-50/50 whitespace-nowrap">5.39%</td>
+                        <td className="px-3 py-2 text-right text-slate-700 whitespace-nowrap">28.50</td>
+                        <td className="px-3 py-2 text-right text-slate-700 whitespace-nowrap">12.30</td>
+                        <td className="px-3 py-2 text-right text-slate-700 whitespace-nowrap">5.00</td>
+                        <td className="px-3 py-2 text-right font-bold text-emerald-700 bg-emerald-50 whitespace-nowrap">0.00</td>
+                        <td className="px-3 py-2 text-slate-700 whitespace-nowrap">Ahmad Faisal</td>
+                        <td className="px-3 py-2 whitespace-nowrap"><span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">COMPLETED</span></td>
+                        <td className="px-3 py-2 text-slate-600 whitespace-nowrap">Sortir gagang halus manual optimal</td>
+                      </tr>
+
+                      <tr className="hover:bg-slate-50 transition-colors">
+                        <td className="px-3 py-2 text-slate-600 whitespace-nowrap">2026-10-24 14:15:00</td>
+                        <td className="px-3 py-2 font-bold text-blue-700 whitespace-nowrap">BTH-202610-003</td>
+                        <td className="px-3 py-2 text-slate-700 whitespace-nowrap">2026-10-24</td>
+                        <td className="px-3 py-2 text-slate-700 whitespace-nowrap">Shift 2</td>
+                        <td className="px-3 py-2 font-bold text-slate-800 whitespace-nowrap">SKM</td>
+                        <td className="px-3 py-2 font-medium text-slate-900 whitespace-nowrap">Madura Rajang</td>
+                        <td className="px-3 py-2 text-right font-bold text-emerald-700 whitespace-nowrap">1,400.00</td>
+                        <td className="px-3 py-2 text-right font-bold text-emerald-800 whitespace-nowrap">1,326.00</td>
+                        <td className="px-3 py-2 text-right font-bold text-amber-800 bg-amber-50/50 whitespace-nowrap">74.00</td>
+                        <td className="px-3 py-2 text-right font-bold text-amber-800 bg-amber-50/50 whitespace-nowrap">5.29%</td>
+                        <td className="px-3 py-2 text-right text-slate-700 whitespace-nowrap">44.00</td>
+                        <td className="px-3 py-2 text-right text-slate-700 whitespace-nowrap">21.00</td>
+                        <td className="px-3 py-2 text-right text-slate-700 whitespace-nowrap">9.00</td>
+                        <td className="px-3 py-2 text-right font-bold text-emerald-700 bg-emerald-50 whitespace-nowrap">0.00</td>
+                        <td className="px-3 py-2 text-slate-700 whitespace-nowrap">Budi Santoso</td>
+                        <td className="px-3 py-2 whitespace-nowrap"><span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">COMPLETED</span></td>
+                        <td className="px-3 py-2 text-slate-600 whitespace-nowrap">Kadar air bahan baku sedikit tinggi (14.2%)</td>
+                      </tr>
+
+                      <tr className="hover:bg-slate-50 transition-colors">
+                        <td className="px-3 py-2 text-slate-600 whitespace-nowrap">2026-10-24 16:30:00</td>
+                        <td className="px-3 py-2 font-bold text-blue-700 whitespace-nowrap">BTH-202610-004</td>
+                        <td className="px-3 py-2 text-slate-700 whitespace-nowrap">2026-10-24</td>
+                        <td className="px-3 py-2 text-slate-700 whitespace-nowrap">Shift 2</td>
+                        <td className="px-3 py-2 font-bold text-slate-800 whitespace-nowrap">SKT</td>
+                        <td className="px-3 py-2 font-medium text-slate-900 whitespace-nowrap">Boyolali Gurih</td>
+                        <td className="px-3 py-2 text-right font-bold text-emerald-700 whitespace-nowrap">920.00</td>
+                        <td className="px-3 py-2 text-right font-bold text-emerald-800 whitespace-nowrap">871.50</td>
+                        <td className="px-3 py-2 text-right font-bold text-amber-800 bg-amber-50/50 whitespace-nowrap">48.50</td>
+                        <td className="px-3 py-2 text-right font-bold text-amber-800 bg-amber-50/50 whitespace-nowrap">5.27%</td>
+                        <td className="px-3 py-2 text-right text-slate-700 whitespace-nowrap">31.00</td>
+                        <td className="px-3 py-2 text-right text-slate-700 whitespace-nowrap">12.50</td>
+                        <td className="px-3 py-2 text-right text-slate-700 whitespace-nowrap">5.00</td>
+                        <td className="px-3 py-2 text-right font-bold text-emerald-700 bg-emerald-50 whitespace-nowrap">0.00</td>
+                        <td className="px-3 py-2 text-slate-700 whitespace-nowrap">Budi Santoso</td>
+                        <td className="px-3 py-2 whitespace-nowrap"><span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">COMPLETED</span></td>
+                        <td className="px-3 py-2 text-slate-600 whitespace-nowrap">Kondisi pisau rajang baru di-asah</td>
+                      </tr>
+
+                      <tr className="hover:bg-slate-50 transition-colors">
+                        <td className="px-3 py-2 text-slate-600 whitespace-nowrap">2026-10-24 21:00:00</td>
+                        <td className="px-3 py-2 font-bold text-blue-700 whitespace-nowrap">BTH-202610-005</td>
+                        <td className="px-3 py-2 text-slate-700 whitespace-nowrap">2026-10-24</td>
+                        <td className="px-3 py-2 text-slate-700 whitespace-nowrap">Shift 3</td>
+                        <td className="px-3 py-2 font-bold text-slate-800 whitespace-nowrap">SKM</td>
+                        <td className="px-3 py-2 font-medium text-slate-900 whitespace-nowrap">Temanggung Asli</td>
+                        <td className="px-3 py-2 text-right font-bold text-emerald-700 whitespace-nowrap">1,100.00</td>
+                        <td className="px-3 py-2 text-right font-bold text-emerald-800 whitespace-nowrap">1,039.50</td>
+                        <td className="px-3 py-2 text-right font-bold text-amber-800 bg-amber-50/50 whitespace-nowrap">60.50</td>
+                        <td className="px-3 py-2 text-right font-bold text-amber-800 bg-amber-50/50 whitespace-nowrap">5.50%</td>
+                        <td className="px-3 py-2 text-right text-slate-700 whitespace-nowrap">35.50</td>
+                        <td className="px-3 py-2 text-right text-slate-700 whitespace-nowrap">17.00</td>
+                        <td className="px-3 py-2 text-right text-slate-700 whitespace-nowrap">8.00</td>
+                        <td className="px-3 py-2 text-right font-bold text-emerald-700 bg-emerald-50 whitespace-nowrap">0.00</td>
+                        <td className="px-3 py-2 text-slate-700 whitespace-nowrap">Dian Pratama</td>
+                        <td className="px-3 py-2 whitespace-nowrap"><span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">COMPLETED</span></td>
+                        <td className="px-3 py-2 text-slate-600 whitespace-nowrap">Shift malam lancar, neraca massa seimbang</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Sheet 2 & Kamus Data Grid */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                {/* Master Data */}
+                <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+                  <div className="px-4 py-2.5 bg-slate-100 border-b border-slate-200 flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-800">
+                      Sheet 2: MASTER_DATA (Sumber Pilihan Dropdown Form)
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-blue-100 text-blue-800 font-medium">Lookup Table</span>
+                  </div>
+                  <div className="p-3 text-[11px] overflow-x-auto">
+                    <table className="w-full text-left">
+                      <thead>
+                        <tr className="border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase">
+                          <th className="pb-1.5">Jenis Tembakau</th>
+                          <th className="pb-1.5">Jalur</th>
+                          <th className="pb-1.5">Shift</th>
+                          <th className="pb-1.5 text-right">Toleransi Susut</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 text-slate-700">
+                        <tr>
+                          <td className="py-1 font-medium text-slate-900">Virginia FC</td>
+                          <td className="py-1">SKM</td>
+                          <td className="py-1">Shift 1 (07:00-15:00)</td>
+                          <td className="py-1 text-right font-semibold text-amber-700">Maks 5.2%</td>
+                        </tr>
+                        <tr>
+                          <td className="py-1 font-medium text-slate-900">Kasturi Super</td>
+                          <td className="py-1">SKT</td>
+                          <td className="py-1">Shift 2 (15:00-23:00)</td>
+                          <td className="py-1 text-right font-semibold text-amber-700">Maks 5.5%</td>
+                        </tr>
+                        <tr>
+                          <td className="py-1 font-medium text-slate-900">Madura Rajang</td>
+                          <td className="py-1">BLEND-A</td>
+                          <td className="py-1">Shift 3 (23:00-07:00)</td>
+                          <td className="py-1 text-right font-semibold text-amber-700">Maks 5.4%</td>
+                        </tr>
+                        <tr>
+                          <td className="py-1 font-medium text-slate-900">Boyolali Gurih</td>
+                          <td className="py-1">BLEND-B</td>
+                          <td className="py-1">-</td>
+                          <td className="py-1 text-right font-semibold text-amber-700">Maks 5.3%</td>
+                        </tr>
+                        <tr>
+                          <td className="py-1 font-medium text-slate-900">Temanggung Asli</td>
+                          <td className="py-1">-</td>
+                          <td className="py-1">-</td>
+                          <td className="py-1 text-right font-semibold text-amber-700">Maks 5.6%</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Kamus Data Payload JSON API */}
+                <div className="bg-slate-900 rounded-xl border border-slate-800 shadow-xs overflow-hidden flex flex-col text-slate-200">
+                  <div className="px-4 py-2.5 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
+                    <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <Code className="w-3.5 h-3.5 text-blue-400" />
+                      Payload Entri Web Apps (JSON ke Spreadsheet / DB)
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 font-mono">POST /api/dhp-submit</span>
+                  </div>
+                  <div className="p-3 text-[11px] font-mono leading-relaxed overflow-x-auto text-emerald-300">
+                    <pre>{`{
+  "noBatch": "BTH-202610-001",
+  "tanggalProses": "2026-10-24",
+  "shift": "Shift 1",
+  "jalurProses": "SKM",
+  "jenisTembakau": "Virginia FC",
+  "nettoBakuKg": 1250.00,
+  "nettoHasilKg": 1185.50,
+  "fraksiGagangKg": 38.20,
+  "fraksiAirKg": 18.50,
+  "fraksiDebuKg": 7.80,
+  "operatorAdmin": "Ahmad Faisal",
+  "catatan": "Batch normal run"
+}`}</pre>
+                  </div>
+                </div>
+              </div>
+
+              {/* Panduan 3 Langkah Memasang ke Google Drive */}
+              <div className="p-4 rounded-xl bg-slate-100 border border-slate-200 text-xs space-y-2 text-slate-700">
+                <div className="font-bold text-slate-900 text-xs flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-emerald-600" />
+                  <span>3 Cara Termudah Membuka / Menggunakan Template Ini:</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
+                  <div className="p-2.5 bg-white rounded-lg border border-slate-200 space-y-1">
+                    <strong className="text-slate-900 font-bold block">Opsi 1: Unduh Excel Langsung</strong>
+                    <p className="text-[11px] text-slate-600">
+                      Klik tombol <strong>Unduh Excel (.xlsx)</strong> di atas. Buka langsung di Microsoft Excel, LibreOffice, atau unggah ke Google Drive.
+                    </p>
+                  </div>
+                  <div className="p-2.5 bg-white rounded-lg border border-slate-200 space-y-1">
+                    <strong className="text-slate-900 font-bold block">Opsi 2: Tempel Langsung ke Google Sheets</strong>
+                    <p className="text-[11px] text-slate-600">
+                      Klik <strong>Salin ke Google Sheets</strong>, buka tab baru dengan alamat <strong>sheets.new</strong>, lalu tekan <strong>Ctrl + V</strong> di sel A1.
+                    </p>
+                  </div>
+                  <div className="p-2.5 bg-white rounded-lg border border-slate-200 space-y-1">
+                    <strong className="text-slate-900 font-bold block">Opsi 3: Dijadikan Input Web Form</strong>
+                    <p className="text-[11px] text-slate-600">
+                      Gunakan spesifikasi 17 kolom ini sebagai schema tabel database formulir web produksi agar sinkronisasi DHP otomatis.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
             </div>
           )}
 
