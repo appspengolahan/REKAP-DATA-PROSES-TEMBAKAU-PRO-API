@@ -26,10 +26,22 @@ import {
   Calendar,
   FileText,
   Table,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Thermometer,
+  Sun,
+  CloudSun,
+  CloudRain,
+  MapPin,
+  Gauge
 } from 'lucide-react';
 import { RawRowData, DhpIntegrationData, DhpBatchItem, GasConfig } from '../types[RekapDataProsesTembakau]';
 import { StandarSusutService } from '../services/standarSusutService';
+import {
+  WeatherService,
+  RealtimeWeatherData,
+  FactoryLocationPreset,
+  FACTORY_LOCATIONS
+} from '../services/weatherService';
 import {
   RekapDataProsesTembakauService,
   formatKg,
@@ -67,6 +79,33 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
   const [copiedTsv, setCopiedTsv] = useState<boolean>(false);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState<boolean>(false);
   const [selectedAnalisisTanggal, setSelectedAnalisisTanggal] = useState<string>('');
+
+  // Monitoring Cuaca & Iklim Pabrik Real-time
+  const [selectedLocation, setSelectedLocation] = useState<FactoryLocationPreset>(() => WeatherService.getSelectedLocation());
+  const [weatherData, setWeatherData] = useState<RealtimeWeatherData | null>(null);
+  const [weatherLoading, setWeatherLoading] = useState<boolean>(false);
+
+  const loadWeather = async (loc?: FactoryLocationPreset, force: boolean = false) => {
+    const targetLoc = loc || selectedLocation;
+    setWeatherLoading(true);
+    try {
+      const data = await WeatherService.fetchCurrentWeather(targetLoc, force);
+      setWeatherData(data);
+    } catch (e) {
+      console.warn('Weather fetch error:', e);
+    } finally {
+      setWeatherLoading(false);
+    }
+  };
+
+  const handleLocationChange = (locId: string) => {
+    const found = FACTORY_LOCATIONS.find(l => l.id === locId);
+    if (found) {
+      setSelectedLocation(found);
+      WeatherService.setSelectedLocation(found.id);
+      loadWeather(found, true);
+    }
+  };
 
   // Daftar tanggal unik dari DHP
   const availableAnalisisDates = useMemo(() => {
@@ -112,6 +151,7 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
   useEffect(() => {
     if (isOpen) {
       loadDhpData();
+      loadWeather();
       setCountdown(12);
     }
   }, [isOpen]);
@@ -1435,6 +1475,161 @@ function doGet(e) {
                         </div>
                       </div>
                     </div>
+                  </div>
+
+                  {/* 2b. Komparasi Cuaca Realtime & Indeks Higroskopis Pabrik */}
+                  <div className="bg-gradient-to-br from-slate-900 via-slate-850 to-slate-900 p-3.5 rounded-xl border border-slate-700/80 shadow-sm text-xs">
+                    {/* Header bar */}
+                    <div className="flex flex-wrap items-center justify-between gap-2.5 pb-2.5 border-b border-slate-700/60">
+                      <div className="flex items-center gap-2">
+                        <div className="p-1.5 rounded-lg bg-sky-500/20 text-sky-300 border border-sky-500/30">
+                          <Thermometer className="w-4 h-4 text-sky-400" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-white text-[11px] uppercase tracking-wider flex items-center gap-1.5">
+                              Iklim Lingkungan Pabrik & Indeks Higroskopis Real-Time
+                            </span>
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-sky-500/20 text-sky-300 border border-sky-500/30 animate-pulse">
+                              LIVE SATELLITE
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-slate-400">
+                            Menganalisis pengaruh suhu & kelembaban (RH%) terhadap laju penguapan air dan kerapuhan debu
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <div className="flex flex-col items-end">
+                          <div className="flex items-center gap-1.5 bg-slate-950/80 px-2.5 py-1 rounded-lg border border-slate-700">
+                            <MapPin className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                            <select
+                              value={selectedLocation.id}
+                              onChange={(e) => handleLocationChange(e.target.value)}
+                              className="bg-transparent text-xs font-bold text-slate-100 focus:outline-none cursor-pointer"
+                            >
+                              {FACTORY_LOCATIONS.map(loc => (
+                                <option key={loc.id} value={loc.id} className="bg-slate-900 text-white">
+                                  {loc.name} {loc.isDefault ? '★ [Pabrik Utama]' : ''}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          {selectedLocation.address && (
+                            <span className="text-[9px] text-amber-300/80 mt-0.5 truncate max-w-xs md:max-w-md font-mono" title={selectedLocation.address}>
+                              📍 {selectedLocation.address}
+                            </span>
+                          )}
+                        </div>
+
+                        <button
+                          onClick={() => loadWeather(selectedLocation, true)}
+                          disabled={weatherLoading}
+                          className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-all cursor-pointer disabled:opacity-50 self-start"
+                          title="Perbarui Cuaca Realtime"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${weatherLoading ? 'animate-spin text-sky-400' : ''}`} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Weather Metrics Grid */}
+                    {weatherData ? (
+                      <div className="mt-3 space-y-2.5">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                          {/* Suhu */}
+                          <div className="p-2.5 bg-slate-800/60 rounded-lg border border-slate-700/60 flex items-center justify-between">
+                            <div>
+                              <div className="text-[10px] text-slate-400 flex items-center gap-1">
+                                <Sun className="w-3 h-3 text-amber-400" />
+                                Suhu Udara
+                              </div>
+                              <div className="text-sm font-black text-amber-300 mt-0.5">
+                                {weatherData.temperature.toFixed(1)}°C
+                              </div>
+                            </div>
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-700 text-slate-300 font-medium">
+                              Ambien
+                            </span>
+                          </div>
+
+                          {/* RH */}
+                          <div className="p-2.5 bg-slate-800/60 rounded-lg border border-slate-700/60 flex items-center justify-between">
+                            <div>
+                              <div className="text-[10px] text-slate-400 flex items-center gap-1">
+                                <Droplets className="w-3 h-3 text-sky-400" />
+                                Kelembaban (RH)
+                              </div>
+                              <div className="text-sm font-black text-sky-300 mt-0.5">
+                                {weatherData.humidity}%
+                              </div>
+                            </div>
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-700 text-slate-300 font-medium">
+                              Relatif
+                            </span>
+                          </div>
+
+                          {/* Cuaca */}
+                          <div className="p-2.5 bg-slate-800/60 rounded-lg border border-slate-700/60 flex items-center justify-between">
+                            <div>
+                              <div className="text-[10px] text-slate-400 flex items-center gap-1">
+                                <CloudSun className="w-3 h-3 text-blue-400" />
+                                Kondisi Cuaca
+                              </div>
+                              <div className="text-xs font-bold text-slate-200 mt-0.5 truncate max-w-[120px]" title={weatherData.weatherDesc}>
+                                {weatherData.weatherDesc}
+                              </div>
+                            </div>
+                            <span className="text-[9px] text-slate-400">
+                              {weatherData.windSpeed} km/j
+                            </span>
+                          </div>
+
+                          {/* Indeks Higroskopis */}
+                          <div className={`p-2.5 rounded-lg border flex items-center justify-between ${weatherData.hygroIndex.badgeBg} ${weatherData.hygroIndex.badgeBorder}`}>
+                            <div>
+                              <div className="text-[10px] text-slate-400 flex items-center gap-1">
+                                <Gauge className="w-3 h-3 text-slate-300" />
+                                Indeks Higroskopis
+                              </div>
+                              <div className={`text-xs font-black mt-0.5 ${weatherData.hygroIndex.badgeColor}`}>
+                                {weatherData.hygroIndex.status}
+                              </div>
+                            </div>
+                            <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase ${weatherData.hygroIndex.badgeBg} ${weatherData.hygroIndex.badgeColor} border ${weatherData.hygroIndex.badgeBorder}`}>
+                              {weatherData.hygroIndex.potensiPenguapan === 'Tinggi' ? 'EVAPORASI CEPAT' : weatherData.hygroIndex.potensiPenguapan === 'Rendah' ? 'EVAPORASI RENDAH' : 'STABIL'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Korelasi Pintar dengan Data DHP */}
+                        <div className="p-2.5 bg-slate-950/70 rounded-lg border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-2">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-1.5 text-[11px] font-bold text-sky-300">
+                              <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                              <span>Korelasi Cuaca & Susut Tembakau Hari Ini:</span>
+                            </div>
+                            <p className="text-[10px] text-slate-300 leading-relaxed">
+                              {weatherData.hygroIndex.analisisKorelasi} Hari ini fraksi air tercatat <strong className="text-sky-300">{formatKg(analisisHarian.totalAirKg)} Kg ({analisisHarian.totalBakuKg > 0 ? ((analisisHarian.totalAirKg / analisisHarian.totalBakuKg) * 100).toFixed(2) : 0}%)</strong> dan debu <strong className="text-amber-300">{formatKg(analisisHarian.totalDebuKg)} Kg ({analisisHarian.totalBakuKg > 0 ? ((analisisHarian.totalDebuKg / analisisHarian.totalBakuKg) * 100).toFixed(2) : 0}%)</strong>.
+                            </p>
+                          </div>
+                          <div className="shrink-0 p-2 bg-slate-900 rounded-md border border-slate-700/80 md:max-w-xs">
+                            <span className="text-[9px] font-bold text-amber-400 uppercase tracking-wider block mb-0.5">
+                              Rekomendasi Kontrol Mesin:
+                            </span>
+                            <p className="text-[10px] text-slate-300 leading-tight">
+                              {weatherData.hygroIndex.rekomendasiOperasional}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="py-4 text-center text-slate-400">
+                        <RefreshCw className="w-4 h-4 animate-spin mx-auto text-sky-400 mb-1" />
+                        <span className="text-[11px]">Menghubungkan ke satelit cuaca Open-Meteo...</span>
+                      </div>
+                    )}
                   </div>
 
                   {/* 3. Matriks Komparasi per Jenis Tembakau yang Masuk Hari Itu */}
