@@ -2351,32 +2351,9 @@ function doGet(e) {
           </div>
 
           <div className="flex items-center gap-2">
-            {(((dhpData?.batchBaruCount || 0) > 0) || ((dhpData?.mismatchCount || 0) > 0)) && (
-              <button
-                onClick={handleSyncToRekap}
-                disabled={isSyncingToRekap}
-                className="inline-flex items-center justify-center gap-2 px-4 py-1.5 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-sm transition-all disabled:opacity-50 shrink-0 cursor-pointer"
-                title="Sinkronkan dan selaraskan data batch DHP ke sheet rekap"
-              >
-                {isSyncingToRekap ? (
-                  <>
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    <span>Menyelaraskan...</span>
-                  </>
-                ) : (
-                  <>
-                    <Send className="w-3.5 h-3.5 text-white" />
-                    <span>
-                      Sinkronkan ke Sheet Rekap ({(dhpData?.batchBaruCount || 0) > 0 ? `${dhpData?.batchBaruCount} Baru` : ''}{(dhpData?.mismatchCount || 0) > 0 ? `, ${dhpData?.mismatchCount} Update` : ''})
-                    </span>
-                  </>
-                )}
-              </button>
-            )}
-
             <button
               onClick={onClose}
-              className="px-4 py-1.5 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-semibold transition-colors shadow-xs cursor-pointer"
+              className="px-5 py-1.5 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-semibold transition-colors shadow-xs cursor-pointer"
             >
               Tutup
             </button>
