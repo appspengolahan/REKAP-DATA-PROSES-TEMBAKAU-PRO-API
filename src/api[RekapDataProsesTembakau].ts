@@ -1501,6 +1501,14 @@ export class RekapDataProsesTembakauService {
 
       const roundedHasil = Math.round(hasil * 10) / 10;
 
+      // Deteksi Selisih Netto Baku antara Rekap dan DHP:
+      const hasBakuMismatch = Boolean(
+        matchedRekap &&
+        rekapBaku !== undefined &&
+        rekapBaku > 0 &&
+        Math.abs(rekapBaku - bakuRound) > 1
+      );
+
       // Deteksi Mismatch / Perubahan Hasil:
       // Jika di Rekap sudah ada nilai hasil (> 0), namun berbeda dengan hasil di DHP (> 0.05 Kg)
       const hasHasilMismatch = Boolean(
@@ -1515,11 +1523,15 @@ export class RekapDataProsesTembakauService {
         matchedRekap &&
         rekapHasil !== undefined &&
         rekapHasil > 0 &&
-        !hasHasilMismatch
+        !hasHasilMismatch &&
+        !hasBakuMismatch
       );
 
       let statusIntegrasi = 'Batch Baru (Siap Masuk)';
-      if (hasHasilMismatch) {
+      if (hasBakuMismatch) {
+        statusIntegrasi = `Baku Rekap Berbeda (${rekapBaku} Kg vs ${bakuRound} Kg)`;
+        mismatchCount++;
+      } else if (hasHasilMismatch) {
         statusIntegrasi = 'Hasil Berubah';
         mismatchCount++;
       } else if (isAlreadyFilledInRekap) {
@@ -1555,9 +1567,28 @@ export class RekapDataProsesTembakauService {
         alreadyInRekap: isAlreadyFilledInRekap,
         matchedRow: matchedRowNumber,
         matchKey: matchKeyIso,
-        isMismatch: hasHasilMismatch,
+        isMismatch: hasHasilMismatch || hasBakuMismatch,
+        hasBakuMismatch,
         rekapHasil,
         rekapBaku
+      });
+    }
+
+    // Deteksi baris di Rekap pada tanggal aktif yang TIDAK ADA di lembar DHP (Duplikat / Ghost Rows)
+    const activeIsoDate = items.length > 0 ? (parseToIsoDate(items[0].tanggalRaw) || items[0].tanggalFormatted) : '';
+    const activeJenisSet = new Set(items.map(it => it.jenisTembakau.toLowerCase().replace(/[^a-z0-9]/g, '')));
+    
+    const anomalousRekapRows: RawRowData[] = [];
+    if (activeIsoDate && currentRows && currentRows.length > 0) {
+      currentRows.forEach(r => {
+        if (!r.tanggal || !r.jenisTembakau) return;
+        const rIso = parseToIsoDate(r.tanggal) || r.tanggal;
+        if (rIso === activeIsoDate) {
+          const rClean = r.jenisTembakau.toLowerCase().replace(/[^a-z0-9]/g, '');
+          if (!activeJenisSet.has(rClean)) {
+            anomalousRekapRows.push(r);
+          }
+        }
       });
     }
 
@@ -1592,6 +1623,7 @@ export class RekapDataProsesTembakauService {
       batchBaruCount,
       mismatchCount,
       items,
+      anomalousRekapRows,
       fetchTimestamp: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
     };
   }

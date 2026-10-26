@@ -139,6 +139,7 @@ export interface DhpBatchItem {
   isMismatch?: boolean;
   rekapHasil?: number;
   rekapBaku?: number;
+  hasBakuMismatch?: boolean;
 }
 
 export interface DhpIntegrationData {
@@ -163,6 +164,7 @@ export interface DhpIntegrationData {
   batchBaruCount: number;
   mismatchCount: number;
   items: DhpBatchItem[];
+  anomalousRekapRows?: RawRowData[];
   fetchTimestamp: string;
 }
 

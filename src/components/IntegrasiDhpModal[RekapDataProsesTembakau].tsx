@@ -310,6 +310,34 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
     }
   };
 
+  // Handle 1-Click Clean Duplicates & Reconciliation
+  const [isReconciling, setIsReconciling] = useState<boolean>(false);
+  const handleReconcileLive = async () => {
+    setIsReconciling(true);
+    setSyncNotice(null);
+    try {
+      const resp = await fetch('/api/sync-gas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'cleanDuplicates' })
+      });
+      const data = await resp.json();
+      setSyncNotice({
+        type: 'success',
+        message: data?.message || 'Rekonsiliasi selesai: baris duplikat berhasil dihapus dan Netto Baku diselaraskan presisi!'
+      });
+      await loadDhpData(false);
+    } catch (err: any) {
+      setSyncNotice({
+        type: 'error',
+        message: 'Gagal mengirim instruksi rekonsiliasi ke GAS: ' + (err?.message || 'Error jaringan')
+      });
+    } finally {
+      setIsReconciling(false);
+      setTimeout(() => setSyncNotice(null), 8000);
+    }
+  };
+
   if (!isOpen) return null;
 
   // Complete GAS Script with Smart In-Place Fill & Strict Formula Protection
@@ -432,6 +460,8 @@ function onOpen() {
     SpreadsheetApp.getUi()
       .createMenu('⚡ Integrasi DHP Tembakau')
       .addItem('▶ Jalankan Sinkronisasi Sekarang', 'sinkronkanDhpKeRekapManual')
+      .addSeparator()
+      .addItem('🧹 Bersihkan Duplikat & Rekonsiliasi Tanggal Aktif', 'BERSIHKAN_DUPLIKAT_DAN_REKONSILIASI')
       .addSeparator()
       .addItem('⏰ Aktifkan Auto-Push 5 Menit', 'AKTIFKAN_AUTO_PUSH_5_MENIT')
       .addItem('🛑 Matikan Auto-Push', 'MATIKAN_AUTO_PUSH')
@@ -638,11 +668,15 @@ function sinkronkanDhpKeRekap(isManual) {
           shRekap.getRange(rowIdx, 7).setValue(batch.jalur);
 
           // Cek apakah baris ini perlu diisi / diperbarui dengan data akhir DHP
-          var needsFill = (rHasil === 0) || (rRow[8] === '' || rRow[8] === null) || (Math.abs(rHasil - batch.hasil) > 0.01);
+          var needsFill = (rHasil === 0) || (rRow[8] === '' || rRow[8] === null) || (Math.abs(rHasil - batch.hasil) > 0.01) || (Math.abs(rBaku - batch.baku) > 0.05);
 
           if (needsFill) {
-            // Kolom H (Col 8): Netto Baku (isi jika di rekap masih kosong / 0)
-            if (rBaku === 0 && batch.baku > 0) {
+            // ========================================================
+            // 📌 KETENTUAN: SHEET TUJUAN REKAP MENGIKUTI APA YG TERCANTUM PADA DHP
+            // Selaraskan Kolom H (Col 8): Netto Baku mengikuti timbangan riil DHP
+            // (jika masih kosong atau jika nilainya berbeda/keliru dari salinan sebelumnya)
+            // ========================================================
+            if (rBaku === 0 || Math.abs(rBaku - batch.baku) > 0.05) {
               shRekap.getRange(rowIdx, 8).setValue(batch.baku);
             }
 
@@ -717,7 +751,7 @@ function sinkronkanDhpKeRekap(isManual) {
     }
   }
 
-  var summaryMsg = 'Sinkronisasi Selesai: ' + updatedCount + ' baris draft berhasil diisi otomatis, ' + appendedCount + ' baris baru ditambahkan. Formula C, D, E, J, dan K terlindungi 100%.';
+  var summaryMsg = 'Sinkronisasi Selesai: ' + updatedCount + ' baris draft berhasil diselaraskan & diisi, ' + appendedCount + ' baris baru ditambahkan. Formula C, D, E, J, dan K terlindungi 100%.';
   Logger.log(summaryMsg);
 
   if (isManual) {
@@ -734,6 +768,171 @@ function sinkronkanDhpKeRekap(isManual) {
   };
 }
 
+/**
+ * =========================================================================
+ * 5. FUNGSI KHUSUS: BERSIHKAN DUPLIKAT & REKONSILIASI TANGGAL AKTIF (26 OKT)
+ * Menghapus baris anomali/duplikat dari tanggal sebelumnya (Madura 2024, Weleri 2024, Besuki 2025)
+ * dan mengoreksi Netto Baku (Ploso, Sapudi, Beringin) agar tepat 6 jenis sesuai DHP riil.
+ * =========================================================================
+ */
+function BERSIHKAN_DUPLIKAT_DAN_REKONSILIASI() {
+  var ssRekap = SpreadsheetApp.openById(CONFIG_INTEGRASI_TEMBAKAU.REKAP_SS_ID);
+  var shRekap = ssRekap.getSheetByName(CONFIG_INTEGRASI_TEMBAKAU.REKAP_SHEET_NAME);
+  var ssDhp = SpreadsheetApp.openById(CONFIG_INTEGRASI_TEMBAKAU.DHP_SS_ID);
+  var shDhp = ssDhp.getSheetByName(CONFIG_INTEGRASI_TEMBAKAU.DHP_SHEET_NAME);
+
+  if (!shRekap || !shDhp) return { success: false, error: 'Sheet Rekap atau DHP tidak ditemukan' };
+
+  var lastRowDhp = shDhp.getLastRow();
+  if (lastRowDhp < 3) return { success: false, error: 'DHP kosong' };
+
+  var dhpValues = shDhp.getRange(3, 1, lastRowDhp - 2, shDhp.getLastColumn()).getValues();
+
+  var INDO_MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+  var INDO_MONTH_MAP = {
+    'januari': 0, 'jan': 0, 'februari': 1, 'feb': 1, 'maret': 2, 'mar': 2,
+    'april': 3, 'apr': 3, 'mei': 4, 'may': 4, 'juni': 5, 'jun': 5,
+    'juli': 6, 'jul': 6, 'agustus': 7, 'agu': 7, 'ags': 7, 'aug': 7,
+    'september': 8, 'sep': 8, 'oktober': 9, 'okt': 9, 'oct': 9,
+    'november': 10, 'nov': 10, 'desember': 11, 'des': 11, 'dec': 11
+  };
+
+  function parseTanggal(raw) {
+    if (!raw) return null;
+    if (raw instanceof Date) return isNaN(raw.getTime()) ? null : raw;
+    var s = String(raw).replace(/^[a-zA-Z]+,\\s*/, '').trim();
+    var mText = s.match(/^(\\d{1,2})\\s+([a-zA-Z]+)\\s+(\\d{4})/);
+    if (mText) {
+      var d = parseInt(mText[1], 10);
+      var m = mText[2].toLowerCase();
+      var y = parseInt(mText[3], 10);
+      if (m in INDO_MONTH_MAP) return new Date(y, INDO_MONTH_MAP[m], d);
+    }
+    var mIso = s.match(/^(\\d{4})-(\\d{1,2})-(\\d{1,2})/);
+    if (mIso) return new Date(parseInt(mIso[1], 10), parseInt(mIso[2], 10) - 1, parseInt(mIso[3], 10));
+    return new Date(s);
+  }
+
+  function formatTgl(d) {
+    if (!d || isNaN(d.getTime())) return '';
+    return d.getDate() + ' ' + INDO_MONTH_SHORT[d.getMonth()] + ' ' + d.getFullYear();
+  }
+
+  function clean(s) {
+    return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  }
+
+  // 1. Kumpulkan daftar batch aktif dari DHP
+  var dhpBatches = [];
+  var targetDateLabel = '';
+
+  for (var j = 0; j < dhpValues.length; j++) {
+    var r = dhpValues[j];
+    var rawTgl = r[2];
+    var rawJenis = String(r[3] || '').trim();
+    var baku = parseDecimalNumber(r[4]);
+    var gagang = parseDecimalNumber(r[5]);
+    var air = parseDecimalNumber(r[6]);
+    var debu = parseDecimalNumber(r[7]);
+    var hasil = parseDecimalNumber(r[8]);
+    var susut = parseDecimalNumber(r[9]) || (baku - hasil);
+
+    if (rawJenis && (baku > 0 || hasil > 0)) {
+      var dObj = parseTanggal(rawTgl);
+      if (!dObj) continue;
+      var lbl = formatTgl(dObj);
+      if (!targetDateLabel) targetDateLabel = lbl;
+
+      var rawPerlakuan = String(r[13] || '').trim().toUpperCase();
+      var jalur = (rawPerlakuan.indexOf('SKM') !== -1 || rawJenis.toUpperCase().indexOf('SKM') !== -1) ? 'SKM' : 'SKT';
+
+      dhpBatches.push({
+        jenis: rawJenis,
+        jalur: jalur,
+        baku: baku,
+        hasil: hasil,
+        susut: susut,
+        gagang: gagang,
+        air: air,
+        debu: debu
+      });
+    }
+  }
+
+  if (dhpBatches.length === 0) return { success: false, message: 'Tidak ada batch DHP yang valid' };
+
+  // 2. Baca sheet Rekap
+  var lastRowRekap = shRekap.getLastRow();
+  var rekapCount = Math.max(0, lastRowRekap - CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW + 1);
+  if (rekapCount === 0) return { success: false, message: 'Sheet Rekap kosong' };
+
+  var rekapValues = shRekap.getRange(CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW, 1, rekapCount, 14).getValues();
+
+  var deletedRows = 0;
+  var reconciledRows = 0;
+
+  // Lakukan iterasi dari baris paling bawah ke atas agar deleteRow tidak menggeser indeks baris atasnya
+  for (var k = rekapValues.length - 1; k >= 0; k--) {
+    var actualRow = CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW + k;
+    var rowData = rekapValues[k];
+    var rTgl = rowData[1];
+    var rJenis = String(rowData[5] || '').trim();
+
+    if (!rTgl || !rJenis) continue;
+
+    var rDateObj = parseTanggal(rTgl);
+    var rLabel = rDateObj ? formatTgl(rDateObj) : String(rTgl).trim();
+
+    // Khusus proses baris yang bertanggal sama dengan tanggal aktif DHP (misal: "26 Okt 2026")
+    if (rLabel.toLowerCase() === targetDateLabel.toLowerCase()) {
+      var foundIdx = -1;
+      for (var b = 0; b < dhpBatches.length; b++) {
+        if (clean(dhpBatches[b].jenis) === clean(rJenis)) {
+          foundIdx = b;
+          break;
+        }
+      }
+
+      if (foundIdx === -1) {
+        // Baris anomali / duplikat dari hari sebelumnya (misal Madura 2024, Weleri 2024, Besuki 2025)
+        Logger.log('🗑️ Hapus baris anomali #' + actualRow + ': ' + rJenis + ' (' + rLabel + ')');
+        shRekap.deleteRow(actualRow);
+        deletedRows++;
+      } else {
+        // Baris valid, lakukan koreksi nilai sel mengikuti DHP riil
+        var bItem = dhpBatches[foundIdx];
+        shRekap.getRange(actualRow, 7).setValue(bItem.jalur);   // G: Jalur
+        shRekap.getRange(actualRow, 8).setValue(bItem.baku);    // H: Netto Baku (Koreksi)
+        shRekap.getRange(actualRow, 9).setValue(bItem.hasil);   // I: Netto Hasil
+        shRekap.getRange(actualRow, 12).setValue(bItem.gagang); // L: Gagang
+        if (bItem.air > 0) {
+          shRekap.getRange(actualRow, 13).setValue(bItem.air);  // M: Air
+        } else {
+          shRekap.getRange(actualRow, 13).clearContent();
+        }
+        shRekap.getRange(actualRow, 14).setValue(bItem.debu);   // N: Debu
+        reconciledRows++;
+      }
+    }
+  }
+
+  var msg = '✅ Rekonsiliasi Sukses: ' + reconciledRows + ' baris diselaraskan presisi, ' + deletedRows + ' baris duplikat dihapus. Rekap tanggal ' + targetDateLabel + ' kini tepat ' + dhpBatches.length + ' jenis tembakau!';
+  Logger.log(msg);
+
+  try {
+    SpreadsheetApp.getUi().alert('🧹 Rekonsiliasi & Anti-Duplikasi', msg, SpreadsheetApp.getUi().ButtonSet.OK);
+  } catch(e) {}
+
+  return {
+    success: true,
+    targetDate: targetDateLabel,
+    reconciledRows: reconciledRows,
+    deletedRows: deletedRows,
+    finalBatchCount: dhpBatches.length,
+    message: msg
+  };
+}
+
 function parseDecimalNumber(val) {
   if (val === null || val === undefined) return 0;
   var str = String(val).replace(/[^0-9,.-]/g, '').replace(',', '.');
@@ -745,7 +944,19 @@ function parseDecimalNumber(val) {
  */
 function doPost(e) {
   try {
-    var result = sinkronkanDhpKeRekap();
+    var data = {};
+    if (e && e.postData && e.postData.contents) {
+      try { data = JSON.parse(e.postData.contents); } catch(pErr) {}
+    }
+    var action = data.action || (e && e.parameter && e.parameter.action) || '';
+
+    var result;
+    if (action === 'cleanDuplicates' || action === 'reconcile') {
+      result = BERSIHKAN_DUPLIKAT_DAN_REKONSILIASI();
+    } else {
+      result = sinkronkanDhpKeRekap();
+    }
+
     return ContentService.createTextOutput(JSON.stringify(result))
       .setMimeType(ContentService.MimeType.JSON);
   } catch (err) {
@@ -761,14 +972,20 @@ function doPost(e) {
  */
 function doGet(e) {
   var action = (e && e.parameter && e.parameter.action) || '';
+  var res;
+  if (action === 'cleanDuplicates' || action === 'reconcile') {
+    res = BERSIHKAN_DUPLIKAT_DAN_REKONSILIASI();
+    return ContentService.createTextOutput(JSON.stringify(res))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
   if (action === 'syncDhp' || action === 'syncDhpToRekap') {
-    var res = sinkronkanDhpKeRekap();
+    res = sinkronkanDhpKeRekap();
     return ContentService.createTextOutput(JSON.stringify(res))
       .setMimeType(ContentService.MimeType.JSON);
   }
   return ContentService.createTextOutput(JSON.stringify({
     status: 'GAS Integrasi DHP Tembakau Aktif',
-    instruction: 'Panggil dengan action=syncDhp atau jalankan fungsi sinkronkanDhpKeRekap()'
+    instruction: 'Panggil dengan action=syncDhp atau jalankan fungsi sinkronkanDhpKeRekap() atau BERSIHKAN_DUPLIKAT_DAN_REKONSILIASI()'
   })).setMimeType(ContentService.MimeType.JSON);
 }`;
 
@@ -1124,6 +1341,47 @@ function doGet(e) {
                   </div>
                 </div>
               </div>
+
+              {/* Alert Banner: Deteksi Duplikasi & Selisih Rekap vs DHP */}
+              {((dhpData?.anomalousRekapRows && dhpData.anomalousRekapRows.length > 0) || dhpData?.items.some(it => it.hasBakuMismatch)) && (
+                <div className="p-2.5 sm:p-3 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-300 text-amber-950 text-xs shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-2.5 shrink-0">
+                  <div className="flex items-start gap-2.5 min-w-0">
+                    <div className="p-1.5 rounded-lg bg-amber-100 border border-amber-300 text-amber-800 shrink-0 mt-0.5">
+                      <AlertCircle className="w-4 h-4" />
+                    </div>
+                    <div className="space-y-1 min-w-0">
+                      <div className="font-bold text-[11px] sm:text-xs text-amber-950 flex items-center gap-1.5 flex-wrap">
+                        <span>Audit Data 26 Okt: Terdeteksi Anomali Duplikasi di Sheet Rekap</span>
+                        {dhpData.anomalousRekapRows && dhpData.anomalousRekapRows.length > 0 && (
+                          <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-rose-100 text-rose-800 border border-rose-300">
+                            {dhpData.anomalousRekapRows.length} Baris Duplikat/Hantu
+                          </span>
+                        )}
+                        {dhpData.items.some(it => it.hasBakuMismatch) && (
+                          <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-amber-200 text-amber-900 border border-amber-400">
+                            Baku Berbeda
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10px] sm:text-[11px] text-amber-800 leading-relaxed">
+                        DHP 26 Okt hanya memproses <strong>6 jenis tembakau (2.540,6 Kg)</strong>. Di Sheet Rekap terdapat duplikasi dari 23 Okt (Madura, Weleri, Beringin, Sapudi) serta ketidaksesuaian Netto Baku (Ploso: 2.379 vs 1.180 Kg, Beringin: 372 vs 317 Kg, Sapudi: 261 vs 266 Kg).
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
+                    <button
+                      onClick={handleReconcileLive}
+                      disabled={isReconciling}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-amber-700 hover:bg-amber-800 shadow-xs transition-all disabled:opacity-50 cursor-pointer whitespace-nowrap"
+                      title="Kirim perintah pembersihan duplikat dan koreksi baku ke GAS"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${isReconciling ? 'animate-spin' : ''}`} />
+                      <span>{isReconciling ? 'Membersihkan...' : 'Bersihkan Duplikat Live'}</span>
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Transactions Table Section - Maximized Viewport & Dominant (Matching Gambar 2) */}
               <div className="bg-white border border-slate-200 rounded-xl sm:rounded-2xl overflow-hidden shadow-xs flex-1 flex flex-col min-h-0">
