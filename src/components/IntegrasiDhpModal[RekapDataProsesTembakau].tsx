@@ -32,7 +32,10 @@ import {
   CloudSun,
   CloudRain,
   MapPin,
-  Gauge
+  Gauge,
+  ChevronDown,
+  ArrowLeft,
+  SlidersHorizontal
 } from 'lucide-react';
 import { RawRowData, DhpIntegrationData, DhpBatchItem, GasConfig } from '../types[RekapDataProsesTembakau]';
 import { StandarSusutService } from '../services/standarSusutService';
@@ -79,6 +82,7 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
   const [copiedTsv, setCopiedTsv] = useState<boolean>(false);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState<boolean>(false);
   const [selectedAnalisisTanggal, setSelectedAnalisisTanggal] = useState<string>('');
+  const [showToolsDropdown, setShowToolsDropdown] = useState<boolean>(false);
 
   // Monitoring Cuaca & Iklim Pabrik Real-time
   const [selectedLocation, setSelectedLocation] = useState<FactoryLocationPreset>(() => WeatherService.getSelectedLocation());
@@ -845,11 +849,13 @@ function doGet(e) {
           </button>
         </div>
 
-        {/* Source & Target Connection Bar (Clean Light Style - Matching Reference Gambar 2) */}
-        <div className="px-3 sm:px-5 py-1.5 sm:py-2 bg-white border-b border-slate-200 flex flex-wrap items-center justify-between gap-1.5 sm:gap-2 text-xs shrink-0">
-          <div className="flex flex-wrap items-center gap-1 sm:gap-1.5 text-[11px] sm:text-xs text-slate-600">
+        {/* Source, Navigation, and Tools Bar - Single Unified Row */}
+        <div className="px-3 sm:px-5 py-2 bg-white border-b border-slate-200 flex flex-wrap items-center justify-between gap-2.5 text-xs shrink-0 relative z-20">
+          
+          {/* SISI KIRI: Indikator Sumber DHP & Target Rekap */}
+          <div className="flex items-center gap-1.5 text-[11px] sm:text-xs text-slate-600 shrink-0">
             <span className="inline-flex items-center gap-1 font-bold text-amber-600">
-              <span className="w-1.5 sm:w-2 h-1.5 sm:h-2 rounded-full bg-amber-500 animate-pulse"></span>
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
               Sumber:
             </span>
             <span className="bg-slate-100 px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] text-slate-800 font-mono border border-slate-200">
@@ -857,7 +863,7 @@ function doGet(e) {
             </span>
             <ArrowRight className="w-3 h-3 text-slate-400 shrink-0" />
             <span className="inline-flex items-center gap-1 font-bold text-emerald-700">
-              <span className="w-1.5 sm:w-2 h-1.5 sm:h-2 rounded-full bg-emerald-500"></span>
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
               Target:
             </span>
             <span className="bg-slate-100 px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] text-slate-800 font-mono border border-slate-200">
@@ -865,11 +871,148 @@ function doGet(e) {
             </span>
           </div>
 
-          <div className="flex items-center gap-1.5 sm:gap-2 ml-auto sm:ml-0">
+          {/* SISI TENGAH: Segmented Pill Toggles (Pratinjau vs Analisis Harian) */}
+          <div className="flex items-center p-0.5 sm:p-1 bg-slate-100 rounded-xl border border-slate-200/90 shadow-xs shrink-0">
+            <button
+              onClick={() => { setActiveTab('transaksi'); setShowToolsDropdown(false); }}
+              className={`flex items-center gap-1.5 px-3 py-1 sm:py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                activeTab === 'transaksi'
+                  ? 'bg-white text-blue-700 shadow-xs border border-slate-200/80'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>Pratinjau ({dhpData?.totalBatch ?? 0})</span>
+            </button>
+
+            <button
+              onClick={() => { setActiveTab('analisis_harian'); setShowToolsDropdown(false); }}
+              className={`flex items-center gap-1.5 px-3 py-1 sm:py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                activeTab === 'analisis_harian'
+                  ? 'bg-white text-amber-800 shadow-xs border border-slate-200/80'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <TrendingUp className="w-3.5 h-3.5 text-amber-600" />
+              <span>Analisis Harian</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                Deviasi
+              </span>
+            </button>
+          </div>
+
+          {/* SISI KANAN: Dropdown Menu Alat/Template + Saklar Auto-Tarik + Tombol Tarik Ulang */}
+          <div className="flex items-center gap-1.5 sm:gap-2 ml-auto sm:ml-0 shrink-0">
+            
+            {/* Dynamic Dropdown: Pemetaan, GAS & Template */}
+            <div className="relative">
+              <button
+                onClick={() => setShowToolsDropdown(!showToolsDropdown)}
+                className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg border text-xs font-semibold transition-all shadow-xs cursor-pointer ${
+                  ['pemetaan', 'gas', 'template_dhp'].includes(activeTab)
+                    ? 'bg-blue-50 border-blue-400 text-blue-800 font-bold ring-2 ring-blue-500/20'
+                    : 'bg-white hover:bg-slate-50 border-slate-300 text-slate-700'
+                }`}
+                title="Buka menu konfigurasi, pemetaan kolom, skrip GAS, dan template Excel"
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5 text-slate-500" />
+                <span className="hidden sm:inline">
+                  {activeTab === 'pemetaan'
+                    ? 'Pemetaan Kolom'
+                    : activeTab === 'gas'
+                    ? 'Skrip GAS'
+                    : activeTab === 'template_dhp'
+                    ? 'Template Excel'
+                    : 'Alat & Konfigurasi'}
+                </span>
+                <span className="sm:hidden">
+                  {activeTab === 'pemetaan'
+                    ? 'Pemetaan'
+                    : activeTab === 'gas'
+                    ? 'GAS'
+                    : activeTab === 'template_dhp'
+                    ? 'Template'
+                    : 'Alat'}
+                </span>
+                <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${showToolsDropdown ? 'rotate-180' : ''}`} />
+              </button>
+
+              {/* Popover Dropdown Menu */}
+              {showToolsDropdown && (
+                <>
+                  <div
+                    className="fixed inset-0 z-30"
+                    onClick={() => setShowToolsDropdown(false)}
+                  />
+                  <div className="absolute right-0 mt-1.5 w-60 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-40 text-xs animate-in fade-in slide-in-from-top-2 duration-150">
+                    <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100">
+                      Konfigurasi &amp; Referensi DHP
+                    </div>
+
+                    <button
+                      onClick={() => { setActiveTab('pemetaan'); setShowToolsDropdown(false); }}
+                      className={`w-full text-left px-3 py-2 flex items-center justify-between transition-colors cursor-pointer ${
+                        activeTab === 'pemetaan' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-700 hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                        <span>Pemetaan Kolom &amp; Rumus</span>
+                      </div>
+                      {activeTab === 'pemetaan' && <Check className="w-3.5 h-3.5 text-blue-600" />}
+                    </button>
+
+                    <button
+                      onClick={() => { setActiveTab('gas'); setShowToolsDropdown(false); }}
+                      className={`w-full text-left px-3 py-2 flex items-center justify-between transition-colors cursor-pointer ${
+                        activeTab === 'gas' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-700 hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Code className="w-4 h-4 text-blue-600" />
+                        <span>Skrip Otomasi GAS</span>
+                      </div>
+                      {activeTab === 'gas' && <Check className="w-3.5 h-3.5 text-blue-600" />}
+                    </button>
+
+                    <button
+                      onClick={() => { setActiveTab('template_dhp'); setShowToolsDropdown(false); }}
+                      className={`w-full text-left px-3 py-2 flex items-center justify-between transition-colors cursor-pointer ${
+                        activeTab === 'template_dhp' ? 'bg-emerald-50 text-emerald-700 font-bold' : 'text-slate-700 hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                        <span>Template Excel &amp; Spreadsheet</span>
+                      </div>
+                      <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                        Baru
+                      </span>
+                    </button>
+
+                    <div className="my-1 border-t border-slate-100" />
+
+                    <a
+                      href="/api/download-template-dhp-excel"
+                      download="TEMPLATE_DHP_TEMBAKAU_ADMIN_PROSES.xlsx"
+                      onClick={() => setShowToolsDropdown(false)}
+                      className="px-3 py-2 flex items-center justify-between text-emerald-800 hover:bg-emerald-50 font-semibold transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Download className="w-4 h-4 text-emerald-700" />
+                        <span>Unduh File Excel (.xlsx)</span>
+                      </div>
+                      <span className="text-[10px] text-emerald-600">Download</span>
+                    </a>
+                  </div>
+                </>
+              )}
+            </div>
+
             {/* Smart Live-Sync Saklar / Toggle Switch */}
             <button
               onClick={() => setAutoPullEnabled(!autoPullEnabled)}
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] sm:text-xs font-semibold transition-all shadow-xs cursor-pointer ${
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 sm:py-1.5 rounded-lg border text-[11px] sm:text-xs font-semibold transition-all shadow-xs cursor-pointer ${
                 autoPullEnabled
                   ? 'bg-emerald-50 hover:bg-emerald-100 border-emerald-300 text-emerald-800'
                   : 'bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-600'
@@ -884,97 +1027,13 @@ function doGet(e) {
             <button
               onClick={() => loadDhpData(false)}
               disabled={loading}
-              className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-[11px] sm:text-xs font-bold transition-all shadow-xs disabled:opacity-50 cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-[11px] sm:text-xs font-bold transition-all shadow-xs disabled:opacity-50 cursor-pointer"
               title="Perbarui pembacaan lembar DHP secara manual (< 1s)"
             >
               <RefreshCw className={`w-3 sm:w-3.5 h-3 sm:h-3.5 ${loading || isAutoPulling ? 'animate-spin' : ''}`} />
               <span className="hidden xs:inline">Tarik Ulang</span>
               <span className="xs:hidden">Tarik</span>
             </button>
-          </div>
-        </div>
-
-        {/* Sub-Tabs Navigation (Clean Light Style - Responsive Horizontal Scrollable) */}
-        <div className="px-3 sm:px-5 border-b border-slate-200 flex items-center justify-between gap-2 bg-white shrink-0 overflow-x-auto scrollbar-none touch-pan-x">
-          <div className="flex items-center gap-1 sm:gap-2 flex-nowrap py-0.5">
-            <button
-              onClick={() => setActiveTab('transaksi')}
-              className={`flex items-center gap-1.5 py-2 px-2.5 sm:px-3 text-xs font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
-                activeTab === 'transaksi'
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              <Layers className="w-3.5 h-3.5" />
-              <span>Pratinjau ({dhpData?.totalBatch ?? 0})</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('analisis_harian')}
-              className={`flex items-center gap-1.5 py-2 px-2.5 sm:px-3 text-xs font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
-                activeTab === 'analisis_harian'
-                  ? 'border-amber-500 text-amber-700 bg-amber-50/50'
-                  : 'border-transparent text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              <TrendingUp className="w-3.5 h-3.5 text-amber-600" />
-              <span>Analisis Harian</span>
-              <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
-                Deviasi
-              </span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('pemetaan')}
-              className={`flex items-center gap-1.5 py-2 px-2.5 sm:px-3 text-xs font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
-                activeTab === 'pemetaan'
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>Pemetaan Kolom</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('gas')}
-              className={`flex items-center gap-1.5 py-2 px-2.5 sm:px-3 text-xs font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
-                activeTab === 'gas'
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              <Code className="w-3.5 h-3.5" />
-              <span>Skrip GAS</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('template_dhp')}
-              className={`flex items-center gap-1.5 py-2 px-2.5 sm:px-3 text-xs font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
-                activeTab === 'template_dhp'
-                  ? 'border-emerald-600 text-emerald-700 bg-emerald-50/50'
-                  : 'border-transparent text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Template Excel</span>
-              <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
-                Baru
-              </span>
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0 pl-1">
-            <a
-              href="/api/download-template-dhp-excel"
-              download="TEMPLATE_DHP_TEMBAKAU_ADMIN_PROSES.xlsx"
-              className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-lg text-xs font-semibold text-emerald-800 bg-emerald-100/80 hover:bg-emerald-200 border border-emerald-300 transition-colors shadow-xs shrink-0 whitespace-nowrap"
-              title="Unduh File Template Excel (.xlsx) untuk formulir DHP"
-            >
-              <Download className="w-3.5 h-3.5 text-emerald-700" />
-              <span className="hidden sm:inline">Unduh Template (.xlsx)</span>
-              <span className="sm:hidden">Template .xlsx</span>
-            </a>
           </div>
         </div>
 
@@ -1736,7 +1795,21 @@ function doGet(e) {
 
           {/* TAB 3: PEMETAAN KOLOM */}
           {activeTab === 'pemetaan' && (
-            <div className="space-y-4">
+            <div className="space-y-3">
+              {/* Tombol Navigasi Kembali Cepat */}
+              <div className="flex items-center justify-between bg-white p-2.5 rounded-xl border border-slate-200 shadow-xs">
+                <button
+                  onClick={() => setActiveTab('transaksi')}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 transition-all cursor-pointer"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Kembali ke Pratinjau Transaksi</span>
+                </button>
+                <span className="text-[11px] text-slate-500 font-medium hidden sm:inline">
+                  Menu: Kamus Pemetaan Kolom DHP
+                </span>
+              </div>
+
               <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700/60 text-xs leading-relaxed text-slate-300 space-y-2">
                 <div className="font-bold text-white text-sm flex items-center gap-2">
                   <ShieldCheck className="w-4 h-4 text-emerald-400" />
@@ -1892,7 +1965,21 @@ function doGet(e) {
 
           {/* TAB 3: SKRIP OTOMASI GAS */}
           {activeTab === 'gas' && (
-            <div className="space-y-4">
+            <div className="space-y-3">
+              {/* Tombol Navigasi Kembali Cepat */}
+              <div className="flex items-center justify-between bg-white p-2.5 rounded-xl border border-slate-200 shadow-xs">
+                <button
+                  onClick={() => setActiveTab('transaksi')}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 transition-all cursor-pointer"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Kembali ke Pratinjau Transaksi</span>
+                </button>
+                <span className="text-[11px] text-slate-500 font-medium hidden sm:inline">
+                  Menu: Skrip Otomasi Google Apps Script
+                </span>
+              </div>
+
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-sm font-bold text-white">
@@ -1982,7 +2069,20 @@ function doGet(e) {
 
           {/* TAB 5: TEMPLATE EXCEL & SPREADSHEET FORMULIR DHP */}
           {activeTab === 'template_dhp' && (
-            <div className="space-y-4 flex-1 flex flex-col min-h-0 text-slate-800 pb-2">
+            <div className="space-y-3 flex-1 flex flex-col min-h-0 text-slate-800 pb-2">
+              {/* Tombol Navigasi Kembali Cepat */}
+              <div className="flex items-center justify-between bg-white p-2.5 rounded-xl border border-slate-200 shadow-xs">
+                <button
+                  onClick={() => setActiveTab('transaksi')}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 transition-all cursor-pointer"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Kembali ke Pratinjau Transaksi</span>
+                </button>
+                <span className="text-[11px] text-slate-500 font-medium hidden sm:inline">
+                  Menu: Template Spreadsheet &amp; Formulir DHP
+                </span>
+              </div>
               
               {/* Header Action Banner */}
               <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-900 via-teal-900 to-slate-900 text-white shadow-md border border-emerald-700/50 flex flex-col md:flex-row md:items-center justify-between gap-4">
