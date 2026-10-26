@@ -1310,6 +1310,35 @@ export class RekapDataProsesTembakauService {
   }
 
   /**
+   * Pembersihan instan di memori/cache lokal untuk batch yang dibatalkan pada tanggal aktif
+   */
+  public static purgeCancelledRowsLocally(activeDateIso: string, validJenisList: string[]): number {
+    const raw = this.getRawData();
+    const validSet = new Set(validJenisList.map(j => j.toLowerCase().replace(/[^a-z0-9]/g, '')));
+    const filtered = raw.filter(r => {
+      if (!r.tanggal || !r.jenisTembakau) return true;
+      const rIso = parseIndonesianDate(r.tanggal);
+      const isoStr = rIso 
+        ? `${rIso.getFullYear()}-${String(rIso.getMonth() + 1).padStart(2, '0')}-${String(rIso.getDate()).padStart(2, '0')}` 
+        : r.tanggal;
+      if (isoStr === activeDateIso) {
+        const cleanJenis = r.jenisTembakau.toLowerCase().replace(/[^a-z0-9]/g, '');
+        // Jika jenis ini tidak ada di DHP dan hasil produksi masih kosong/0, bersihkan!
+        if (!validSet.has(cleanJenis) && (r.hasil === 0 || !r.hasil)) {
+          return false;
+        }
+      }
+      return true;
+    });
+
+    const deletedCount = raw.length - filtered.length;
+    if (deletedCount > 0) {
+      this.saveRawData(filtered);
+    }
+    return deletedCount;
+  }
+
+  /**
    * Mengambil dan memvalidasi data aktif dari Spreadsheet DHP Tembakau (Tab INTEGRASI DATA)
    * Menghubungkan ID 1NDS55VchAgNAeJJbY12ANA8HyJDeNNhAZ33zbojpH5I dengan Rekap Tembakau
    */

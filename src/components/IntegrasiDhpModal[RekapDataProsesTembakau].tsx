@@ -310,21 +310,29 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
     }
   };
 
-  // Handle 1-Click Clean Duplicates & Reconciliation
+  // Handle 1-Click Clean Cancelled Batches & Reconciliation
   const [isReconciling, setIsReconciling] = useState<boolean>(false);
   const handleReconcileLive = async () => {
     setIsReconciling(true);
     setSyncNotice(null);
     try {
+      // 1. Bersihkan di cache lokal web app secara instan (0.01s)
+      if (dhpData?.items && dhpData.items.length > 0) {
+        const activeIso = dhpData.items[0].tanggalRaw || dhpData.items[0].tanggalFormatted;
+        const validJenis = dhpData.items.map(it => it.jenisTembakau);
+        RekapDataProsesTembakauService.purgeCancelledRowsLocally(activeIso, validJenis);
+      }
+
+      // 2. Kirim perintah pembersihan & rekonsiliasi ke Google Apps Script (Live Google Sheets)
       const resp = await fetch('/api/sync-gas', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'cleanDuplicates' })
+        body: JSON.stringify({ action: 'cleanCancelled' })
       });
       const data = await resp.json();
       setSyncNotice({
         type: 'success',
-        message: data?.message || 'Rekonsiliasi selesai: baris duplikat berhasil dihapus dan Netto Baku diselaraskan presisi!'
+        message: data?.message || 'Rekonsiliasi selesai: batch yang dibatalkan berhasil dibersihkan dan data riil DHP diselaraskan presisi!'
       });
       await loadDhpData(false);
     } catch (err: any) {
@@ -461,7 +469,7 @@ function onOpen() {
       .createMenu('⚡ Integrasi DHP Tembakau')
       .addItem('▶ Jalankan Sinkronisasi Sekarang', 'sinkronkanDhpKeRekapManual')
       .addSeparator()
-      .addItem('🧹 Bersihkan Duplikat & Rekonsiliasi Tanggal Aktif', 'BERSIHKAN_DUPLIKAT_DAN_REKONSILIASI')
+      .addItem('🧹 Bersihkan Batch Dibatalkan & Rekonsiliasi Tanggal Aktif', 'BERSIHKAN_DUPLIKAT_DAN_REKONSILIASI')
       .addSeparator()
       .addItem('⏰ Aktifkan Auto-Push 5 Menit', 'AKTIFKAN_AUTO_PUSH_5_MENIT')
       .addItem('🛑 Matikan Auto-Push', 'MATIKAN_AUTO_PUSH')
@@ -751,7 +759,52 @@ function sinkronkanDhpKeRekap(isManual) {
     }
   }
 
-  var summaryMsg = 'Sinkronisasi Selesai: ' + updatedCount + ' baris draft berhasil diselaraskan & diisi, ' + appendedCount + ' baris baru ditambahkan. Formula C, D, E, J, dan K terlindungi 100%.';
+  // 4. MEKANISME OTOMATIS: REVERSE SCANNING & AUTO-PURGE BATCH DIBATALKAN
+  // Menelusuri baris tanggal aktif dari bawah ke atas (bottom-up agar aman).
+  // Jika ada baris template/draft pada tanggal aktif yang TIDAK menerima transaksi riil DHP:
+  // - Jika bobot Baku 0,0 Kg (baris template berlebih): Otomatis langsung dihapus bersih.
+  // - Jika dipanggil secara manual (isManual) atau rekonsiliasi dan hasil = 0 (rencana produksi dibatalkan): Otomatis dihapus agar tidak menjadi data hantu.
+  var purgedCount = 0;
+  if (dhpBatches.length > 0) {
+    var activeTargetDateLabel = dhpBatches[0].dateLabel.toLowerCase();
+    for (var kScan = rekapValues.length - 1; kScan >= 0; kScan--) {
+      var checkRow = CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW + kScan;
+      var rScanRow = rekapValues[kScan];
+      var rScanTgl = rScanRow[1];
+      var rScanJenis = String(rScanRow[5] || '').trim();
+      var rScanBaku = parseDecimalNumber(rScanRow[7]);
+      var rScanHasil = parseDecimalNumber(rScanRow[8]);
+
+      if (!rScanTgl || !rScanJenis) continue;
+
+      var scanDateObj = parseTanggalIndo(rScanTgl);
+      var scanLabel = scanDateObj ? formatKolomBTanggal(scanDateObj).toLowerCase() : String(rScanTgl).trim().toLowerCase();
+
+      // Hanya proses baris pada tanggal aktif DHP yang sama
+      if (scanLabel === activeTargetDateLabel) {
+        var isReceivedRealDhp = false;
+        for (var bIdx = 0; bIdx < dhpBatches.length; bIdx++) {
+          if (cleanStr(dhpBatches[bIdx].jenis) === cleanStr(rScanJenis)) {
+            isReceivedRealDhp = true;
+            break;
+          }
+        }
+
+        // Jika baris tidak menerima transaksi riil DHP dan hasil produksi masih 0:
+        if (!isReceivedRealDhp && rScanHasil === 0) {
+          // Kasus A: Baku 0,0 Kg (Template berlebih) -> Selalu hapus otomatis
+          // Kasus B: Baku > 0 (Rencana produksi batal tapi draft baku terlanjur tercetak) -> Hapus saat sinkronisasi manual
+          if (rScanBaku === 0 || isManual) {
+            Logger.log('🗑️ Auto-Purge baris dibatalkan #' + checkRow + ': ' + rScanJenis + ' (' + rScanTgl + ')');
+            shRekap.deleteRow(checkRow);
+            purgedCount++;
+          }
+        }
+      }
+    }
+  }
+
+  var summaryMsg = 'Sinkronisasi Selesai: ' + updatedCount + ' baris draft berhasil diselaraskan & diisi, ' + appendedCount + ' baris baru ditambahkan' + (purgedCount > 0 ? ', ' + purgedCount + ' baris dibatalkan dibersihkan' : '') + '. Formula C, D, E, J, dan K terlindungi 100%.';
   Logger.log(summaryMsg);
 
   if (isManual) {
@@ -764,6 +817,7 @@ function sinkronkanDhpKeRekap(isManual) {
     success: true,
     updatedCount: updatedCount,
     appendedCount: appendedCount,
+    purgedCount: purgedCount,
     message: summaryMsg
   };
 }
@@ -894,10 +948,16 @@ function BERSIHKAN_DUPLIKAT_DAN_REKONSILIASI() {
       }
 
       if (foundIdx === -1) {
-        // Baris anomali / duplikat dari hari sebelumnya (misal Madura 2024, Weleri 2024, Besuki 2025)
-        Logger.log('🗑️ Hapus baris anomali #' + actualRow + ': ' + rJenis + ' (' + rLabel + ')');
-        shRekap.deleteRow(actualRow);
-        deletedRows++;
+        // Baris anomali / dibatalkan / ghost row yang tidak tercatat di DHP
+        // Pengaman: Hanya hapus jika Netto Hasil masih 0 atau kosong (tidak ada output riil)
+        var rHasilRow = parseDecimalNumber(rowData[8]);
+        if (rHasilRow === 0) {
+          Logger.log('🗑️ Hapus baris dibatalkan #' + actualRow + ': ' + rJenis + ' (' + rLabel + ')');
+          shRekap.deleteRow(actualRow);
+          deletedRows++;
+        } else {
+          Logger.log('⚠️ Lewati baris #' + actualRow + ' (' + rJenis + '): Memiliki Netto Hasil ' + rHasilRow + ' Kg');
+        }
       } else {
         // Baris valid, lakukan koreksi nilai sel mengikuti DHP riil
         var bItem = dhpBatches[foundIdx];
@@ -951,7 +1011,7 @@ function doPost(e) {
     var action = data.action || (e && e.parameter && e.parameter.action) || '';
 
     var result;
-    if (action === 'cleanDuplicates' || action === 'reconcile') {
+    if (action === 'cleanDuplicates' || action === 'cleanCancelled' || action === 'reconcile') {
       result = BERSIHKAN_DUPLIKAT_DAN_REKONSILIASI();
     } else {
       result = sinkronkanDhpKeRekap();
@@ -973,7 +1033,7 @@ function doPost(e) {
 function doGet(e) {
   var action = (e && e.parameter && e.parameter.action) || '';
   var res;
-  if (action === 'cleanDuplicates' || action === 'reconcile') {
+  if (action === 'cleanDuplicates' || action === 'cleanCancelled' || action === 'reconcile') {
     res = BERSIHKAN_DUPLIKAT_DAN_REKONSILIASI();
     return ContentService.createTextOutput(JSON.stringify(res))
       .setMimeType(ContentService.MimeType.JSON);
@@ -1207,6 +1267,19 @@ function doGet(e) {
                       </span>
                     </button>
 
+                    <button
+                      onClick={() => { setShowToolsDropdown(false); handleReconcileLive(); }}
+                      disabled={isReconciling}
+                      className="w-full text-left px-3 py-2 flex items-center justify-between text-amber-800 hover:bg-amber-50 font-semibold transition-colors cursor-pointer text-xs"
+                      title="Bersihkan batch yang dibatalkan / duplikat dan selaraskan data riil DHP"
+                    >
+                      <div className="flex items-center gap-2">
+                        <RefreshCw className={`w-4 h-4 text-amber-600 ${isReconciling ? 'animate-spin' : ''}`} />
+                        <span>Bersihkan Batch Batal &amp; Rekonsiliasi</span>
+                      </div>
+                      <span className="text-[10px] text-amber-700 font-bold">Purge</span>
+                    </button>
+
                     <div className="my-1 border-t border-slate-100" />
 
                     <a
@@ -1342,7 +1415,7 @@ function doGet(e) {
                 </div>
               </div>
 
-              {/* Alert Banner: Deteksi Duplikasi & Selisih Rekap vs DHP */}
+              {/* Alert Banner: Deteksi Batch Dibatalkan & Rekonsiliasi Rekap vs DHP */}
               {((dhpData?.anomalousRekapRows && dhpData.anomalousRekapRows.length > 0) || dhpData?.items.some(it => it.hasBakuMismatch)) && (
                 <div className="p-2.5 sm:p-3 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-300 text-amber-950 text-xs shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-2.5 shrink-0">
                   <div className="flex items-start gap-2.5 min-w-0">
@@ -1351,10 +1424,10 @@ function doGet(e) {
                     </div>
                     <div className="space-y-1 min-w-0">
                       <div className="font-bold text-[11px] sm:text-xs text-amber-950 flex items-center gap-1.5 flex-wrap">
-                        <span>Audit Data 26 Okt: Terdeteksi Anomali Duplikasi di Sheet Rekap</span>
+                        <span>Audit Realisasi ({dhpData?.items?.[0]?.tanggalFormatted || 'Tanggal Aktif'}): Terdeteksi Batch Batal / Duplikat di Rekap</span>
                         {dhpData.anomalousRekapRows && dhpData.anomalousRekapRows.length > 0 && (
                           <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-rose-100 text-rose-800 border border-rose-300">
-                            {dhpData.anomalousRekapRows.length} Baris Duplikat/Hantu
+                            {dhpData.anomalousRekapRows.length} Batch Dibatalkan/Hantu
                           </span>
                         )}
                         {dhpData.items.some(it => it.hasBakuMismatch) && (
@@ -1364,7 +1437,7 @@ function doGet(e) {
                         )}
                       </div>
                       <p className="text-[10px] sm:text-[11px] text-amber-800 leading-relaxed">
-                        DHP 26 Okt hanya memproses <strong>6 jenis tembakau (2.540,6 Kg)</strong>. Di Sheet Rekap terdapat duplikasi dari 23 Okt (Madura, Weleri, Beringin, Sapudi) serta ketidaksesuaian Netto Baku (Ploso: 2.379 vs 1.180 Kg, Beringin: 372 vs 317 Kg, Sapudi: 261 vs 266 Kg).
+                        DHP hanya memproses <strong>{dhpData.totalBatch} varian riil ({formatKg(dhpData.totalBakuKg)})</strong>. Di Sheet Rekap terdapat baris rencana yang tidak jadi diproses / dibatalkan, atau selisih Netto Baku antara draft dan timbangan riil.
                       </p>
                     </div>
                   </div>
@@ -1374,10 +1447,10 @@ function doGet(e) {
                       onClick={handleReconcileLive}
                       disabled={isReconciling}
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-amber-700 hover:bg-amber-800 shadow-xs transition-all disabled:opacity-50 cursor-pointer whitespace-nowrap"
-                      title="Kirim perintah pembersihan duplikat dan koreksi baku ke GAS"
+                      title="Hapus baris batch yang dibatalkan dan selaraskan Netto Baku riil DHP"
                     >
                       <RefreshCw className={`w-3.5 h-3.5 ${isReconciling ? 'animate-spin' : ''}`} />
-                      <span>{isReconciling ? 'Membersihkan...' : 'Bersihkan Duplikat Live'}</span>
+                      <span>{isReconciling ? 'Membersihkan...' : 'Bersihkan Batch Batal Live'}</span>
                     </button>
                   </div>
                 </div>
