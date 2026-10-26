@@ -812,25 +812,25 @@ function doGet(e) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-slate-50 border border-slate-300 rounded-2xl shadow-2xl max-w-7xl w-full h-[94vh] max-h-[94vh] flex flex-col overflow-hidden text-slate-800">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-1 sm:p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-slate-50 border border-slate-300 rounded-xl sm:rounded-2xl shadow-2xl max-w-7xl w-full h-[98vh] sm:h-[94vh] max-h-[98vh] sm:max-h-[94vh] flex flex-col overflow-hidden text-slate-800">
         
         {/* Modal Top Header (Matching Reference Gambar 2) */}
-        <div className="px-4 sm:px-5 py-2.5 sm:py-3 border-b border-slate-800 flex items-center justify-between gap-3 bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 text-white shrink-0">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-xl bg-blue-500/20 border border-blue-400/30 flex items-center justify-center text-blue-300 shadow-sm flex-shrink-0">
-              <Database className="w-4 h-4" />
+        <div className="px-3.5 sm:px-5 py-2 sm:py-3 border-b border-slate-800 flex items-center justify-between gap-2.5 bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 text-white shrink-0">
+          <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl bg-blue-500/20 border border-blue-400/30 flex items-center justify-center text-blue-300 shadow-sm flex-shrink-0">
+              <Database className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </div>
             <div className="min-w-0">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 sm:gap-2">
                 <h2 className="text-xs sm:text-sm font-bold text-white tracking-tight truncate">
                   Integrasi &amp; Sinkronisasi DHP Tembakau
                 </h2>
-                <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 shadow-sm flex-shrink-0">
+                <span className="px-1.5 sm:px-2 py-0.5 rounded-full text-[8px] sm:text-[9px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 shadow-sm flex-shrink-0">
                   Presisi 100%
                 </span>
               </div>
-              <p className="text-[10px] sm:text-[11px] text-slate-300 leading-none mt-0.5 truncate">
+              <p className="text-[9px] sm:text-[11px] text-slate-300 leading-none mt-0.5 truncate hidden xs:block">
                 Pencocokan dan transfer otomatis data aktif DHP Tembakau ke Datasheet Rekap Susut Tembakau
               </p>
             </div>
@@ -841,83 +841,84 @@ function doGet(e) {
             className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors flex-shrink-0 cursor-pointer"
             title="Tutup Modal"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
         </div>
 
         {/* Source & Target Connection Bar (Clean Light Style - Matching Reference Gambar 2) */}
-        <div className="px-4 sm:px-5 py-2 bg-white border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs shrink-0">
-          <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-600">
-            <span className="inline-flex items-center gap-1.5 font-bold text-amber-600">
-              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
-              Sumber DHP:
+        <div className="px-3 sm:px-5 py-1.5 sm:py-2 bg-white border-b border-slate-200 flex flex-wrap items-center justify-between gap-1.5 sm:gap-2 text-xs shrink-0">
+          <div className="flex flex-wrap items-center gap-1 sm:gap-1.5 text-[11px] sm:text-xs text-slate-600">
+            <span className="inline-flex items-center gap-1 font-bold text-amber-600">
+              <span className="w-1.5 sm:w-2 h-1.5 sm:h-2 rounded-full bg-amber-500 animate-pulse"></span>
+              Sumber:
             </span>
-            <span className="bg-slate-100 px-2.5 py-0.5 rounded-lg text-[11px] text-slate-800 font-mono border border-slate-200">
-              Tab <strong className="text-blue-700">INTEGRASI DATA</strong> (1NDS55V...)
+            <span className="bg-slate-100 px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] text-slate-800 font-mono border border-slate-200">
+              Tab <strong className="text-blue-700">INTEGRASI DATA</strong>
             </span>
-            <ArrowRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-            <span className="inline-flex items-center gap-1.5 font-bold text-emerald-700">
-              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-              Target Rekap:
+            <ArrowRight className="w-3 h-3 text-slate-400 shrink-0" />
+            <span className="inline-flex items-center gap-1 font-bold text-emerald-700">
+              <span className="w-1.5 sm:w-2 h-1.5 sm:h-2 rounded-full bg-emerald-500"></span>
+              Target:
             </span>
-            <span className="bg-slate-100 px-2.5 py-0.5 rounded-lg text-[11px] text-slate-800 font-mono border border-slate-200">
-              Tab <strong className="text-emerald-700">REKAP SUSUT TEMBAKAU</strong> (1LnixFR...)
+            <span className="bg-slate-100 px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] text-slate-800 font-mono border border-slate-200">
+              Tab <strong className="text-emerald-700">REKAP SUSUT</strong>
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 ml-auto sm:ml-0">
             {/* Smart Live-Sync Saklar / Toggle Switch */}
             <button
               onClick={() => setAutoPullEnabled(!autoPullEnabled)}
-              className={`inline-flex items-center gap-2 px-3 py-1 rounded-lg border text-xs font-semibold transition-all shadow-xs cursor-pointer ${
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] sm:text-xs font-semibold transition-all shadow-xs cursor-pointer ${
                 autoPullEnabled
                   ? 'bg-emerald-50 hover:bg-emerald-100 border-emerald-300 text-emerald-800'
                   : 'bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-600'
               }`}
               title={autoPullEnabled ? 'Klik untuk menjeda Auto-Tarik' : 'Klik untuk mengaktifkan kembali Auto-Tarik'}
             >
-              <span className={`w-2 h-2 rounded-full ${autoPullEnabled ? 'bg-emerald-500 shadow-xs shadow-emerald-500/50 animate-pulse' : 'bg-slate-400'}`}></span>
-              <span>{autoPullEnabled ? `Auto-Tarik Aktif (${countdown}s)` : 'Auto-Tarik: Jeda'}</span>
+              <span className={`w-1.5 sm:w-2 h-1.5 sm:h-2 rounded-full ${autoPullEnabled ? 'bg-emerald-500 shadow-xs shadow-emerald-500/50 animate-pulse' : 'bg-slate-400'}`}></span>
+              <span>{autoPullEnabled ? `Auto (${countdown}s)` : 'Jeda'}</span>
             </button>
 
             {/* Manual Refresh Button */}
             <button
               onClick={() => loadDhpData(false)}
               disabled={loading}
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-xs font-bold transition-all shadow-xs disabled:opacity-50 cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-[11px] sm:text-xs font-bold transition-all shadow-xs disabled:opacity-50 cursor-pointer"
               title="Perbarui pembacaan lembar DHP secara manual (< 1s)"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading || isAutoPulling ? 'animate-spin' : ''}`} />
-              <span>Tarik Ulang DHP</span>
+              <RefreshCw className={`w-3 sm:w-3.5 h-3 sm:h-3.5 ${loading || isAutoPulling ? 'animate-spin' : ''}`} />
+              <span className="hidden xs:inline">Tarik Ulang</span>
+              <span className="xs:hidden">Tarik</span>
             </button>
           </div>
         </div>
 
-        {/* Sub-Tabs Navigation (Clean Light Style - Matching Reference Gambar 2) */}
-        <div className="px-4 sm:px-5 border-b border-slate-200 flex items-center justify-between gap-2 bg-white shrink-0 overflow-x-auto">
-          <div className="flex items-center gap-1 sm:gap-2">
+        {/* Sub-Tabs Navigation (Clean Light Style - Responsive Horizontal Scrollable) */}
+        <div className="px-3 sm:px-5 border-b border-slate-200 flex items-center justify-between gap-2 bg-white shrink-0 overflow-x-auto scrollbar-none touch-pan-x">
+          <div className="flex items-center gap-1 sm:gap-2 flex-nowrap py-0.5">
             <button
               onClick={() => setActiveTab('transaksi')}
-              className={`flex items-center gap-1.5 py-2.5 px-3 text-xs font-bold border-b-2 transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 py-2 px-2.5 sm:px-3 text-xs font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                 activeTab === 'transaksi'
                   ? 'border-blue-600 text-blue-600'
                   : 'border-transparent text-slate-500 hover:text-slate-800'
               }`}
             >
               <Layers className="w-3.5 h-3.5" />
-              <span>Pratinjau &amp; Transaksi ({dhpData?.totalBatch ?? 0} Batch)</span>
+              <span>Pratinjau ({dhpData?.totalBatch ?? 0})</span>
             </button>
 
             <button
               onClick={() => setActiveTab('analisis_harian')}
-              className={`flex items-center gap-1.5 py-2.5 px-3 text-xs font-bold border-b-2 transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 py-2 px-2.5 sm:px-3 text-xs font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                 activeTab === 'analisis_harian'
                   ? 'border-amber-500 text-amber-700 bg-amber-50/50'
                   : 'border-transparent text-slate-500 hover:text-slate-800'
               }`}
             >
               <TrendingUp className="w-3.5 h-3.5 text-amber-600" />
-              <span>Laporan Analisis Harian</span>
+              <span>Analisis Harian</span>
               <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
                 Deviasi
               </span>
@@ -925,53 +926,54 @@ function doGet(e) {
 
             <button
               onClick={() => setActiveTab('pemetaan')}
-              className={`flex items-center gap-1.5 py-2.5 px-3 text-xs font-bold border-b-2 transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 py-2 px-2.5 sm:px-3 text-xs font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                 activeTab === 'pemetaan'
                   ? 'border-blue-600 text-blue-600'
                   : 'border-transparent text-slate-500 hover:text-slate-800'
               }`}
             >
               <ShieldCheck className="w-3.5 h-3.5" />
-              <span>Pemetaan Kolom &amp; Proteksi Rumus</span>
+              <span>Pemetaan Kolom</span>
             </button>
 
             <button
               onClick={() => setActiveTab('gas')}
-              className={`flex items-center gap-1.5 py-2.5 px-3 text-xs font-bold border-b-2 transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 py-2 px-2.5 sm:px-3 text-xs font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                 activeTab === 'gas'
                   ? 'border-blue-600 text-blue-600'
                   : 'border-transparent text-slate-500 hover:text-slate-800'
               }`}
             >
               <Code className="w-3.5 h-3.5" />
-              <span>Skrip Otomasi GAS</span>
+              <span>Skrip GAS</span>
             </button>
 
             <button
               onClick={() => setActiveTab('template_dhp')}
-              className={`flex items-center gap-1.5 py-2.5 px-3 text-xs font-bold border-b-2 transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 py-2 px-2.5 sm:px-3 text-xs font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                 activeTab === 'template_dhp'
                   ? 'border-emerald-600 text-emerald-700 bg-emerald-50/50'
                   : 'border-transparent text-slate-500 hover:text-slate-800'
               }`}
             >
               <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Template Excel &amp; Spreadsheet</span>
+              <span>Template Excel</span>
               <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
                 Baru
               </span>
             </button>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0 pl-1">
             <a
               href="/api/download-template-dhp-excel"
               download="TEMPLATE_DHP_TEMBAKAU_ADMIN_PROSES.xlsx"
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold text-emerald-800 bg-emerald-100/80 hover:bg-emerald-200 border border-emerald-300 transition-colors shadow-xs shrink-0"
+              className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-lg text-xs font-semibold text-emerald-800 bg-emerald-100/80 hover:bg-emerald-200 border border-emerald-300 transition-colors shadow-xs shrink-0 whitespace-nowrap"
               title="Unduh File Template Excel (.xlsx) untuk formulir DHP"
             >
               <Download className="w-3.5 h-3.5 text-emerald-700" />
-              <span>Unduh Template (.xlsx)</span>
+              <span className="hidden sm:inline">Unduh Template (.xlsx)</span>
+              <span className="sm:hidden">Template .xlsx</span>
             </a>
           </div>
         </div>
@@ -995,102 +997,91 @@ function doGet(e) {
           {activeTab === 'transaksi' && (
             <div className="space-y-2.5 flex-1 flex flex-col min-h-0">
               
-              {/* 3 Compact KPI Summary Cards - Slim & Low Profile */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 flex-shrink-0">
+              {/* 3 Compact KPI Summary Cards - 1 Horizontal Row on Mobile & Tablet */}
+              <div className="grid grid-cols-3 gap-1.5 sm:gap-2.5 flex-shrink-0">
                 {/* Kartu 1: Total Batch Aktif DHP */}
-                <div className="px-3.5 py-2 rounded-xl bg-white border border-slate-200 shadow-xs flex flex-col justify-center">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                      TOTAL BATCH AKTIF DHP
+                <div className="px-2 sm:px-3.5 py-1.5 sm:py-2 rounded-xl bg-white border border-slate-200 shadow-xs flex flex-col justify-center min-w-0">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-slate-500 truncate">
+                      TOTAL BATCH
                     </span>
-                    <Layers className="w-3.5 h-3.5 text-slate-400" />
+                    <Layers className="w-3 sm:w-3.5 h-3 sm:h-3.5 text-slate-400 shrink-0" />
                   </div>
-                  <div className="mt-1 flex items-center justify-between gap-2">
-                    <div className="flex items-baseline gap-1.5">
-                      <span className="text-base sm:text-lg font-black text-slate-900">
-                        {dhpData?.totalBatch || 0} Batch
+                  <div className="mt-0.5 sm:mt-1 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-0.5 sm:gap-2">
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-sm sm:text-lg font-black text-slate-900 leading-tight">
+                        {dhpData?.totalBatch || 0}
                       </span>
-                      <span className="text-[11px] text-slate-500">aktif</span>
+                      <span className="text-[9px] sm:text-[11px] text-slate-500">Batch</span>
                     </div>
-                    <span className="px-2 py-0.5 rounded-lg text-xs font-bold bg-blue-50 border border-blue-200 text-blue-700 whitespace-nowrap font-mono">
-                      {formatKg(dhpData?.totalBakuKg || 0)} Baku
+                    <span className="px-1 sm:px-2 py-0.5 rounded text-[9px] sm:text-xs font-bold bg-blue-50 border border-blue-200 text-blue-700 whitespace-nowrap font-mono truncate">
+                      {formatKg(dhpData?.totalBakuKg || 0)}
                     </span>
                   </div>
                 </div>
 
                 {/* Kartu 2: Terverifikasi di Rekap */}
-                <div className="px-3.5 py-2 rounded-xl bg-white border border-emerald-300/80 shadow-xs flex flex-col justify-center">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800">
-                      TERVERIFIKASI DI REKAP
+                <div className="px-2 sm:px-3.5 py-1.5 sm:py-2 rounded-xl bg-white border border-emerald-300/80 shadow-xs flex flex-col justify-center min-w-0">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-emerald-800 truncate">
+                      TERVERIFIKASI
                     </span>
-                    <span className="px-2 py-0.2 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1">
-                      {dhpData?.terverifikasiPct || 0}% Cocok
-                      <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                    <span className="px-1 sm:px-1.5 py-0.2 rounded text-[8px] sm:text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-0.5 shrink-0">
+                      {dhpData?.terverifikasiPct || 0}%
+                      <CheckCircle2 className="w-2.5 sm:w-3 h-2.5 sm:h-3 text-emerald-600" />
                     </span>
                   </div>
-                  <div className="mt-1 flex items-center justify-between gap-2 flex-wrap">
-                    <div className="flex items-baseline gap-1.5">
-                      <span className="text-base sm:text-lg font-black text-emerald-800">
-                        {dhpData?.terverifikasiCount || 0} Batch
+                  <div className="mt-0.5 sm:mt-1 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-0.5 sm:gap-2">
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-sm sm:text-lg font-black text-emerald-800 leading-tight">
+                        {dhpData?.terverifikasiCount || 0}
                       </span>
-                      <span className="text-[10px] text-emerald-700 font-medium">
-                        (Susut: {formatKg(dhpData?.terverifikasiSusutKg || 0)})
-                      </span>
+                      <span className="text-[9px] sm:text-[11px] text-slate-500">Batch</span>
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="px-2 py-0.5 rounded-lg text-xs font-bold bg-emerald-50 border border-emerald-200 text-emerald-700 whitespace-nowrap font-mono">
-                        {formatKg(dhpData?.terverifikasiHasilKg || 0)} Hasil
-                      </span>
-                      {(dhpData?.mismatchCount || 0) > 0 && (
-                        <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 border border-amber-300 text-amber-900 animate-pulse whitespace-nowrap">
-                          ⚠️ {dhpData?.mismatchCount} Ubah
-                        </span>
-                      )}
-                    </div>
+                    <span className="px-1 sm:px-2 py-0.5 rounded text-[9px] sm:text-xs font-bold bg-emerald-50 border border-emerald-200 text-emerald-700 whitespace-nowrap font-mono truncate">
+                      {formatKg(dhpData?.terverifikasiHasilKg || 0)}
+                    </span>
                   </div>
                 </div>
 
                 {/* Kartu 3: Batch Baru Siap Masuk */}
-                <div className="px-3.5 py-2 rounded-xl bg-white border border-slate-200 shadow-xs flex flex-col justify-center">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                      BATCH BARU SIAP MASUK
+                <div className="px-2 sm:px-3.5 py-1.5 sm:py-2 rounded-xl bg-white border border-slate-200 shadow-xs flex flex-col justify-center min-w-0">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-slate-500 truncate">
+                      BATCH BARU
                     </span>
-                    <ShieldCheck className="w-3.5 h-3.5 text-slate-400" />
+                    <ShieldCheck className="w-3 sm:w-3.5 h-3 sm:h-3.5 text-slate-400 shrink-0" />
                   </div>
-                  <div className="mt-1 flex items-center justify-between gap-2">
-                    <div className="flex items-baseline gap-1.5">
-                      <span className="text-base sm:text-lg font-black text-slate-900">
-                        {dhpData?.batchBaruCount || 0} Batch
+                  <div className="mt-0.5 sm:mt-1 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-0.5 sm:gap-2">
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-sm sm:text-lg font-black text-slate-900 leading-tight">
+                        {dhpData?.batchBaruCount || 0}
                       </span>
-                      <span className="text-[11px] text-slate-500">
-                        {(dhpData?.batchBaruCount || 0) > 0 ? 'perlu dibukukan' : 'sinkron'}
-                      </span>
+                      <span className="text-[9px] sm:text-[11px] text-slate-500">Batch</span>
                     </div>
-                    <span className={`px-2 py-0.5 rounded-lg text-xs font-bold whitespace-nowrap font-mono ${(dhpData?.batchBaruCount || 0) > 0 ? 'bg-amber-50 border border-amber-200 text-amber-800' : 'bg-slate-100 text-slate-600'}`}>
-                      {(dhpData?.batchBaruCount || 0) > 0 ? `${dhpData?.batchBaruCount} Baris Siap` : 'Sinkron Presisi'}
+                    <span className={`px-1 sm:px-2 py-0.5 rounded text-[9px] sm:text-xs font-bold whitespace-nowrap font-mono truncate ${(dhpData?.batchBaruCount || 0) > 0 ? 'bg-amber-50 border border-amber-200 text-amber-800' : 'bg-slate-100 text-slate-600'}`}>
+                      {(dhpData?.batchBaruCount || 0) > 0 ? `${dhpData?.batchBaruCount} Siap` : 'Sinkron'}
                     </span>
                   </div>
                 </div>
               </div>
 
               {/* Transactions Table Section - Maximized Viewport & Dominant (Matching Gambar 2) */}
-              <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs flex-1 flex flex-col min-h-0">
+              <div className="bg-white border border-slate-200 rounded-xl sm:rounded-2xl overflow-hidden shadow-xs flex-1 flex flex-col min-h-0">
                 {/* Header Tabel Transaksi dengan Ringkasan Neraca Segaris (Inline Summary) */}
-                <div className="px-4 py-2.5 bg-slate-50/80 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 flex-shrink-0">
-                  <div className="flex items-center gap-2">
-                    <FileText className="w-4 h-4 text-blue-600" />
-                    <span className="text-xs font-bold text-slate-800">
-                      Daftar Transaksi DHP Terdeteksi (Tab INTEGRASI DATA)
+                <div className="px-3 sm:px-4 py-1.5 sm:py-2.5 bg-slate-50/80 border-b border-slate-200 flex flex-wrap items-center justify-between gap-1.5 sm:gap-2 flex-shrink-0">
+                  <div className="flex items-center gap-1.5 sm:gap-2">
+                    <FileText className="w-3.5 sm:w-4 h-3.5 sm:h-4 text-blue-600 shrink-0" />
+                    <span className="text-[11px] sm:text-xs font-bold text-slate-800">
+                      Daftar Transaksi DHP Terdeteksi
                     </span>
-                    <span className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                    <span className="px-1.5 py-0.5 rounded-md text-[10px] sm:text-[11px] font-medium bg-slate-100 text-slate-600 border border-slate-200 whitespace-nowrap">
                       {dhpData?.items.length || 0} baris aktif
                     </span>
                   </div>
 
                   {/* Ringkasan Neraca Segaris (Inline Summary persis seperti Gambar 2) */}
-                  <div className="text-xs font-mono text-slate-600 flex items-center gap-2">
+                  <div className="text-[10px] sm:text-xs font-mono text-slate-600 flex items-center gap-1.5 sm:gap-2 flex-wrap">
                     <span>Baku: <strong className="text-slate-900">{formatKg(dhpData?.totalBakuKg || 0)}</strong></span>
                     <span className="text-slate-300">·</span>
                     <span>Hasil: <strong className="text-slate-900">{formatKg(dhpData?.totalHasilKg || 0)}</strong></span>
