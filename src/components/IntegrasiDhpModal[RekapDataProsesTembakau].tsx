@@ -696,9 +696,12 @@ function sinkronkanDhpKeRekap(isManual) {
           shRekap.getRange(rowIdx, 7).setValue(batch.jalur);
 
           // Cek apakah baris ini perlu diisi / diperbarui dengan data akhir DHP
-          var needsFill = (rHasil === 0) || 
+          // 🛡️ PROTEKSI ANTI-TIMPA NILAI 0: Jika Netto Hasil di Rekap sudah ada (> 0),
+          // dan data DHP masih bernilai 0 (karena masih berjalan/belum ditimbang output-nya),
+          // JANGAN PERNAH menimpa hasil yang sudah ada dengan 0!
+          var needsFill = (rHasil === 0 && batch.hasil > 0) || 
                           (rRow[8] === '' || rRow[8] === null) || 
-                          (Math.abs(rHasil - batch.hasil) > 0.01) || 
+                          (batch.hasil > 0 && Math.abs(rHasil - batch.hasil) > 0.01) || 
                           (Math.abs(rBaku - batch.baku) > 0.05) ||
                           (Math.abs(rGagang - batch.gagang) > 0.05) ||
                           (Math.abs(rAir - batch.air) > 0.05) ||
@@ -715,7 +718,12 @@ function sinkronkanDhpKeRekap(isManual) {
             }
 
             // Kolom I (Col 9): Netto Hasil (dari DHP)
-            shRekap.getRange(rowIdx, 9).setValue(batch.hasil);
+            // 🛡️ Proteksi: Hanya update hasil jika batch.hasil > 0 (bukan status masih proses/draft)
+            if (batch.hasil > 0) {
+              shRekap.getRange(rowIdx, 9).setValue(batch.hasil);
+            } else if (rHasil === 0 && (rRow[8] === '' || rRow[8] === null)) {
+              shRekap.getRange(rowIdx, 9).setValue(0);
+            }
 
             // Kolom L (Col 12): Gagang
             shRekap.getRange(rowIdx, 12).setValue(batch.gagang);
@@ -991,7 +999,10 @@ function BERSIHKAN_DUPLIKAT_DAN_REKONSILIASI() {
         var bItem = dhpBatches[foundIdx];
         shRekap.getRange(actualRow, 7).setValue(bItem.jalur);   // G: Jalur
         shRekap.getRange(actualRow, 8).setValue(bItem.baku);    // H: Netto Baku (Koreksi)
-        shRekap.getRange(actualRow, 9).setValue(bItem.hasil);   // I: Netto Hasil
+        // 🛡️ Proteksi: Hanya update hasil jika bItem.hasil > 0 (jangan menimpa data selesai dengan 0)
+        if (bItem.hasil > 0) {
+          shRekap.getRange(actualRow, 9).setValue(bItem.hasil);   // I: Netto Hasil
+        }
         shRekap.getRange(actualRow, 12).setValue(bItem.gagang); // L: Gagang
         if (bItem.air > 0) {
           shRekap.getRange(actualRow, 13).setValue(bItem.air);  // M: Air

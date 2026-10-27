@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { generatePanduanPdf } from './scripts/generate_pdf.ts';
+import { generateIncidentPdf } from './scripts/generate_incident_pdf.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -146,6 +147,40 @@ async function startServer() {
       fileStream.pipe(res);
     } catch (err: any) {
       res.status(500).json({ success: false, error: 'Gagal membuka file PDF' });
+    }
+  });
+
+  // API Route: Download PDF Early Warning Celah Sistem
+  app.get('/api/download-early-warning-pdf', async (_req, res) => {
+    try {
+      const filePath = path.resolve(__dirname, 'public', 'EARLY_WARNING_CELAH_SISTEM_DHP_REKAP.pdf');
+      if (!fs.existsSync(filePath)) {
+        await generateIncidentPdf();
+      }
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'attachment; filename="EARLY_WARNING_CELAH_SISTEM_DHP_REKAP.pdf"');
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+      const fileStream = fs.createReadStream(filePath);
+      fileStream.pipe(res);
+    } catch (err: any) {
+      console.error('Error serving early warning PDF download:', err);
+      res.status(500).json({ success: false, error: 'Gagal mengunduh file PDF Early Warning' });
+    }
+  });
+
+  // API Route: View PDF Early Warning Celah Sistem di Browser
+  app.get('/api/view-early-warning-pdf', async (_req, res) => {
+    try {
+      const filePath = path.resolve(__dirname, 'public', 'EARLY_WARNING_CELAH_SISTEM_DHP_REKAP.pdf');
+      if (!fs.existsSync(filePath)) {
+        await generateIncidentPdf();
+      }
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'inline; filename="EARLY_WARNING_CELAH_SISTEM_DHP_REKAP.pdf"');
+      const fileStream = fs.createReadStream(filePath);
+      fileStream.pipe(res);
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: 'Gagal membuka file PDF Early Warning' });
     }
   });
 
