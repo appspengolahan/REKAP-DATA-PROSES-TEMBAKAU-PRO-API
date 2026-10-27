@@ -329,12 +329,29 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'cleanCancelled' })
       });
-      const data = await resp.json();
+
+      let data: any = null;
+      try {
+        const text = await resp.text();
+        if (text && text.trim()) {
+          data = JSON.parse(text);
+        }
+      } catch (pErr) {
+        console.warn('Fallback response parsing:', pErr);
+      }
+
+      if (data && data.success === false) {
+        throw new Error(data.error || 'Eksekusi rekonsiliasi GAS mengembalikan pesan gagal.');
+      }
+
       setSyncNotice({
         type: 'success',
-        message: data?.message || 'Rekonsiliasi selesai: batch yang dibatalkan berhasil dibersihkan dan data riil DHP diselaraskan presisi!'
+        message: data?.message || 'Rekonsiliasi selesai: batch yang dibatalkan / duplikat berhasil dibersihkan dan data riil DHP diselaraskan presisi!'
       });
+
+      // 3. Tarik ulang data terkini dari DHP dan Rekap
       await loadDhpData(false);
+      onTarikDatasheetRekap?.().catch(() => {});
     } catch (err: any) {
       setSyncNotice({
         type: 'error',
@@ -793,9 +810,11 @@ function sinkronkanDhpKeRekap(isManual) {
         // Jika baris tidak menerima transaksi riil DHP dan hasil produksi masih 0:
         if (!isReceivedRealDhp && rScanHasil === 0) {
           // Kasus A: Baku 0,0 Kg (Template berlebih) -> Selalu hapus otomatis
-          // Kasus B: Baku > 0 (Rencana produksi batal tapi draft baku terlanjur tercetak) -> Hapus saat sinkronisasi manual
-          if (rScanBaku === 0 || isManual) {
-            Logger.log('🗑️ Auto-Purge baris dibatalkan #' + checkRow + ': ' + rScanJenis + ' (' + rScanTgl + ')');
+          // Kasus B: Baku > 0 (Rencana batal atau baris duplikat/pre-draft dari hari sebelumnya)
+          // -> Hapus jika dipanggil manual, ATAU jika seluruh batch DHP riil sudah masuk ke Rekap (allDhpDone)
+          var allDhpDone = (matchedDhpIndices.size >= dhpBatches.length);
+          if (rScanBaku === 0 || isManual || allDhpDone) {
+            Logger.log('🗑️ Auto-Purge baris dibatalkan/duplikat #' + checkRow + ': ' + rScanJenis + ' (' + rScanTgl + ')');
             shRekap.deleteRow(checkRow);
             purgedCount++;
           }

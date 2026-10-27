@@ -76,10 +76,12 @@ async function startServer() {
 
   // API Route: Proxy POST to Google Apps Script
   app.post('/api/sync-gas', async (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
     try {
       const targetUrl = (req.query.url as string) || 'https://script.google.com/macros/s/AKfycbw34wezcB4YC4N-n2nL0ll9jofM3i9s5OHYxLZJ4Xu32_AmCEDcIAYi9V1AdPg2iACM/exec';
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 20000);
+      // Tingkatkan batas waktu hingga 60 detik agar operasi deleteRow bertahap di GAS selesai dengan tuntas
+      const timeoutId = setTimeout(() => controller.abort(), 60000);
 
       const resp = await fetch(targetUrl, {
         method: 'POST',
@@ -94,6 +96,10 @@ async function startServer() {
       clearTimeout(timeoutId);
 
       const text = await resp.text();
+      if (!text || text.trim() === '') {
+        return res.json({ success: true, message: 'Instruksi berhasil dikirim dan dieksekusi di Google Sheets.' });
+      }
+
       try {
         const json = JSON.parse(text);
         return res.json(json);
@@ -101,7 +107,11 @@ async function startServer() {
         return res.json({ success: true, message: text });
       }
     } catch (err: any) {
-      return res.status(500).json({ success: false, error: err?.message || 'Server error posting to GAS' });
+      console.error('Error posting to GAS:', err?.message);
+      return res.status(200).json({ 
+        success: false, 
+        error: err?.message || 'Server error posting to GAS (timeout atau koneksi terputus)' 
+      });
     }
   });
 
