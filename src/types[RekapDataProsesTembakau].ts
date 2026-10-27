@@ -140,6 +140,12 @@ export interface DhpBatchItem {
   rekapHasil?: number;
   rekapBaku?: number;
   hasBakuMismatch?: boolean;
+  hasGagangMismatch?: boolean;
+  rekapGagang?: number;
+  hasAirMismatch?: boolean;
+  rekapAir?: number;
+  hasDebuMismatch?: boolean;
+  rekapDebu?: number;
 }
 
 export interface DhpIntegrationData {

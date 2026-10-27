@@ -662,6 +662,9 @@ function sinkronkanDhpKeRekap(isManual) {
     var rJalur = String(rRow[6] || '').trim().toUpperCase(); // Kolom G: Jenis/Jalur (SKT / SKM)
     var rBaku = parseDecimalNumber(rRow[7]); // Kolom H: Netto Baku
     var rHasil = parseDecimalNumber(rRow[8]); // Kolom I: Netto Hasil
+    var rGagang = parseDecimalNumber(rRow[11]); // Kolom L: Gagang
+    var rAir = parseDecimalNumber(rRow[12]); // Kolom M: Air
+    var rDebu = parseDecimalNumber(rRow[13]); // Kolom N: Debu
 
     if (rTgl && String(rTgl).trim() !== '') {
       actualMaxRow = Math.max(actualMaxRow, rowIdx);
@@ -693,7 +696,13 @@ function sinkronkanDhpKeRekap(isManual) {
           shRekap.getRange(rowIdx, 7).setValue(batch.jalur);
 
           // Cek apakah baris ini perlu diisi / diperbarui dengan data akhir DHP
-          var needsFill = (rHasil === 0) || (rRow[8] === '' || rRow[8] === null) || (Math.abs(rHasil - batch.hasil) > 0.01) || (Math.abs(rBaku - batch.baku) > 0.05);
+          var needsFill = (rHasil === 0) || 
+                          (rRow[8] === '' || rRow[8] === null) || 
+                          (Math.abs(rHasil - batch.hasil) > 0.01) || 
+                          (Math.abs(rBaku - batch.baku) > 0.05) ||
+                          (Math.abs(rGagang - batch.gagang) > 0.05) ||
+                          (Math.abs(rAir - batch.air) > 0.05) ||
+                          (Math.abs(rDebu - batch.debu) > 0.05);
 
           if (needsFill) {
             // ========================================================
@@ -1606,7 +1615,15 @@ function doGet(e) {
                               {item.isMismatch ? (
                                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300 shadow-xs animate-pulse whitespace-nowrap">
                                   <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                                  <span>Hasil Berubah (Rekap {formatKg(item.rekapHasil || 0)} ➔ DHP {formatKg(item.hasil)})</span>
+                                  <span>
+                                    {item.hasGagangMismatch
+                                      ? `Gagang Diperbarui (Rekap ${formatKg(item.rekapGagang || 0)} ➔ DHP ${formatKg(item.gagangKg)})`
+                                      : item.hasBakuMismatch
+                                      ? `Baku Berbeda (Rekap ${formatKg(item.rekapBaku || 0)} ➔ DHP ${formatKg(item.nettoBaku)})`
+                                      : item.hasAirMismatch || item.hasDebuMismatch
+                                      ? `Fraksi Diperbarui (Debu/Air)`
+                                      : `Hasil Berubah (Rekap ${formatKg(item.rekapHasil || 0)} ➔ DHP ${formatKg(item.hasil)})`}
+                                  </span>
                                 </span>
                               ) : item.alreadyInRekap ? (
                                 <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-300 shadow-xs whitespace-nowrap">
@@ -1673,21 +1690,35 @@ function doGet(e) {
                 )}
               </div>
 
-              {/* Compact Sync Action Bar (Hanya tampil jika ada data yang perlu dibukukan/diselaraskan) */}
-              {(((dhpData?.batchBaruCount || 0) > 0) || ((dhpData?.mismatchCount || 0) > 0)) && (
-                <div className="px-3.5 py-2 bg-blue-50/90 rounded-xl border border-blue-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shrink-0 shadow-xs">
+              {/* Action Bar Sinkronisasi Selalu Ditampilkan */}
+              {dhpData && (
+                <div className={`px-3.5 py-2.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shrink-0 shadow-xs transition-colors ${
+                  (((dhpData?.batchBaruCount || 0) > 0) || ((dhpData?.mismatchCount || 0) > 0))
+                    ? 'bg-blue-50/95 border-blue-300'
+                    : 'bg-emerald-50/90 border-emerald-300'
+                }`}>
                   <div className="flex items-center gap-2 text-xs">
-                    <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0" />
-                    <span className="text-slate-700 font-semibold text-[11px]">
+                    {(((dhpData?.batchBaruCount || 0) > 0) || ((dhpData?.mismatchCount || 0) > 0)) ? (
+                      <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0" />
+                    ) : (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    )}
+                    <span className="text-slate-800 font-semibold text-[11px]">
                       {(dhpData?.mismatchCount || 0) > 0
-                        ? `⚠️ Ditemukan ${dhpData?.mismatchCount} batch dengan data hasil berubah dan ${dhpData?.batchBaruCount || 0} batch baru yang siap diselaraskan.`
-                        : `Terdapat ${dhpData?.batchBaruCount} batch baru yang siap dibukukan ke baris baru Sheet Rekap.`}
+                        ? `⚠️ Ditemukan ${dhpData?.mismatchCount} batch dengan data timbangan (hasil/gagang/fraksi) diperbarui dan ${dhpData?.batchBaruCount || 0} batch baru yang siap diselaraskan.`
+                        : (dhpData?.batchBaruCount || 0) > 0
+                        ? `Terdapat ${dhpData?.batchBaruCount} batch baru yang siap dibukukan ke baris baru Sheet Rekap.`
+                        : `Semua data DHP (${dhpData?.totalBatch || 0} batch) sudah 100% selaras presisi dengan baris Sheet Rekap.`}
                     </span>
                   </div>
                   <button
                     onClick={handleSyncToRekap}
                     disabled={isSyncingToRekap}
-                    className="inline-flex items-center justify-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-xs transition-all disabled:opacity-50 shrink-0 cursor-pointer"
+                    className={`inline-flex items-center justify-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold shadow-xs transition-all disabled:opacity-50 shrink-0 cursor-pointer ${
+                      (((dhpData?.batchBaruCount || 0) > 0) || ((dhpData?.mismatchCount || 0) > 0))
+                        ? 'text-white bg-blue-600 hover:bg-blue-700'
+                        : 'text-emerald-800 bg-white hover:bg-emerald-100 border border-emerald-300'
+                    }`}
                     title="Sinkronkan dan selaraskan data batch DHP ke sheet rekap"
                   >
                     {isSyncingToRekap ? (
@@ -1697,8 +1728,12 @@ function doGet(e) {
                       </>
                     ) : (
                       <>
-                        <Send className="w-3.5 h-3.5 text-white" />
-                        <span>Sinkronkan ke Sheet Rekap</span>
+                        <Send className="w-3.5 h-3.5" />
+                        <span>
+                          {(((dhpData?.batchBaruCount || 0) > 0) || ((dhpData?.mismatchCount || 0) > 0))
+                            ? `Sinkronkan ke Sheet Rekap (${(dhpData?.batchBaruCount || 0) + (dhpData?.mismatchCount || 0)} Batch)`
+                            : 'Sinkronkan Ulang ke Sheet Rekap'}
+                        </span>
                       </>
                     )}
                   </button>

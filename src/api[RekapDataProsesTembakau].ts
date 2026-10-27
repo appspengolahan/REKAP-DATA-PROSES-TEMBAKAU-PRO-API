@@ -1379,6 +1379,9 @@ export class RekapDataProsesTembakauService {
       baku: number;
       hasil: number;
       jalur: string;
+      gagangKg: number;
+      airKg: number;
+      debuKg: number;
     }
 
     const rekapMap = new Map<string, RekapRowRef>();
@@ -1394,7 +1397,10 @@ export class RekapDataProsesTembakauService {
         jenisTembakau: r.jenisTembakau,
         baku: r.baku || 0,
         hasil: r.hasil || 0,
-        jalur: r.jenisProses || 'SKT'
+        jalur: r.jenisProses || 'SKT',
+        gagangKg: r.gagangKg || 0,
+        airKg: r.airKg || 0,
+        debuKg: r.debuKg || 0
       };
 
       if (tglClean && jenisClean) {
@@ -1548,6 +1554,13 @@ export class RekapDataProsesTembakauService {
       const waktu = (row[12] || '-').trim();
 
       const roundedHasil = Math.round(hasil * 10) / 10;
+      const roundedGagang = Math.round(gagangKg * 10) / 10;
+      const roundedAir = Math.round(airKg * 10) / 10;
+      const roundedDebu = Math.round(debuKg * 10) / 10;
+
+      const rekapGagang = matchedRekap ? Math.round((matchedRekap.gagangKg || 0) * 10) / 10 : undefined;
+      const rekapAir = matchedRekap ? Math.round((matchedRekap.airKg || 0) * 10) / 10 : undefined;
+      const rekapDebu = matchedRekap ? Math.round((matchedRekap.debuKg || 0) * 10) / 10 : undefined;
 
       // Deteksi Selisih Netto Baku antara Rekap dan DHP:
       const hasBakuMismatch = Boolean(
@@ -1566,13 +1579,35 @@ export class RekapDataProsesTembakauService {
         Math.abs(rekapHasil - roundedHasil) > 0.05
       );
 
-      // Terverifikasi penuh jika sudah ada di rekap dan nilai hasilnya cocok
+      // Deteksi Mismatch / Perubahan Gagang (misal timbangan gagang baru diinput di DHP):
+      const hasGagangMismatch = Boolean(
+        matchedRekap &&
+        rekapGagang !== undefined &&
+        Math.abs(rekapGagang - roundedGagang) > 0.1
+      );
+
+      // Deteksi Mismatch / Perubahan Air:
+      const hasAirMismatch = Boolean(
+        matchedRekap &&
+        rekapAir !== undefined &&
+        Math.abs(rekapAir - roundedAir) > 0.1
+      );
+
+      // Deteksi Mismatch / Perubahan Debu:
+      const hasDebuMismatch = Boolean(
+        matchedRekap &&
+        rekapDebu !== undefined &&
+        Math.abs(rekapDebu - roundedDebu) > 0.1
+      );
+
+      const hasAnyMismatch = hasHasilMismatch || hasBakuMismatch || hasGagangMismatch || hasAirMismatch || hasDebuMismatch;
+
+      // Terverifikasi penuh jika sudah ada di rekap dan seluruh timbangan cocok
       const isAlreadyFilledInRekap = Boolean(
         matchedRekap &&
         rekapHasil !== undefined &&
         rekapHasil > 0 &&
-        !hasHasilMismatch &&
-        !hasBakuMismatch
+        !hasAnyMismatch
       );
 
       let statusIntegrasi = 'Batch Baru (Siap Masuk)';
@@ -1581,6 +1616,12 @@ export class RekapDataProsesTembakauService {
         mismatchCount++;
       } else if (hasHasilMismatch) {
         statusIntegrasi = 'Hasil Berubah';
+        mismatchCount++;
+      } else if (hasGagangMismatch) {
+        statusIntegrasi = `Gagang Diperbarui (${rekapGagang} Kg ➔ ${roundedGagang} Kg)`;
+        mismatchCount++;
+      } else if (hasDebuMismatch || hasAirMismatch) {
+        statusIntegrasi = 'Fraksi Susut Diperbarui';
         mismatchCount++;
       } else if (isAlreadyFilledInRekap) {
         statusIntegrasi = matchedRowNumber ? `Sudah Masuk di Rekap (Baris ${matchedRowNumber})` : 'Sudah Masuk di Rekap';
@@ -1608,15 +1649,21 @@ export class RekapDataProsesTembakauService {
         hasil: roundedHasil,
         susutKg: Math.round(susutKg * 10) / 10,
         susutPct: Math.round(susutPct * 100) / 100,
-        gagangKg: Math.round(gagangKg * 10) / 10,
-        airKg: Math.round(airKg * 10) / 10,
-        debuKg: Math.round(debuKg * 10) / 10,
+        gagangKg: roundedGagang,
+        airKg: roundedAir,
+        debuKg: roundedDebu,
         statusIntegrasi,
         alreadyInRekap: isAlreadyFilledInRekap,
         matchedRow: matchedRowNumber,
         matchKey: matchKeyIso,
-        isMismatch: hasHasilMismatch || hasBakuMismatch,
+        isMismatch: hasAnyMismatch,
         hasBakuMismatch,
+        hasGagangMismatch,
+        rekapGagang,
+        hasAirMismatch,
+        rekapAir,
+        hasDebuMismatch,
+        rekapDebu,
         rekapHasil,
         rekapBaku
       });
