@@ -1340,10 +1340,17 @@ export class RekapDataProsesTembakauService {
         isSameDate = rClean.includes(targetIso) || targetIso.includes(rClean);
       }
 
+      const cleanJenis = r.jenisTembakau.toLowerCase().replace(/[^a-z0-9]/g, '');
+
       if (isSameDate) {
-        const cleanJenis = r.jenisTembakau.toLowerCase().replace(/[^a-z0-9]/g, '');
         // Jika jenis ini tidak ada di DHP dan hasil produksi masih kosong/0, bersihkan!
         if (!validSet.has(cleanJenis) && (r.hasil === 0 || !r.hasil)) {
+          return false;
+        }
+      } else {
+        // Baris tanggal lain: Jika jenis ini sedang aktif diproses di DHP dan baris lama ini ber-hasil 0,
+        // ini adalah draft usang / batch yang dijadwalkan ulang yang harus dibersihkan agar tidak menduplikasi!
+        if (validSet.has(cleanJenis) && (r.hasil === 0 || !r.hasil)) {
           return false;
         }
       }
@@ -1415,6 +1422,13 @@ export class RekapDataProsesTembakauService {
         // 3. Fallback: Tanggal + Jenis
         if (!rekapMap.has(`${tglClean}|${jenisClean}`)) {
           rekapMap.set(`${tglClean}|${jenisClean}`, ref);
+        }
+        // 4. Kunci Draft Menggantung (Orphan Draft): Jika baris ini belum ada hasil (hasil === 0), catat sebagai kandidat reschedule
+        if (ref.hasil === 0 && bakuRound > 0) {
+          rekapMap.set(`DRAFT|${jenisClean}|${bakuRound}`, ref);
+          if (!rekapMap.has(`DRAFT|${jenisClean}`)) {
+            rekapMap.set(`DRAFT|${jenisClean}`, ref);
+          }
         }
       }
     });
@@ -1678,11 +1692,15 @@ export class RekapDataProsesTembakauService {
       currentRows.forEach(r => {
         if (!r.tanggal || !r.jenisTembakau) return;
         const rIso = parseToIsoDate(r.tanggal) || r.tanggal;
+        const rClean = r.jenisTembakau.toLowerCase().replace(/[^a-z0-9]/g, '');
+
         if (rIso === activeIsoDate) {
-          const rClean = r.jenisTembakau.toLowerCase().replace(/[^a-z0-9]/g, '');
           if (!activeJenisSet.has(rClean)) {
             anomalousRekapRows.push(r);
           }
+        } else if ((r.hasil === 0 || !r.hasil) && activeJenisSet.has(rClean)) {
+          // Baris orphan draft / reschedule dari tanggal sebelumnya (misal Madura 2024 di baris 1556)
+          anomalousRekapRows.push(r);
         }
       });
     }

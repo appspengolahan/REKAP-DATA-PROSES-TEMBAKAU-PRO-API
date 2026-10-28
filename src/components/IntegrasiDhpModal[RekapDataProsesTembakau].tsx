@@ -758,6 +758,43 @@ function sinkronkanDhpKeRekap(isManual) {
   for (var m = 0; m < dhpBatches.length; m++) {
     if (!matchedDhpIndices.has(m)) {
       var item = dhpBatches[m];
+
+      // 🛡️ CEK DRAFT TERTUNDA LINTAS TANGGAL: Periksa apakah ada baris draft (hasil = 0) dari tanggal sebelumnya
+      // dengan jenis dan bobot baku yang sama (misal Madura 2024 yang dijadwalkan ulang)
+      var foundDraftRowIdx = -1;
+      for (var dScan = rekapValues.length - 1; dScan >= 0; dScan--) {
+        var dRow = rekapValues[dScan];
+        var dJenis = cleanStr(dRow[5]);
+        var dHasil = parseDecimalNumber(dRow[8]);
+        var dBaku = parseDecimalNumber(dRow[7]);
+        if (dJenis === cleanStr(item.jenis) && dHasil === 0 && (dBaku === 0 || Math.abs(dBaku - item.baku) < 5)) {
+          foundDraftRowIdx = CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW + dScan;
+          break;
+        }
+      }
+
+      if (foundDraftRowIdx !== -1) {
+        // Alihkan baris draft lama ke tanggal aktif & isi data riil DHP (mencegah penambahan baris duplikat)
+        Logger.log('🔄 Memutasi baris draft lama #' + foundDraftRowIdx + ' menjadi tanggal ' + item.dateLabel);
+        shRekap.getRange(foundDraftRowIdx, 2).setValue(item.dateLabel); // B: Tanggal diperbarui ke tanggal aktif
+        shRekap.getRange(foundDraftRowIdx, 6).setValue(item.jenis);     // F: Jenis
+        shRekap.getRange(foundDraftRowIdx, 7).setValue(item.jalur);     // G: Jalur (SKT/SKM)
+        shRekap.getRange(foundDraftRowIdx, 8).setValue(item.baku);      // H: Netto Baku
+        if (item.hasil > 0) {
+          shRekap.getRange(foundDraftRowIdx, 9).setValue(item.hasil);   // I: Netto Hasil
+        }
+        shRekap.getRange(foundDraftRowIdx, 12).setValue(item.gagang);   // L: Gagang
+        if (item.air > 0) {
+          shRekap.getRange(foundDraftRowIdx, 13).setValue(item.air);    // M: Air
+        } else {
+          shRekap.getRange(foundDraftRowIdx, 13).clearContent();
+        }
+        shRekap.getRange(foundDraftRowIdx, 14).setValue(item.debu);     // N: Debu
+        updatedCount++;
+        matchedDhpIndices.add(m);
+        continue;
+      }
+
       var targetRow = actualMaxRow + 1;
       actualMaxRow = targetRow;
 
@@ -793,11 +830,10 @@ function sinkronkanDhpKeRekap(isManual) {
     }
   }
 
-  // 4. MEKANISME OTOMATIS: REVERSE SCANNING & AUTO-PURGE BATCH DIBATALKAN
-  // Menelusuri baris tanggal aktif dari bawah ke atas (bottom-up agar aman).
-  // Jika ada baris template/draft pada tanggal aktif yang TIDAK menerima transaksi riil DHP:
-  // - Jika bobot Baku 0,0 Kg (baris template berlebih): Otomatis langsung dihapus bersih.
-  // - Jika dipanggil secara manual (isManual) atau rekonsiliasi dan hasil = 0 (rencana produksi dibatalkan): Otomatis dihapus agar tidak menjadi data hantu.
+  // 4. MEKANISME OTOMATIS: REVERSE SCANNING & AUTO-PURGE BATCH DIBATALKAN / GHOST ROW
+  // Menelusuri baris dari bawah ke atas (bottom-up agar aman).
+  // - Kasus 1: Baris pada tanggal aktif yang TIDAK menerima transaksi riil DHP dan hasil = 0 (dibatalkan) -> Hapus
+  // - Kasus 2: Baris dari tanggal lama yang ber-hasil 0 (draft usang) di mana batch-nya sudah diproses pada tanggal aktif -> Hapus
   var purgedCount = 0;
   if (dhpBatches.length > 0) {
     var activeTargetDateLabel = dhpBatches[0].dateLabel.toLowerCase();
@@ -814,27 +850,31 @@ function sinkronkanDhpKeRekap(isManual) {
       var scanDateObj = parseTanggalIndo(rScanTgl);
       var scanLabel = scanDateObj ? formatKolomBTanggal(scanDateObj).toLowerCase() : String(rScanTgl).trim().toLowerCase();
 
-      // Hanya proses baris pada tanggal aktif DHP yang sama
-      if (scanLabel === activeTargetDateLabel) {
-        var isReceivedRealDhp = false;
-        for (var bIdx = 0; bIdx < dhpBatches.length; bIdx++) {
-          if (cleanStr(dhpBatches[bIdx].jenis) === cleanStr(rScanJenis)) {
-            isReceivedRealDhp = true;
-            break;
-          }
+      // Cek apakah jenis tembakau ini ada di DHP aktif
+      var isMatchingActiveDhp = false;
+      for (var bIdx = 0; bIdx < dhpBatches.length; bIdx++) {
+        if (cleanStr(dhpBatches[bIdx].jenis) === cleanStr(rScanJenis)) {
+          isMatchingActiveDhp = true;
+          break;
         }
+      }
 
-        // Jika baris tidak menerima transaksi riil DHP dan hasil produksi masih 0:
-        if (!isReceivedRealDhp && rScanHasil === 0) {
-          // Kasus A: Baku 0,0 Kg (Template berlebih) -> Selalu hapus otomatis
-          // Kasus B: Baku > 0 (Rencana batal atau baris duplikat/pre-draft dari hari sebelumnya)
-          // -> Hapus jika dipanggil manual, ATAU jika seluruh batch DHP riil sudah masuk ke Rekap (allDhpDone)
+      // KASUS 1: Baris pada tanggal aktif DHP
+      if (scanLabel === activeTargetDateLabel) {
+        if (!isMatchingActiveDhp && rScanHasil === 0) {
           var allDhpDone = (matchedDhpIndices.size >= dhpBatches.length);
           if (rScanBaku === 0 || isManual || allDhpDone) {
-            Logger.log('🗑️ Auto-Purge baris dibatalkan/duplikat #' + checkRow + ': ' + rScanJenis + ' (' + rScanTgl + ')');
+            Logger.log('🗑️ Auto-Purge baris dibatalkan #' + checkRow + ': ' + rScanJenis + ' (' + rScanTgl + ')');
             shRekap.deleteRow(checkRow);
             purgedCount++;
           }
+        }
+      } else {
+        // KASUS 2: Baris tanggal lama (orphan draft) yang memiliki hasil 0 dan jenisnya sudah tercatat/diproses di DHP aktif
+        if (isMatchingActiveDhp && rScanHasil === 0) {
+          Logger.log('🗑️ Auto-Purge draft usang tanggal lampau #' + checkRow + ': ' + rScanJenis + ' (' + rScanTgl + ')');
+          shRekap.deleteRow(checkRow);
+          purgedCount++;
         }
       }
     }
@@ -1011,6 +1051,25 @@ function BERSIHKAN_DUPLIKAT_DAN_REKONSILIASI() {
         }
         shRekap.getRange(actualRow, 14).setValue(bItem.debu);   // N: Debu
         reconciledRows++;
+      }
+    } else {
+      // 🛡️ PEMBERSIHAN DUPLIKAT DRAFT TANGGAL LAMPAU:
+      // Jika baris ini bukan tanggal aktif DHP, tapi memiliki Netto Hasil = 0 (draft usang / reschedule)
+      // dan jenis tembakaunya sama dengan salah satu batch yang sedang aktif di DHP (misal Madura 2024 (BAT) R di baris 1556):
+      var rHasilRowPast = parseDecimalNumber(rowData[8]);
+      if (rHasilRowPast === 0) {
+        var isDuplicateOfActiveDhp = false;
+        for (var bPast = 0; bPast < dhpBatches.length; bPast++) {
+          if (clean(dhpBatches[bPast].jenis) === clean(rJenis)) {
+            isDuplicateOfActiveDhp = true;
+            break;
+          }
+        }
+        if (isDuplicateOfActiveDhp) {
+          Logger.log('🗑️ Hapus baris draft duplikat tanggal usang #' + actualRow + ': ' + rJenis + ' (' + rLabel + ')');
+          shRekap.deleteRow(actualRow);
+          deletedRows++;
+        }
       }
     }
   }
