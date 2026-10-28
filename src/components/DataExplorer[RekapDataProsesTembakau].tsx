@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { RawRowData, UserRole } from '../types[RekapDataProsesTembakau]';
-import { formatKg, formatPct, formatHariTanggalIndo, parseDateValue } from '../api[RekapDataProsesTembakau]';
+import { formatKg, formatPct, formatHariTanggalIndo, parseDateValue, RekapDataProsesTembakauService } from '../api[RekapDataProsesTembakau]';
 import {
   Search,
   Plus,
@@ -51,8 +51,9 @@ export const DataExplorerRekapDataProsesTembakau: React.FC<DataExplorerProps> = 
 
   // Urutkan dan filter data: default terbaru berada paling atas
   const sortedAndFiltered = useMemo(() => {
+    const cleanedRows = RekapDataProsesTembakauService.deduplicateAndCleanRows(rows);
     const searchLower = searchTerm.trim().toLowerCase();
-    const result = rows.filter((r) => {
+    const result = cleanedRows.filter((r) => {
       const dateFormatted = formatHariTanggalIndo(r.tanggal);
       const matchSearch =
         !searchLower ||

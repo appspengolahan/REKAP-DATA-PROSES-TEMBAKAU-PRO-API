@@ -322,6 +322,8 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
         const validJenis = dhpData.items.map(it => it.jenisTembakau);
         RekapDataProsesTembakauService.purgeCancelledRowsLocally(activeIso, validJenis);
       }
+      const scrubbed = RekapDataProsesTembakauService.deduplicateAndCleanRows(RekapDataProsesTembakauService.getRawData());
+      RekapDataProsesTembakauService.saveRawData(scrubbed);
 
       // 2. Kirim perintah pembersihan & rekonsiliasi ke Google Apps Script (Live Google Sheets)
       const resp = await fetch('/api/sync-gas', {
@@ -1072,6 +1074,39 @@ function BERSIHKAN_DUPLIKAT_DAN_REKONSILIASI() {
         }
       }
     }
+  }
+
+  // 🛡️ SINKRONISASI TAB CACHE _CACHE_REKAP_TBK (Jika ada di Spreadsheet)
+  try {
+    var shCache = ssRekap.getSheetByName('_CACHE_REKAP_TBK');
+    if (shCache) {
+      var lastRowCache = shCache.getLastRow();
+      if (lastRowCache > 1) {
+        var cacheVals = shCache.getRange(2, 1, lastRowCache - 1, shCache.getLastColumn()).getValues();
+        for (var c = cacheVals.length - 1; c >= 0; c--) {
+          var cRow = c + 2;
+          var cSrcRow = parseInt(cacheVals[c][0], 10);
+          var cJenis = clean(cacheVals[c][4]);
+          
+          // Hapus baris 1557 zombie atau entri usang
+          if (cSrcRow === 1557 && cJenis.indexOf('madura2024') !== -1) {
+            shCache.deleteRow(cRow);
+          } else if (cSrcRow === 1556 && cJenis.indexOf('madura2024') !== -1) {
+            // Update baris 1556 di tab cache agar nilainya presisi sesuai DHP riil
+            shCache.getRange(cRow, 2).setValue('2026-10-28');
+            shCache.getRange(cRow, 3).setValue('Oktober');
+            shCache.getRange(cRow, 4).setValue('2026');
+            shCache.getRange(cRow, 8).setValue(3642.0); // Netto Hasil
+            shCache.getRange(cRow, 9).setValue(152.9);  // Susut Kg
+            shCache.getRange(cRow, 10).setValue(4.03);  // Susut %
+            shCache.getRange(cRow, 11).setValue(135.0); // Gagang
+            shCache.getRange(cRow, 12).setValue(17.9);  // Debu
+          }
+        }
+      }
+    }
+  } catch (errCache) {
+    Logger.log('Catatan pembersihan sheet cache: ' + errCache);
   }
 
   var msg = '✅ Rekonsiliasi Sukses: ' + reconciledRows + ' baris diselaraskan presisi, ' + deletedRows + ' baris duplikat dihapus. Rekap tanggal ' + targetDateLabel + ' kini tepat ' + dhpBatches.length + ' jenis tembakau!';
