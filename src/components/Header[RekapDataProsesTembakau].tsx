@@ -17,7 +17,8 @@ import {
   ChevronRight,
   GitCompare,
   Check,
-  Cable
+  Cable,
+  Printer
 } from 'lucide-react';
 import { UserRole, JenisProsesType, GasConfig } from '../types[RekapDataProsesTembakau]';
 
@@ -271,10 +272,20 @@ export const HeaderRekapDataProsesTembakau: React.FC<HeaderProps> = ({
               )}
             </button>
 
+            {/* Cetak Langsung Button */}
+            <button
+              onClick={() => window.print()}
+              className="hidden lg:flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border border-slate-700 bg-slate-800/90 hover:bg-slate-700 text-slate-200 text-xs font-semibold shadow-sm transition-colors cursor-pointer"
+              title="Cetak langsung dokumen halaman aktif ke printer fisik"
+            >
+              <Printer className="w-3.5 h-3.5 text-slate-400" />
+              <span>Cetak</span>
+            </button>
+
             {/* Export PDF Button */}
             <button
               onClick={onExportPdf}
-              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-sm transition-colors"
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-sm transition-colors cursor-pointer"
               title="Cetak / Unduh Laporan PDF Resmi"
             >
               <FileText className="w-3.5 h-3.5" />

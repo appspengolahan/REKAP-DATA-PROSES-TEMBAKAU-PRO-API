@@ -41,7 +41,8 @@ import {
   FileText,
   LayoutGrid,
   Menu,
-  Cable
+  Cable,
+  Printer
 } from 'lucide-react';
 
 const STORAGE_SIDEBAR_COLLAPSED = 'PP1_SIDEBAR_COLLAPSED_TBK';
@@ -445,13 +446,23 @@ export default function App() {
                         Penelusuran detail setiap baris entri sheet REKAP SUSUT TEMBAKAU
                       </p>
                     </div>
-                    <button
-                      onClick={() => handleExportPdf('Log_Data_Harian')}
-                      className="no-print flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition-colors"
-                    >
-                      <FileText className="w-3.5 h-3.5" />
-                      <span>Export PDF</span>
-                    </button>
+                    <div className="no-print flex items-center gap-2">
+                      <button
+                        onClick={() => window.print()}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-800 text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                        title="Cetak langsung ke printer fisik"
+                      >
+                        <Printer className="w-3.5 h-3.5 text-slate-700" />
+                        <span>Cetak Dokumen</span>
+                      </button>
+                      <button
+                        onClick={() => handleExportPdf('Log_Data_Harian')}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition-colors cursor-pointer"
+                      >
+                        <FileText className="w-3.5 h-3.5" />
+                        <span>Export PDF</span>
+                      </button>
+                    </div>
                   </div>
                   <DataExplorerRekapDataProsesTembakau
                     rows={rows}

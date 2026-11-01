@@ -1,7 +1,7 @@
 import React from 'react';
 import { RawRowData } from '../types[RekapDataProsesTembakau]';
 import { formatKg, formatPct } from '../api[RekapDataProsesTembakau]';
-import { GitCompare, Scale, Droplet, Wind, ArrowRight, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import { GitCompare, Scale, Droplet, Wind, ArrowRight, ShieldCheck, CheckCircle2, Printer, Download } from 'lucide-react';
 
 interface MatriksSktSkmProps {
   rows: RawRowData[];
@@ -57,26 +57,79 @@ export const MatriksSktSkmRekapDataProsesTembakau: React.FC<MatriksSktSkmProps> 
   const skt = computeMetrics(sktRows);
   const skm = computeMetrics(skmRows);
 
+  const handleExportPdf = () => {
+    const origTitle = document.title;
+    document.title = `Matriks_Komparasi_SKT_vs_SKM_Tahun_${selectedTahun}`;
+    window.print();
+    setTimeout(() => {
+      document.title = origTitle;
+    }, 1000);
+  };
+
   return (
     <div className="space-y-6">
-      {/* Intro Banner */}
-      <div className="bg-gradient-to-r from-slate-900 to-slate-800 text-white rounded-2xl p-5 shadow-sm">
-        <div className="flex items-center gap-3 mb-2">
-          <div className="p-2 bg-blue-500/20 text-blue-400 rounded-xl border border-blue-500/30">
-            <GitCompare className="w-5 h-5" />
+      {/* Official Print Header Kop */}
+      <div className="print-only hidden p-4 mb-3 border-b-2 border-slate-800 bg-slate-50 rounded-xl">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-slate-900 text-white font-bold flex items-center justify-center text-sm shadow-xs">
+              PP1
+            </div>
+            <div>
+              <div className="text-xs font-bold text-slate-900 tracking-wider">PT BATU KARANG — DIVISI PRODUKSI I</div>
+              <div className="text-sm font-black text-blue-700">MATRIKS KOMPARASI PROSES DUAL JALUR: SKT VS SKM</div>
+              <div className="text-[10px] text-slate-500 font-medium">
+                Komparasi Efisiensi Sortasi Tangan vs Rotary Mesin | Terverifikasi ISO-9001
+              </div>
+            </div>
           </div>
-          <div>
-            <h3 className="text-base font-bold text-slate-100">
-              Matriks Komparasi Dual Jalur: SKT vs SKM
-            </h3>
-            <p className="text-xs text-slate-400">
-              Analisis diferensiasi susut proses & dekomposisi 3 komponen (Gagang, Air, Debu)
-            </p>
+          <div className="text-right text-[10px] text-slate-600">
+            <div><strong>Tahun:</strong> {selectedTahun === 'Semua' ? 'Semua Tahun (2025–2026)' : selectedTahun}</div>
+            <div><strong>Tanggal Cetak:</strong> {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
           </div>
         </div>
-        <p className="text-xs text-slate-300 leading-relaxed max-w-4xl">
-          Jalur <strong>SKT (Tangan)</strong> memprioritaskan pemisahan sortasi manual dengan toleransi susut rendah (rata-rata 5–6%), sedangkan jalur <strong>SKM (Mesin)</strong> menggunakan rotary berkecepatan tinggi dengan intensitas destemming lebih masif sehingga susut lebih tinggi (rata-rata 7–9%).
-        </p>
+      </div>
+
+      {/* Intro Banner */}
+      <div className="bg-gradient-to-r from-slate-900 to-slate-800 text-white rounded-2xl p-5 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-3 mb-2">
+            <div className="p-2 bg-blue-500/20 text-blue-400 rounded-xl border border-blue-500/30">
+              <GitCompare className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-slate-100">
+                Matriks Komparasi Dual Jalur: SKT vs SKM
+              </h3>
+              <p className="text-xs text-slate-400">
+                Analisis diferensiasi susut proses &amp; dekomposisi 3 komponen (Gagang, Air, Debu)
+              </p>
+            </div>
+          </div>
+          <p className="text-xs text-slate-300 leading-relaxed max-w-3xl">
+            Jalur <strong>SKT (Tangan)</strong> memprioritaskan pemisahan sortasi manual dengan toleransi susut rendah (rata-rata 5–6%), sedangkan jalur <strong>SKM (Mesin)</strong> menggunakan rotary berkecepatan tinggi dengan intensitas destemming lebih masif sehingga susut lebih tinggi (rata-rata 7–9%).
+          </p>
+        </div>
+
+        {/* Dual Actions */}
+        <div className="no-print flex items-center gap-2 shrink-0 self-start md:self-center">
+          <button
+            onClick={() => window.print()}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-100 text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+            title="Cetak langsung matriks ke printer fisik"
+          >
+            <Printer className="w-3.5 h-3.5 text-slate-300" />
+            <span>Cetak Matriks</span>
+          </button>
+          <button
+            onClick={handleExportPdf}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-sm transition-colors cursor-pointer"
+            title="Export matriks komparasi ke dokumen PDF"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Export PDF</span>
+          </button>
+        </div>
       </div>
 
       {/* Comparative Cards */}

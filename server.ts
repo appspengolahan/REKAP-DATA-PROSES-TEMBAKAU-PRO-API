@@ -5,6 +5,8 @@ import { fileURLToPath } from 'url';
 import { generatePanduanPdf } from './scripts/generate_pdf.ts';
 import { generateIncidentPdf } from './scripts/generate_incident_pdf.ts';
 import { generateRekapJenisPdf } from './scripts/generate_rekap_jenis_pdf.ts';
+import { generateRekapBulanPdf } from './scripts/generate_rekap_bulan_pdf.ts';
+import { generateDeviasiPdf } from './scripts/generate_deviasi_pdf.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -254,6 +256,114 @@ async function startServer() {
     } catch (err: any) {
       console.error('Error generating Rekap Jenis PDF:', err);
       return res.status(500).json({ success: false, error: err?.message || 'Gagal menghasilkan PDF Rekap Jenis' });
+    }
+  });
+
+  // API Route: Generate & Download Rekap Bulan PDF
+  app.post('/api/export-pdf-rekap-bulan', async (req, res) => {
+    try {
+      const {
+        items,
+        periodeLabel,
+        jenisProsesLabel,
+        totalBaku,
+        totalHasil,
+        totalSusutKg,
+        weightedSusutPct,
+        highestMonth,
+        highestLoss,
+        lowestMonth,
+        lowestLoss,
+        scope,
+        orientation,
+        mode
+      } = req.body;
+
+      const pdfBuffer = await generateRekapBulanPdf({
+        items: items || [],
+        periodeLabel: periodeLabel || 'Semua Periode',
+        jenisProsesLabel: jenisProsesLabel || 'Semua Jalur',
+        totalBaku: totalBaku || 0,
+        totalHasil: totalHasil || 0,
+        totalSusutKg: totalSusutKg || 0,
+        weightedSusutPct: weightedSusutPct || 0,
+        highestMonth,
+        highestLoss,
+        lowestMonth,
+        lowestLoss,
+        scope: scope || 'all',
+        orientation: orientation || 'landscape'
+      });
+
+      const cleanPeriode = (periodeLabel || 'Semua_Periode').replace(/[^a-zA-Z0-9_-]/g, '_');
+      const filename = `Monitoring_Board_Rekap_Bulanan_${cleanPeriode}.pdf`;
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader(
+        'Content-Disposition',
+        mode === 'view' ? `inline; filename="${filename}"` : `attachment; filename="${filename}"`
+      );
+      res.setHeader('Content-Length', pdfBuffer.length);
+      return res.send(pdfBuffer);
+    } catch (err: any) {
+      console.error('Error generating Rekap Bulan PDF:', err);
+      return res.status(500).json({ success: false, error: err?.message || 'Gagal menghasilkan PDF Rekap Bulanan' });
+    }
+  });
+
+  // API Route: Generate & Download Analisis Deviasi PDF
+  app.post('/api/export-pdf-deviasi', async (req, res) => {
+    try {
+      const {
+        items,
+        periodeLabel,
+        totalBakuKg,
+        totalHasilKg,
+        totalSusutKg,
+        susutRiilWeightedPct,
+        acuanWeightedPct,
+        deviasiAgregatPct,
+        statusAgregat,
+        totalGagangKg,
+        totalAirKg,
+        totalDebuKg,
+        scope,
+        statusFilter,
+        orientation,
+        mode
+      } = req.body;
+
+      const pdfBuffer = await generateDeviasiPdf({
+        items: items || [],
+        periodeLabel: periodeLabel || 'Periode Berjalan',
+        totalBakuKg: totalBakuKg || 0,
+        totalHasilKg: totalHasilKg || 0,
+        totalSusutKg: totalSusutKg || 0,
+        susutRiilWeightedPct: susutRiilWeightedPct || 0,
+        acuanWeightedPct: acuanWeightedPct || 0,
+        deviasiAgregatPct: deviasiAgregatPct || 0,
+        statusAgregat: statusAgregat || 'aman',
+        totalGagangKg: totalGagangKg || 0,
+        totalAirKg: totalAirKg || 0,
+        totalDebuKg: totalDebuKg || 0,
+        scope: scope || 'all',
+        statusFilter: statusFilter || 'all',
+        orientation: orientation || 'landscape'
+      });
+
+      const cleanPeriode = (periodeLabel || 'Periode').replace(/[^a-zA-Z0-9_-]/g, '_');
+      const filename = `Monitoring_Board_Evaluasi_Deviasi_${cleanPeriode}.pdf`;
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader(
+        'Content-Disposition',
+        mode === 'view' ? `inline; filename="${filename}"` : `attachment; filename="${filename}"`
+      );
+      res.setHeader('Content-Length', pdfBuffer.length);
+      return res.send(pdfBuffer);
+    } catch (err: any) {
+      console.error('Error generating Deviasi PDF:', err);
+      return res.status(500).json({ success: false, error: err?.message || 'Gagal menghasilkan PDF Evaluasi Deviasi' });
     }
   });
 

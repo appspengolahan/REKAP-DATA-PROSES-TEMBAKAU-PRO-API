@@ -28,8 +28,10 @@ import {
   ShieldCheck,
   Building2,
   Search,
-  Check
+  Check,
+  Printer
 } from 'lucide-react';
+import { CetakDanExportDeviasiModal, DeviasiScopeType, DeviasiStatusFilter } from './CetakDanExportDeviasiModal';
 
 interface AnalisisDeviasiViewProps {
   rows: RawRowData[];
@@ -50,6 +52,9 @@ export const AnalisisDeviasiView: React.FC<AnalisisDeviasiViewProps> = ({
   // 2. Filter State Khusus Evaluasi Bulanan
   const [filterTahun, setFilterTahun] = useState<string>(initialTahun === 'Semua' ? '2026' : initialTahun);
   const [filterBulan, setFilterBulan] = useState<string>(initialBulan === 'Semua' ? 'Oktober' : initialBulan);
+  const [isCetakModalOpen, setIsCetakModalOpen] = useState(false);
+  const [printScope, setPrintScope] = useState<DeviasiScopeType>('all');
+  const [printStatusFilter, setPrintStatusFilter] = useState<DeviasiStatusFilter>('all');
 
   // 3. Standar Registry State (Aktif Sistem)
   const [standarList, setStandarList] = useState<StandarSusutItem[]>(() => 
@@ -143,6 +148,17 @@ export const AnalisisDeviasiView: React.FC<AnalisisDeviasiViewProps> = ({
   const analisisBulanan: AnalisisBulananSummary = useMemo(() => {
     return StandarSusutService.computeAnalisisBulanan(rows, filterBulan, filterTahun, standarList);
   }, [rows, filterBulan, filterTahun, standarList]);
+
+  // Filter items berdasarkan printStatusFilter untuk cetak / tampilan
+  const displayedItems = useMemo(() => {
+    if (printStatusFilter === 'kritis_only') {
+      return analisisBulanan.items.filter(it => it.status === 'kritis');
+    }
+    if (printStatusFilter === 'toleransi_aman') {
+      return analisisBulanan.items.filter(it => it.status !== 'kritis');
+    }
+    return analisisBulanan.items;
+  }, [analisisBulanan.items, printStatusFilter]);
 
   // Handler: Tetapkan Standar dari Periode Ini Sebagai Acuan Aktif Sistem
   const handleApplyPeriodAsActive = () => {
@@ -250,17 +266,28 @@ export const AnalisisDeviasiView: React.FC<AnalisisDeviasiViewProps> = ({
         </div>
 
         {/* Action Buttons */}
-        <div className="flex items-center gap-2 self-start md:self-center shrink-0">
-          {onExportPdf && (
-            <button
-              onClick={onExportPdf}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition-all"
-              title="Cetak Laporan Resmi Evaluasi Bulanan (PDF)"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Export PDF Evaluasi</span>
-            </button>
-          )}
+        <div className="flex items-center gap-2 self-start md:self-center shrink-0 no-print">
+          {/* Tombol Cetak Dokumen Langsung (Printer) */}
+          <button
+            type="button"
+            onClick={() => setIsCetakModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-100 shadow-sm transition-all cursor-pointer"
+            title="Cetak langsung ke printer fisik dengan Kop Resmi PT Batu Karang"
+          >
+            <Printer className="w-3.5 h-3.5 text-amber-400" />
+            <span>Cetak Laporan</span>
+          </button>
+
+          {/* Tombol Export PDF Evaluasi */}
+          <button
+            type="button"
+            onClick={() => setIsCetakModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white shadow-sm transition-all cursor-pointer"
+            title="Pilih opsi cetak atau unduh file PDF Evaluasi Mutu & Deviasi"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Export PDF Evaluasi</span>
+          </button>
         </div>
       </div>
 
@@ -309,8 +336,31 @@ export const AnalisisDeviasiView: React.FC<AnalisisDeviasiViewProps> = ({
       {subTab === 'evaluasi-bulanan' && (
         <div className="space-y-4">
           
+          {/* Official Print Header Kop */}
+          <div className="print-only hidden p-4 mb-3 border-b-2 border-slate-800 bg-slate-50 rounded-xl">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-slate-900 text-white font-bold flex items-center justify-center text-sm shadow-xs">
+                  PP1
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-slate-900 tracking-wider">PT BATU KARANG — DIVISI PRODUKSI I</div>
+                  <div className="text-sm font-black text-amber-700">LAPORAN EVALUASI MUTU, DEVIASI SUSUT &amp; STANDAR ACUAN</div>
+                  <div className="text-[10px] text-slate-500 font-medium">
+                    Sistem Terpadu Kontrol Kualitas Proses Tembakau | Audit Standar Acuan Mutu
+                  </div>
+                </div>
+              </div>
+              <div className="text-right text-[10px] text-slate-600">
+                <div><strong>Periode Evaluasi:</strong> {filterBulan} {filterTahun}</div>
+                <div><strong>Status Mutu:</strong> <span className="uppercase font-bold">{analisisBulanan.statusAgregat}</span></div>
+                <div><strong>Tanggal Cetak:</strong> {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
+              </div>
+            </div>
+          </div>
+
           {/* Filter Bar Periode */}
-          <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-wrap items-center justify-between gap-3">
+          <div className="no-print bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <Calendar className="w-4 h-4 text-blue-600" />
               <span className="text-xs font-bold text-slate-800">Periode Evaluasi:</span>
@@ -350,7 +400,9 @@ export const AnalisisDeviasiView: React.FC<AnalisisDeviasiViewProps> = ({
           </div>
 
           {/* 4 Kartu KPI Ringkasan Eksekutif */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className={`grid grid-cols-2 md:grid-cols-4 gap-3 print-section-summary ${
+            printScope === 'table_only' ? 'print:hidden' : ''
+          }`}>
             
             {/* Total Olah */}
             <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs">
@@ -420,7 +472,9 @@ export const AnalisisDeviasiView: React.FC<AnalisisDeviasiViewProps> = ({
           </div>
 
           {/* Akumulasi Fraksi Limbah Bulanan */}
-          <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs">
+          <div className={`bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs print-section-summary ${
+            printScope === 'table_only' ? 'print:hidden' : ''
+          }`}>
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
                 <Layers className="w-3.5 h-3.5 text-blue-600" />
@@ -471,7 +525,9 @@ export const AnalisisDeviasiView: React.FC<AnalisisDeviasiViewProps> = ({
           </div>
 
           {/* Tabel Komparasi Detail Seluruh Bahan Baku */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+          <div className={`bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden print-section-table ${
+            printScope === 'summary_only' ? 'print:hidden' : ''
+          }`}>
             <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between bg-slate-50">
               <div>
                 <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
@@ -482,11 +538,11 @@ export const AnalisisDeviasiView: React.FC<AnalisisDeviasiViewProps> = ({
                 </p>
               </div>
               <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-700">
-                {analisisBulanan.items.length} Varian Diproses
+                {displayedItems.length} Varian Diproses
               </span>
             </div>
 
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto print:overflow-visible">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
                   <tr className="bg-slate-100/80 text-slate-600 font-bold border-b border-slate-200 text-[11px]">
@@ -503,14 +559,14 @@ export const AnalisisDeviasiView: React.FC<AnalisisDeviasiViewProps> = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {analisisBulanan.items.length === 0 ? (
+                  {displayedItems.length === 0 ? (
                     <tr>
                       <td colSpan={10} className="py-8 text-center text-slate-400">
                         Tidak ada data proses untuk periode terpilih.
                       </td>
                     </tr>
                   ) : (
-                    analisisBulanan.items.map((item, idx) => {
+                    displayedItems.map((item, idx) => {
                       const isOver = item.deviasiPct > 0;
                       return (
                         <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
@@ -572,12 +628,39 @@ export const AnalisisDeviasiView: React.FC<AnalisisDeviasiViewProps> = ({
                     })
                   )}
                 </tbody>
+                <tfoot className="border-t-2 border-slate-300 bg-slate-100 font-bold text-slate-800">
+                  <tr>
+                    <td colSpan={3} className="py-2.5 px-3 uppercase text-[10px] tracking-wider text-slate-700">
+                      Total Neraca Evaluasi ({displayedItems.length} Varian)
+                    </td>
+                    <td className="py-2.5 px-3 text-right font-mono text-slate-900">
+                      {formatKg(analisisBulanan.totalBakuKg)}
+                    </td>
+                    <td className="py-2.5 px-3 text-right font-mono text-slate-900">
+                      {formatKg(analisisBulanan.totalHasilKg)}
+                    </td>
+                    <td className="py-2.5 px-3 text-right font-mono text-blue-700">
+                      {formatPct(analisisBulanan.susutRiilWeightedPct)}
+                    </td>
+                    <td className="py-2.5 px-3 text-right font-mono text-amber-700">
+                      {formatPct(analisisBulanan.acuanWeightedPct)}
+                    </td>
+                    <td className="py-2.5 px-3 text-right font-mono font-black text-rose-700">
+                      {analisisBulanan.deviasiAgregatPct >= 0 ? '+' : ''}{formatPct(analisisBulanan.deviasiAgregatPct)}
+                    </td>
+                    <td colSpan={2} className="py-2.5 px-3 text-center text-[10px] font-bold text-slate-700">
+                      Status: {analisisBulanan.statusAgregat.toUpperCase()}
+                    </td>
+                  </tr>
+                </tfoot>
               </table>
             </div>
           </div>
 
           {/* Kotak Kesimpulan & Rekomendasi Manajerial */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className={`grid grid-cols-1 md:grid-cols-2 gap-3 ${
+            printScope === 'table_only' ? 'print:hidden' : ''
+          }`}>
             
             {/* Kesimpulan Naratif */}
             <div className="bg-indigo-950/90 text-white p-4 rounded-2xl border border-indigo-800/80 shadow-xs flex flex-col justify-between">
@@ -1041,6 +1124,20 @@ export const AnalisisDeviasiView: React.FC<AnalisisDeviasiViewProps> = ({
         </div>
       )}
 
+      {/* Modal Cetak & Export Analisis Deviasi */}
+      <CetakDanExportDeviasiModal
+        isOpen={isCetakModalOpen}
+        onClose={() => setIsCetakModalOpen(false)}
+        analisisBulanan={analisisBulanan}
+        filterBulan={filterBulan}
+        filterTahun={filterTahun}
+        onApplyPrintSettings={({ scope, statusFilter, orientation }) => {
+          setPrintScope(scope);
+          setPrintStatusFilter(statusFilter);
+          document.body.setAttribute('data-print-scope', scope);
+          document.body.setAttribute('data-print-orientation', orientation);
+        }}
+      />
     </div>
   );
 };

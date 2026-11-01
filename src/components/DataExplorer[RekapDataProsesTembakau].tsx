@@ -12,8 +12,12 @@ import {
   ArrowUp,
   ArrowUpDown,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Printer,
+  Download,
+  FileText
 } from 'lucide-react';
+import { CetakDanExportLogModal } from './CetakDanExportLogModal';
 
 interface DataExplorerProps {
   rows: RawRowData[];
@@ -33,6 +37,8 @@ export const DataExplorerRekapDataProsesTembakau: React.FC<DataExplorerProps> = 
   const [pageSize, setPageSize] = useState<number>(50);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [isCetakModalOpen, setIsCetakModalOpen] = useState(false);
+  const [customPrintRows, setCustomPrintRows] = useState<RawRowData[] | null>(null);
 
   // New form fields
   const [formTembakau, setFormTembakau] = useState('');
@@ -100,6 +106,16 @@ export const DataExplorerRekapDataProsesTembakau: React.FC<DataExplorerProps> = 
     const startIdx = (safeCurrentPage - 1) * pageSize;
     return sortedAndFiltered.slice(startIdx, startIdx + pageSize);
   }, [sortedAndFiltered, isAll, safeCurrentPage, pageSize]);
+
+  const rowsToRender = customPrintRows || displayedRows;
+
+  const renderTotals = useMemo(() => {
+    const totalBaku = rowsToRender.reduce((s, r) => s + (r.baku || 0), 0);
+    const totalHasil = rowsToRender.reduce((s, r) => s + (r.hasil || 0), 0);
+    const totalSusut = Math.max(0, totalBaku - totalHasil);
+    const susutPct = totalBaku > 0 ? (totalSusut / totalBaku) * 100 : 0;
+    return { totalBaku, totalHasil, totalSusut, susutPct };
+  }, [rowsToRender]);
 
   const handleToggleSort = () => {
     setSortOrder((prev) => (prev === 'desc' ? 'asc' : 'desc'));
@@ -227,6 +243,28 @@ export const DataExplorerRekapDataProsesTembakau: React.FC<DataExplorerProps> = 
             </select>
           </div>
 
+          {/* Tombol Cetak Dokumen Langsung (Printer) */}
+          <button
+            type="button"
+            onClick={() => setIsCetakModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-slate-800 text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+            title="Cetak langsung ke printer fisik dengan pilihan rentang baris"
+          >
+            <Printer className="w-3.5 h-3.5 text-slate-700" />
+            <span className="hidden sm:inline">Cetak Log</span>
+          </button>
+
+          {/* Tombol Export PDF Log */}
+          <button
+            type="button"
+            onClick={() => setIsCetakModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-sm transition-colors cursor-pointer"
+            title="Pilih opsi cetak atau unduh file PDF Log Data Harian"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Export PDF</span>
+          </button>
+
           {/* Add Button for PM & Admin */}
           {(userRole === 'Project Manager' || userRole === 'Admin' || userRole === 'Site Engineer') && (
             <button
@@ -240,14 +278,37 @@ export const DataExplorerRekapDataProsesTembakau: React.FC<DataExplorerProps> = 
         </div>
       </div>
 
+      {/* Official Print Header Kop */}
+      <div className="print-only hidden p-4 mb-3 border-b-2 border-slate-800 bg-slate-50 rounded-xl">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-slate-900 text-white font-bold flex items-center justify-center text-sm shadow-xs">
+              PP1
+            </div>
+            <div>
+              <div className="text-xs font-bold text-slate-900 tracking-wider">PT BATU KARANG — DIVISI PRODUKSI I</div>
+              <div className="text-sm font-black text-indigo-700">BUKU LOG DATA HARIAN PROSES TEMBAKAU (DHP)</div>
+              <div className="text-[10px] text-slate-500 font-medium">
+                Log Transaksi Penimbangan Bahan Baku &amp; Hasil Jadi Produksi | Audit Trail
+              </div>
+            </div>
+          </div>
+          <div className="text-right text-[10px] text-slate-600">
+            <div><strong>Jalur:</strong> {filterJalur === 'Semua' ? 'Semua Jalur (SKT & SKM)' : filterJalur}</div>
+            <div><strong>Jumlah Terpilih:</strong> {rowsToRender.length} Batch</div>
+            <div><strong>Tanggal Cetak:</strong> {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
+          </div>
+        </div>
+      </div>
+
       {/* Mobile Swipe Hint */}
-      <div className="sm:hidden text-[11px] text-slate-400 italic flex items-center gap-1.5 px-1">
+      <div className="no-print sm:hidden text-[11px] text-slate-400 italic flex items-center gap-1.5 px-1">
         <span>👉</span>
         <span>Geser tabel ke samping untuk melihat detail batch lengkap</span>
       </div>
 
       {/* Table Container */}
-      <div className="overflow-x-auto border border-slate-200 rounded-2xl bg-white shadow-sm">
+      <div className="overflow-x-auto print:overflow-visible border border-slate-200 rounded-2xl bg-white shadow-sm">
         <table className="w-full text-xs text-left border-collapse min-w-[780px]">
           <thead>
             <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
@@ -279,14 +340,14 @@ export const DataExplorerRekapDataProsesTembakau: React.FC<DataExplorerProps> = 
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {displayedRows.length === 0 ? (
+            {rowsToRender.length === 0 ? (
               <tr>
                 <td colSpan={10} className="py-8 text-center text-slate-400 text-xs italic">
                   Tidak ditemukan data batch yang cocok dengan kriteria pencarian/filter.
                 </td>
               </tr>
             ) : (
-              displayedRows.map((r, idx) => {
+              rowsToRender.map((r, idx) => {
                 const isHigh = r.susutPct >= 8.5;
                 const isLow = r.susutPct <= 5.5;
                 const dateInfo = formatHariTanggalIndo(r.tanggal);
@@ -351,12 +412,34 @@ export const DataExplorerRekapDataProsesTembakau: React.FC<DataExplorerProps> = 
               })
             )}
           </tbody>
+          <tfoot className="border-t-2 border-slate-300 bg-slate-100 font-bold text-slate-800">
+            <tr>
+              <td colSpan={3} className="py-2.5 px-3 uppercase text-[10px] tracking-wider text-slate-700">
+                Subtotal Neraca Terpilih ({rowsToRender.length} Batch)
+              </td>
+              <td className="py-2.5 px-3 text-right font-mono text-slate-900">
+                {formatKg(renderTotals.totalBaku)}
+              </td>
+              <td className="py-2.5 px-3 text-right font-mono text-slate-900">
+                {formatKg(renderTotals.totalHasil)}
+              </td>
+              <td className="py-2.5 px-3 text-right font-mono text-slate-900">
+                {formatKg(renderTotals.totalSusut)}
+              </td>
+              <td className="py-2.5 px-3 text-right font-mono text-indigo-700">
+                {formatPct(renderTotals.susutPct)}
+              </td>
+              <td colSpan={3} className="py-2.5 px-3 text-right font-mono text-[10px] text-slate-500">
+                Terverifikasi QC
+              </td>
+            </tr>
+          </tfoot>
         </table>
       </div>
 
       {/* Pagination Controls Footer */}
       {totalPages > 1 && !isAll && (
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200 text-xs">
+        <div className="no-print flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200 text-xs">
           <div className="text-slate-500 text-xs">
             Menampilkan <strong className="text-slate-800 font-semibold">{((safeCurrentPage - 1) * pageSize) + 1}</strong> -{' '}
             <strong className="text-slate-800 font-semibold">{Math.min(safeCurrentPage * pageSize, totalItems)}</strong> dari{' '}
@@ -543,6 +626,22 @@ export const DataExplorerRekapDataProsesTembakau: React.FC<DataExplorerProps> = 
           </div>
         </div>
       )}
+
+      {/* Modal Cetak & Export Log Data Harian */}
+      <CetakDanExportLogModal
+        isOpen={isCetakModalOpen}
+        onClose={() => {
+          setIsCetakModalOpen(false);
+          setCustomPrintRows(null);
+        }}
+        allRows={sortedAndFiltered}
+        currentPageRows={displayedRows}
+        filterJalur={filterJalur}
+        onApplyPrintSettings={(selectedRows, orientation) => {
+          setCustomPrintRows(selectedRows);
+          document.body.setAttribute('data-print-orientation', orientation);
+        }}
+      />
     </div>
   );
 };

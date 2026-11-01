@@ -5,6 +5,7 @@ import { MONTH_NAMES } from '../mockData[RekapDataProsesTembakau]';
 import { MonthlyLossLineChart, BakuVsHasilBarChart } from './Charts[RekapDataProsesTembakau]';
 import { TableBulanRekapDataProsesTembakau } from './TableBulan[RekapDataProsesTembakau]';
 import { ChartExpandedModalRekapDataProsesTembakau, ChartModalType } from './ChartExpandedModal[RekapDataProsesTembakau]';
+import { CetakDanExportBulanModal, BulanPrintScopeType } from './CetakDanExportBulanModal';
 import { 
   CalendarDays, 
   TrendingDown, 
@@ -17,7 +18,8 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   RotateCcw,
-  Calendar
+  Calendar,
+  Printer
 } from 'lucide-react';
 
 interface RekapBulanViewProps {
@@ -45,6 +47,8 @@ export const RekapBulanViewRekapDataProsesTembakau: React.FC<RekapBulanViewProps
   onExportPdf
 }) => {
   const [expandedChart, setExpandedChart] = useState<ChartModalType | null>(null);
+  const [isCetakModalOpen, setIsCetakModalOpen] = useState(false);
+  const [printScope, setPrintScope] = useState<BulanPrintScopeType>('all');
 
   // Filter State: Rentang Periode Bulan-Tahun (Dari: Bulan, Tahun | Sampai: Bulan, Tahun)
   // Default: Semua Tahun & Semua Bulan
@@ -215,12 +219,22 @@ export const RekapBulanViewRekapDataProsesTembakau: React.FC<RekapBulanViewProps
             </div>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
-            {/* Note: Redundant 'Tarik Datasheet' has been removed because it is already present in Header */}
+          <div className="flex items-center gap-2 flex-wrap no-print">
+            {/* Tombol Cetak Dokumen Langsung (Printer) */}
             <button
-              onClick={onExportPdf}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-sm transition-colors"
-              title="Unduh Laporan PDF Rekap Bulanan"
+              onClick={() => setIsCetakModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-800 text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+              title="Cetak langsung ke printer fisik dengan Kop Resmi PT Batu Karang"
+            >
+              <Printer className="w-3.5 h-3.5 text-slate-700" />
+              <span>Cetak Dokumen</span>
+            </button>
+
+            {/* Tombol Export PDF Bulanan */}
+            <button
+              onClick={() => setIsCetakModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-sm transition-colors cursor-pointer"
+              title="Pilih opsi cetak atau unduh file PDF Rekap Bulanan"
             >
               <FileText className="w-3.5 h-3.5" />
               <span>Export PDF Bulanan</span>
@@ -330,7 +344,9 @@ export const RekapBulanViewRekapDataProsesTembakau: React.FC<RekapBulanViewProps
       </div>
 
       {/* Monthly Highlight KPI Cards (4 Cards) - Dynamically Updated by Filter */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 print-section-summary ${
+        printScope === 'table_only' ? 'print:hidden' : ''
+      }`}>
         {/* Card 1: Total Baku */}
         <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-sm flex flex-col justify-between">
           <div className="flex items-center justify-between text-slate-500 text-xs font-semibold">
@@ -411,7 +427,9 @@ export const RekapBulanViewRekapDataProsesTembakau: React.FC<RekapBulanViewProps
       </div>
 
       {/* 2 Monthly Interactive Charts - Dynamically Updated */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className={`grid grid-cols-1 lg:grid-cols-2 gap-4 print-section-summary ${
+        printScope === 'table_only' ? 'print:hidden' : ''
+      }`}>
         {/* Chart 1: Tren Susut Bulanan */}
         <div 
           onClick={() => setExpandedChart('monthlyLoss')}
@@ -464,8 +482,10 @@ export const RekapBulanViewRekapDataProsesTembakau: React.FC<RekapBulanViewProps
       </div>
 
       {/* Full Monthly Detail Table - Dynamically Updated */}
-      <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-sm space-y-4">
-        <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+      <div className={`bg-white rounded-2xl border border-slate-200/90 p-5 shadow-sm space-y-4 print-section-table ${
+        printScope === 'summary_only' ? 'print:hidden' : ''
+      }`}>
+        <div className="no-print flex items-center justify-between pb-3 border-b border-slate-100">
           <div>
             <h3 className="text-sm font-bold text-slate-800">
               Tabel Kinerja Kesusutan per Bulan
@@ -479,8 +499,40 @@ export const RekapBulanViewRekapDataProsesTembakau: React.FC<RekapBulanViewProps
           </div>
         </div>
 
-        <TableBulanRekapDataProsesTembakau data={displayedRekapBulan} />
+        <TableBulanRekapDataProsesTembakau 
+          data={displayedRekapBulan} 
+          periodeLabel={
+            isFilterActive
+              ? `${startBulan} ${startTahun} s/d ${endBulan} ${endTahun}`
+              : `Semua Periode (${displayedRekapBulan.length} Bulan)`
+          }
+          jenisProses={jenisProses === 'Semua' ? 'Semua Jalur (SKT & SKM)' : jenisProses}
+        />
       </div>
+
+      {/* Modal Cetak & Export PDF Bulanan */}
+      <CetakDanExportBulanModal
+        isOpen={isCetakModalOpen}
+        onClose={() => setIsCetakModalOpen(false)}
+        data={displayedRekapBulan}
+        allMonthsData={allMonthsData}
+        jenisProses={jenisProses}
+        filterLabel={
+          isFilterActive
+            ? `${startBulan} ${startTahun} s/d ${endBulan} ${endTahun}`
+            : `Semua Periode (${displayedRekapBulan.length} Bulan)`
+        }
+        totalBaku={totalBaku}
+        totalHasil={totalHasil}
+        weightedSusutPct={weightedSusutPct}
+        highestMonth={maxLossMonth}
+        lowestMonth={minLossMonth}
+        onApplyPrintSettings={({ scope, orientation }) => {
+          setPrintScope(scope);
+          document.body.setAttribute('data-print-scope', scope);
+          document.body.setAttribute('data-print-orientation', orientation);
+        }}
+      />
 
       {/* Chart Expanded Modal */}
       {expandedChart && (
