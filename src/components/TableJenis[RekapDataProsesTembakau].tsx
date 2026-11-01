@@ -7,12 +7,18 @@ interface TableJenisProps {
   data: GroupSummary[];
   onSelectJenisTrend?: (jenis: string) => void;
   selectedJenisTrend?: string;
+  printRange?: { start: number; end: number } | null;
+  periodeLabel?: string;
+  jenisProses?: string;
 }
 
 export const TableJenisRekapDataProsesTembakau: React.FC<TableJenisProps> = ({
   data,
   onSelectJenisTrend,
-  selectedJenisTrend
+  selectedJenisTrend,
+  printRange,
+  periodeLabel,
+  jenisProses
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<'baku' | 'susutPct' | 'kapasitasPct'>('baku');
@@ -39,6 +45,22 @@ export const TableJenisRekapDataProsesTembakau: React.FC<TableJenisProps> = ({
     }
   };
 
+  // Compute table totals
+  const totals = React.useMemo(() => {
+    const totalData = filtered.reduce((acc, r) => acc + (r.jumlahData || 0), 0);
+    const totalBaku = filtered.reduce((acc, r) => acc + (r.baku || 0), 0);
+    const totalHasil = filtered.reduce((acc, r) => acc + (r.hasil || 0), 0);
+    const totalSusutKg = Math.round((totalBaku - totalHasil) * 10) / 10;
+    const avgSusutPct = totalBaku > 0 ? (totalSusutKg / totalBaku) * 100 : 0;
+    return {
+      totalData,
+      totalBaku,
+      totalHasil,
+      totalSusutKg,
+      avgSusutPct
+    };
+  }, [filtered]);
+
   return (
     <div className="space-y-3">
       {/* Search Bar */}
@@ -62,6 +84,22 @@ export const TableJenisRekapDataProsesTembakau: React.FC<TableJenisProps> = ({
       <div className="sm:hidden text-[11px] text-slate-400 italic flex items-center gap-1.5 px-1">
         <span>👉</span>
         <span>Geser tabel ke samping untuk melihat kolom lengkap</span>
+      </div>
+
+      {/* Print-Only Header Kop Dokumen Resmi */}
+      <div className="print-only mb-4 border-b-2 border-slate-900 pb-2">
+        <div className="flex justify-between items-start">
+          <div>
+            <h1 className="text-sm font-bold text-slate-900 tracking-tight">PT BATU KARANG — DIVISI PRODUKSI I</h1>
+            <p className="text-[10px] text-slate-600">Sistem Monitoring Board — Rekapitulasi Data Proses Kesusutan Tembakau</p>
+            <p className="text-xs font-bold text-slate-900 mt-1">Laporan Rekapitulasi per Jenis Tembakau</p>
+          </div>
+          <div className="text-right text-[9px] text-slate-600 space-y-0.5">
+            <p><strong>Periode:</strong> {periodeLabel || 'Semua Periode'}</p>
+            <p><strong>Jalur:</strong> {jenisProses || 'Semua Jalur'}</p>
+            <p><strong>Dicetak:</strong> {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+          </div>
+        </div>
       </div>
 
       {/* Table Container */}
@@ -107,25 +145,31 @@ export const TableJenisRekapDataProsesTembakau: React.FC<TableJenisProps> = ({
           </thead>
           <tbody className="divide-y divide-slate-100">
             {filtered.map((row, idx) => {
+              const rowNo = idx + 1;
               const isSelected = selectedJenisTrend === row.label;
               const isHigh = row.susutPct >= 8.5;
               const isLow = row.susutPct <= 5.5;
+
+              // Check if row falls outside print range
+              const isOutOfPrintRange = Boolean(
+                printRange && (rowNo < printRange.start || rowNo > printRange.end)
+              );
 
               return (
                 <tr 
                   key={idx} 
                   className={`hover:bg-slate-50/80 transition-colors ${
                     isSelected ? 'bg-amber-50/70' : ''
-                  }`}
+                  } ${isOutOfPrintRange ? 'print-hidden-row' : ''}`}
                 >
                   <td className="py-2.5 px-3 text-slate-400 font-mono text-[11px]">
-                    {idx + 1}
+                    {rowNo}
                   </td>
                   <td className="py-2.5 px-3 font-semibold text-slate-800">
                     <div className="flex items-center gap-1.5">
                       <span>{row.label}</span>
                       {isSelected && (
-                        <span className="text-[9px] bg-amber-200 text-amber-900 px-1.5 py-0.5 rounded-full font-bold">
+                        <span className="text-[9px] bg-amber-200 text-amber-900 px-1.5 py-0.5 rounded-full font-bold no-print">
                           Trend Aktif
                         </span>
                       )}
@@ -168,6 +212,32 @@ export const TableJenisRekapDataProsesTembakau: React.FC<TableJenisProps> = ({
               );
             })}
           </tbody>
+          <tfoot className="bg-slate-100 font-bold border-t-2 border-slate-300 text-slate-900">
+            <tr>
+              <td colSpan={2} className="py-3 px-3 text-slate-800 uppercase text-[11px]">
+                TOTAL NERACA ({filtered.length} VARIAN)
+              </td>
+              <td className="py-3 px-3 text-right font-mono text-slate-800">
+                {totals.totalData}
+              </td>
+              <td className="py-3 px-3 text-right font-mono text-slate-900">
+                {formatKg(totals.totalBaku)}
+              </td>
+              <td className="py-3 px-3 text-right font-mono text-slate-900">
+                {formatKg(totals.totalHasil)}
+              </td>
+              <td className="py-3 px-3 text-right font-mono text-blue-700">
+                {formatPct(totals.avgSusutPct)}
+              </td>
+              <td colSpan={2} className="py-3 px-3 text-slate-500 text-[10px] text-center font-normal">
+                (Susut: {formatKg(totals.totalSusutKg)})
+              </td>
+              <td className="py-3 px-3 text-right font-mono text-slate-800">
+                100,00%
+              </td>
+              {onSelectJenisTrend && <td className="no-print"></td>}
+            </tr>
+          </tfoot>
         </table>
       </div>
     </div>

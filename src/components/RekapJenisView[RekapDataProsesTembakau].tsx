@@ -4,6 +4,7 @@ import { formatKg, formatPct } from '../api[RekapDataProsesTembakau]';
 import { TobaccoVariantVolumeBarChart, TrendJenisLineChart } from './Charts[RekapDataProsesTembakau]';
 import { TableJenisRekapDataProsesTembakau } from './TableJenis[RekapDataProsesTembakau]';
 import { ChartExpandedModalRekapDataProsesTembakau, ChartModalType } from './ChartExpandedModal[RekapDataProsesTembakau]';
+import { CetakDanExportJenisModal, PrintScopeType } from './CetakDanExportJenisModal';
 import { 
   Layers, 
   TrendingDown, 
@@ -15,7 +16,9 @@ import {
   FileText, 
   Filter,
   Calendar,
-  Sparkles
+  Sparkles,
+  Printer,
+  Download
 } from 'lucide-react';
 
 interface RekapJenisViewProps {
@@ -47,6 +50,8 @@ export const RekapJenisViewRekapDataProsesTembakau: React.FC<RekapJenisViewProps
   onExportPdf
 }) => {
   const [expandedChart, setExpandedChart] = useState<ChartModalType | null>(null);
+  const [isCetakModalOpen, setIsCetakModalOpen] = useState(false);
+  const [printRange, setPrintRange] = useState<{ start: number; end: number } | null>(null);
 
   // Available Years List (Always ensuring 2026 and 2025 are available)
   const effectiveTahunList = useMemo(() => {
@@ -85,11 +90,22 @@ export const RekapJenisViewRekapDataProsesTembakau: React.FC<RekapJenisViewProps
     };
   }, [rekapJenisTembakauPeriode]);
 
+  // Apply print scope and range settings
+  const handleApplyPrintSettings = (settings: {
+    scope: PrintScopeType;
+    startRow: number;
+    endRow: number;
+    orientation: 'landscape' | 'portrait';
+  }) => {
+    document.body.setAttribute('data-print-scope', settings.scope);
+    setPrintRange({ start: settings.startRow, end: settings.endRow });
+  };
+
   return (
     <div className="space-y-6">
       
       {/* Header Banner & Period Filter */}
-      <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-sm">
+      <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-sm print-section-header">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-100">
           <div>
             <div className="flex items-center gap-2">
@@ -107,11 +123,22 @@ export const RekapJenisViewRekapDataProsesTembakau: React.FC<RekapJenisViewProps
             </div>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap no-print">
+            {/* Opsi 1: Cetak Langsung (Direct Print) */}
             <button
-              onClick={onExportPdf}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-sm transition-colors"
-              title="Unduh Laporan PDF Rekap Varian Tembakau"
+              onClick={() => setIsCetakModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold shadow-xs transition-colors"
+              title="Cetak langsung laporan ke printer fisik"
+            >
+              <Printer className="w-3.5 h-3.5 text-blue-300" />
+              <span>Cetak Dokumen</span>
+            </button>
+
+            {/* Opsi 2: Export PDF Dinamis */}
+            <button
+              onClick={() => setIsCetakModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs transition-colors"
+              title="Unduh Laporan PDF Rekap Varian Tembakau (Dinamis Multi-Halaman)"
             >
               <FileText className="w-3.5 h-3.5" />
               <span>Export PDF Varian</span>
@@ -189,12 +216,12 @@ export const RekapJenisViewRekapDataProsesTembakau: React.FC<RekapJenisViewProps
       </div>
 
       {/* Variety Highlight KPI Cards (4 Cards) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 print-section-summary">
         {/* Card 1: Total Varian Terproses */}
-        <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-sm flex flex-col justify-between">
+        <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-sm flex flex-col justify-between print-card">
           <div className="flex items-center justify-between text-slate-500 text-xs font-semibold">
             <span>Katalog Varian Tembakau</span>
-            <span className="p-1.5 rounded-lg bg-indigo-50 text-indigo-600">
+            <span className="p-1.5 rounded-lg bg-indigo-50 text-indigo-600 no-print">
               <Layers className="w-4 h-4" />
             </span>
           </div>
@@ -209,10 +236,10 @@ export const RekapJenisViewRekapDataProsesTembakau: React.FC<RekapJenisViewProps
         </div>
 
         {/* Card 2: Varian Volume Terbesar */}
-        <div className="bg-white rounded-2xl border border-amber-200 p-4 shadow-sm bg-gradient-to-br from-white to-amber-50/30 flex flex-col justify-between">
+        <div className="bg-white rounded-2xl border border-amber-200 p-4 shadow-sm bg-gradient-to-br from-white to-amber-50/30 flex flex-col justify-between print-card">
           <div className="flex items-center justify-between text-amber-700 text-xs font-semibold">
             <span className="flex items-center gap-1">
-              <Award className="w-3.5 h-3.5" /> Volume Terbesar
+              <Award className="w-3.5 h-3.5 no-print" /> Volume Terbesar
             </span>
             <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
               Top 1
@@ -229,10 +256,10 @@ export const RekapJenisViewRekapDataProsesTembakau: React.FC<RekapJenisViewProps
         </div>
 
         {/* Card 3: Varian Paling Efisien */}
-        <div className="bg-white rounded-2xl border border-emerald-200 p-4 shadow-sm bg-gradient-to-br from-white to-emerald-50/30 flex flex-col justify-between">
+        <div className="bg-white rounded-2xl border border-emerald-200 p-4 shadow-sm bg-gradient-to-br from-white to-emerald-50/30 flex flex-col justify-between print-card">
           <div className="flex items-center justify-between text-emerald-600 text-xs font-semibold">
             <span className="flex items-center gap-1">
-              <CheckCircle2 className="w-3.5 h-3.5" /> Paling Hemat (Yield Max)
+              <CheckCircle2 className="w-3.5 h-3.5 no-print" /> Paling Hemat (Yield Max)
             </span>
             <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">
               Optimal
@@ -249,10 +276,10 @@ export const RekapJenisViewRekapDataProsesTembakau: React.FC<RekapJenisViewProps
         </div>
 
         {/* Card 4: Varian Susut Tertinggi */}
-        <div className="bg-white rounded-2xl border border-rose-200 p-4 shadow-sm bg-gradient-to-br from-white to-rose-50/30 flex flex-col justify-between">
+        <div className="bg-white rounded-2xl border border-rose-200 p-4 shadow-sm bg-gradient-to-br from-white to-rose-50/30 flex flex-col justify-between print-card">
           <div className="flex items-center justify-between text-rose-600 text-xs font-semibold">
             <span className="flex items-center gap-1">
-              <AlertTriangle className="w-3.5 h-3.5" /> Susut Tertinggi
+              <AlertTriangle className="w-3.5 h-3.5 no-print" /> Susut Tertinggi
             </span>
             <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700">
               Evaluasi
@@ -270,11 +297,11 @@ export const RekapJenisViewRekapDataProsesTembakau: React.FC<RekapJenisViewProps
       </div>
 
       {/* 2 Variety Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 print-section-charts print-avoid-break">
         {/* Chart 1: 10 Varian Terbesar */}
         <div 
           onClick={() => setExpandedChart('tobaccoVariant')}
-          className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-sm hover:shadow-md hover:border-blue-400 transition-all cursor-pointer group"
+          className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-sm hover:shadow-md hover:border-blue-400 transition-all cursor-pointer group print-card"
           title="Klik untuk memperbesar grafik varian tembakau"
         >
           <div className="flex items-center justify-between mb-2">
@@ -287,7 +314,7 @@ export const RekapJenisViewRekapDataProsesTembakau: React.FC<RekapJenisViewProps
                 e.stopPropagation();
                 setExpandedChart('tobaccoVariant');
               }}
-              className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-slate-500 hover:text-blue-600 bg-slate-50 hover:bg-blue-50 rounded-lg border border-slate-200/90 transition-colors"
+              className="no-print flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-slate-500 hover:text-blue-600 bg-slate-50 hover:bg-blue-50 rounded-lg border border-slate-200/90 transition-colors"
             >
               <Maximize2 className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Perbesar</span>
@@ -299,7 +326,7 @@ export const RekapJenisViewRekapDataProsesTembakau: React.FC<RekapJenisViewProps
         {/* Chart 2: Interactive Individual Variety Trend */}
         <div 
           onClick={() => setExpandedChart('trendJenis')}
-          className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-sm hover:shadow-md hover:border-blue-400 transition-all cursor-pointer group"
+          className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-sm hover:shadow-md hover:border-blue-400 transition-all cursor-pointer group print-card"
           title="Klik untuk memperbesar grafik tren per varian"
         >
           <div className="flex items-center justify-between mb-2 gap-2">
@@ -309,7 +336,7 @@ export const RekapJenisViewRekapDataProsesTembakau: React.FC<RekapJenisViewProps
               </h3>
             </div>
             
-            <div className="flex items-center gap-1.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-1.5 flex-shrink-0 no-print" onClick={(e) => e.stopPropagation()}>
               <select
                 value={trendJenis.jenisTembakau}
                 onChange={(e) => onSelectJenisTrend(e.target.value)}
@@ -338,8 +365,8 @@ export const RekapJenisViewRekapDataProsesTembakau: React.FC<RekapJenisViewProps
       </div>
 
       {/* Full Variety Table with Search and Sorting */}
-      <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-sm space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
+      <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-sm space-y-4 print-section-table">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100 no-print">
           <div>
             <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
               <span>Tabel Lengkap Rekapitulasi per Jenis Tembakau</span>
@@ -360,6 +387,9 @@ export const RekapJenisViewRekapDataProsesTembakau: React.FC<RekapJenisViewProps
           data={rekapJenisTembakauPeriode} 
           onSelectJenisTrend={onSelectJenisTrend}
           selectedJenisTrend={trendJenis.jenisTembakau}
+          printRange={printRange}
+          periodeLabel={`${periodeRange.bulanMulai} s/d ${periodeRange.bulanAkhir} ${periodeRange.tahunMulai || 'Semua'}`}
+          jenisProses={jenisProses === 'Semua' ? 'Semua Jalur (SKT & SKM)' : jenisProses}
         />
       </div>
 
@@ -376,6 +406,25 @@ export const RekapJenisViewRekapDataProsesTembakau: React.FC<RekapJenisViewProps
           onSelectJenisTrend={onSelectJenisTrend}
         />
       )}
+
+      {/* Dynamic Multi-page Print & PDF Export Modal */}
+      <CetakDanExportJenisModal
+        isOpen={isCetakModalOpen}
+        onClose={() => {
+          setIsCetakModalOpen(false);
+          // Reset print range filter when modal is closed
+          setPrintRange(null);
+          document.body.removeAttribute('data-print-scope');
+        }}
+        data={rekapJenisTembakauPeriode}
+        periodeRange={periodeRange}
+        jenisProses={jenisProses}
+        totalVolume={totalVolume}
+        topVolume={topVolume}
+        mostEfficient={mostEfficient}
+        highestLoss={highestLoss}
+        onApplyPrintSettings={handleApplyPrintSettings}
+      />
     </div>
   );
 };

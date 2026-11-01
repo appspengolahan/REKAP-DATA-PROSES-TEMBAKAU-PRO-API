@@ -4,6 +4,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { generatePanduanPdf } from './scripts/generate_pdf.ts';
 import { generateIncidentPdf } from './scripts/generate_incident_pdf.ts';
+import { generateRekapJenisPdf } from './scripts/generate_rekap_jenis_pdf.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -199,6 +200,60 @@ async function startServer() {
     } catch (err: any) {
       console.error('Error serving Excel template download:', err);
       res.status(500).json({ success: false, error: 'Gagal mengunduh file Excel template' });
+    }
+  });
+
+  // API Route: Generate & Download / View Dynamic Rekap Jenis PDF
+  app.post('/api/export-pdf-rekap-jenis', async (req, res) => {
+    try {
+      const {
+        items,
+        periodeLabel,
+        jenisProsesLabel,
+        totalVolume,
+        topVolumeLabel,
+        topVolumeBaku,
+        efficientLabel,
+        efficientLoss,
+        highestLossLabel,
+        highestLoss,
+        scope,
+        startRow,
+        endRow,
+        orientation,
+        mode
+      } = req.body;
+
+      const pdfBuffer = await generateRekapJenisPdf({
+        items: items || [],
+        periodeLabel: periodeLabel || 'Semua Periode',
+        jenisProsesLabel: jenisProsesLabel || 'Semua Jalur',
+        totalVolume: totalVolume || 0,
+        topVolumeLabel,
+        topVolumeBaku,
+        efficientLabel,
+        efficientLoss,
+        highestLossLabel,
+        highestLoss,
+        scope: scope || 'all',
+        startRow: startRow ? parseInt(startRow, 10) : undefined,
+        endRow: endRow ? parseInt(endRow, 10) : undefined,
+        orientation: orientation || 'landscape'
+      });
+
+      const cleanPeriode = (periodeLabel || 'Semua_Periode').replace(/[^a-zA-Z0-9_-]/g, '_');
+      const filename = `Monitoring_Board_Rekap_Jenis_Tembakau_${cleanPeriode}.pdf`;
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader(
+        'Content-Disposition',
+        mode === 'view' ? `inline; filename="${filename}"` : `attachment; filename="${filename}"`
+      );
+      res.setHeader('Content-Length', pdfBuffer.length);
+      return res.send(pdfBuffer);
+    } catch (err: any) {
+      console.error('Error generating Rekap Jenis PDF:', err);
+      return res.status(500).json({ success: false, error: err?.message || 'Gagal menghasilkan PDF Rekap Jenis' });
     }
   });
 
