@@ -463,6 +463,51 @@ function CEK_STATUS_PEMICU() {
   }
 }
 
+/**
+ * 5. PILIH INI LALU KLIK "JALANKAN (RUN)" UNTUK BERSIHKAN BARIS HANTU KOSONG (MISAL BARIS 1557-1564 TGL 28 OKT)
+ * Menghapus semua baris di Sheet Rekap yang memiliki Tanggal di Kolom B,
+ * namun Kolom F (Jenis Tembakau) KOSONG dan tidak memiliki bobot baku/hasil.
+ */
+function BERSIHKAN_BARIS_KOSONG_DAN_ZOMBIE() {
+  var ssRekap = SpreadsheetApp.openById(CONFIG_INTEGRASI_TEMBAKAU.REKAP_SS_ID);
+  var shRekap = ssRekap.getSheetByName(CONFIG_INTEGRASI_TEMBAKAU.REKAP_SHEET_NAME);
+  if (!shRekap) return { success: false, error: 'Sheet Rekap tidak ditemukan' };
+
+  var lastRowRekap = shRekap.getLastRow();
+  var rekapCount = Math.max(0, lastRowRekap - CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW + 1);
+  if (rekapCount === 0) return { success: false, message: 'Sheet Rekap kosong' };
+
+  var rekapValues = shRekap.getRange(CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW, 1, rekapCount, 14).getValues();
+  var deletedRows = 0;
+
+  // Scan dari baris paling bawah ke atas agar indeks baris tidak bergeser
+  for (var k = rekapValues.length - 1; k >= 0; k--) {
+    var actualRow = CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW + k;
+    var rowData = rekapValues[k];
+    var rTgl = rowData[1];
+    var rJenis = String(rowData[5] || '').trim();
+    var rBaku = parseDecimalNumber(rowData[7]);
+    var rHasil = parseDecimalNumber(rowData[8]);
+
+    // Kriteria baris kosong / zombie:
+    // Kolom B (Tanggal) ada isinya (misal '28 Okt 2026'), tetapi Kolom F (Jenis Tembakau) kosong melompong
+    // dan tidak memiliki bobot baku / hasil (rBaku === 0 && rHasil === 0)
+    if (rTgl && rTgl.toString().trim() !== '' && (!rJenis || rJenis === '') && rBaku === 0 && rHasil === 0) {
+      Logger.log('🗑️ Menghapus baris hantu kosong #' + actualRow + ' (Tanggal: ' + rTgl + ')');
+      shRekap.deleteRow(actualRow);
+      deletedRows++;
+    }
+  }
+
+  var msg = '🧹 Pembersihan Tuntas: ' + deletedRows + ' baris hantu/kosong berhasil dihapus dari Sheet Rekap!';
+  Logger.log(msg);
+  try {
+    SpreadsheetApp.getUi().alert('🧹 Pembersihan Baris Kosong', msg, SpreadsheetApp.getUi().ButtonSet.OK);
+  } catch(e) {}
+
+  return { success: true, deletedRows: deletedRows, message: msg };
+}
+
 function matikanAutoPushSilent() {
   var triggers = ScriptApp.getProjectTriggers();
   for (var i = 0; i < triggers.length; i++) {
@@ -488,7 +533,8 @@ function onOpen() {
       .createMenu('⚡ Integrasi DHP Tembakau')
       .addItem('▶ Jalankan Sinkronisasi Sekarang', 'sinkronkanDhpKeRekapManual')
       .addSeparator()
-      .addItem('🧹 Bersihkan Batch Dibatalkan & Rekonsiliasi Tanggal Aktif', 'BERSIHKAN_DUPLIKAT_DAN_REKONSILIASI')
+      .addItem('🧹 Bersihkan Baris Kosong & Zombie (Hapus Slot 28 Okt)', 'BERSIHKAN_BARIS_KOSONG_DAN_ZOMBIE')
+      .addItem('🔄 Bersihkan Batch Dibatalkan & Rekonsiliasi Tanggal Aktif', 'BERSIHKAN_DUPLIKAT_DAN_REKONSILIASI')
       .addSeparator()
       .addItem('⏰ Aktifkan Auto-Push 5 Menit', 'AKTIFKAN_AUTO_PUSH_5_MENIT')
       .addItem('🛑 Matikan Auto-Push', 'MATIKAN_AUTO_PUSH')
@@ -668,7 +714,7 @@ function sinkronkanDhpKeRekap(isManual) {
     var rAir = parseDecimalNumber(rRow[12]); // Kolom M: Air
     var rDebu = parseDecimalNumber(rRow[13]); // Kolom N: Debu
 
-    if (rTgl && String(rTgl).trim() !== '') {
+    if (rTgl && String(rTgl).trim() !== '' && rJenis && rJenis !== '') {
       actualMaxRow = Math.max(actualMaxRow, rowIdx);
 
       var rDateObj = parseTanggalIndo(rTgl);
@@ -834,6 +880,7 @@ function sinkronkanDhpKeRekap(isManual) {
 
   // 4. MEKANISME OTOMATIS: REVERSE SCANNING & AUTO-PURGE BATCH DIBATALKAN / GHOST ROW
   // Menelusuri baris dari bawah ke atas (bottom-up agar aman).
+  // - Kasus 0: Baris Zombie (Kolom B terisi Tanggal, tapi Kolom F Jenis Tembakau KOSONG dan Baku/Hasil 0) -> Hapus
   // - Kasus 1: Baris pada tanggal aktif yang TIDAK menerima transaksi riil DHP dan hasil = 0 (dibatalkan) -> Hapus
   // - Kasus 2: Baris dari tanggal lama yang ber-hasil 0 (draft usang) di mana batch-nya sudah diproses pada tanggal aktif -> Hapus
   var purgedCount = 0;
@@ -846,6 +893,14 @@ function sinkronkanDhpKeRekap(isManual) {
       var rScanJenis = String(rScanRow[5] || '').trim();
       var rScanBaku = parseDecimalNumber(rScanRow[7]);
       var rScanHasil = parseDecimalNumber(rScanRow[8]);
+
+      // KASUS 0: Baris Zombie Kosong (Kolom B ada Tanggal, tapi Kolom F Jenis Tembakau Kosong dan Baku/Hasil 0)
+      if (rScanTgl && (!rScanJenis || rScanJenis === '') && rScanBaku === 0 && rScanHasil === 0) {
+        Logger.log('🗑️ Auto-Purge baris hantu kosong #' + checkRow + ' (Tanggal: ' + rScanTgl + ')');
+        shRekap.deleteRow(checkRow);
+        purgedCount++;
+        continue;
+      }
 
       if (!rScanTgl || !rScanJenis) continue;
 
@@ -882,7 +937,7 @@ function sinkronkanDhpKeRekap(isManual) {
     }
   }
 
-  var summaryMsg = 'Sinkronisasi Selesai: ' + updatedCount + ' baris draft berhasil diselaraskan & diisi, ' + appendedCount + ' baris baru ditambahkan' + (purgedCount > 0 ? ', ' + purgedCount + ' baris dibatalkan dibersihkan' : '') + '. Formula C, D, E, J, dan K terlindungi 100%.';
+  var summaryMsg = 'Sinkronisasi Selesai: ' + updatedCount + ' baris draft berhasil diselaraskan & diisi, ' + appendedCount + ' baris baru ditambahkan' + (purgedCount > 0 ? ', ' + purgedCount + ' baris hantu/dibatalkan dibersihkan' : '') + '. Formula C, D, E, J, dan K terlindungi 100%.';
   Logger.log(summaryMsg);
 
   if (isManual) {
@@ -899,6 +954,7 @@ function sinkronkanDhpKeRekap(isManual) {
     message: summaryMsg
   };
 }
+
 
 /**
  * =========================================================================
@@ -1008,7 +1064,16 @@ function BERSIHKAN_DUPLIKAT_DAN_REKONSILIASI() {
     var actualRow = CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW + k;
     var rowData = rekapValues[k];
     var rTgl = rowData[1];
-    var rJenis = String(rowData[5] || '').trim();
+    var rBaku = parseDecimalNumber(rowData[7]);
+    var rHasil = parseDecimalNumber(rowData[8]);
+
+    // KASUS 0: Baris Zombie Kosong (Kolom B ada Tanggal, tapi Kolom F Jenis Tembakau Kosong dan Baku/Hasil 0)
+    if (rTgl && rTgl.toString().trim() !== '' && (!rJenis || rJenis === '') && rBaku === 0 && rHasil === 0) {
+      Logger.log('🗑️ Hapus baris hantu kosong #' + actualRow + ' (Tanggal: ' + rTgl + ')');
+      shRekap.deleteRow(actualRow);
+      deletedRows++;
+      continue;
+    }
 
     if (!rTgl || !rJenis) continue;
 
@@ -1144,7 +1209,10 @@ function doPost(e) {
     var action = data.action || (e && e.parameter && e.parameter.action) || '';
 
     var result;
-    if (action === 'cleanDuplicates' || action === 'cleanCancelled' || action === 'reconcile') {
+    if (action === 'cleanZombie' || action === 'cleanEmpty') {
+      result = BERSIHKAN_BARIS_KOSONG_DAN_ZOMBIE();
+    } else if (action === 'cleanDuplicates' || action === 'cleanCancelled' || action === 'reconcile') {
+      BERSIHKAN_BARIS_KOSONG_DAN_ZOMBIE();
       result = BERSIHKAN_DUPLIKAT_DAN_REKONSILIASI();
     } else {
       result = sinkronkanDhpKeRekap();
@@ -1166,7 +1234,13 @@ function doPost(e) {
 function doGet(e) {
   var action = (e && e.parameter && e.parameter.action) || '';
   var res;
+  if (action === 'cleanZombie' || action === 'cleanEmpty') {
+    res = BERSIHKAN_BARIS_KOSONG_DAN_ZOMBIE();
+    return ContentService.createTextOutput(JSON.stringify(res))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
   if (action === 'cleanDuplicates' || action === 'cleanCancelled' || action === 'reconcile') {
+    BERSIHKAN_BARIS_KOSONG_DAN_ZOMBIE();
     res = BERSIHKAN_DUPLIKAT_DAN_REKONSILIASI();
     return ContentService.createTextOutput(JSON.stringify(res))
       .setMimeType(ContentService.MimeType.JSON);
@@ -2551,6 +2625,9 @@ function doGet(e) {
                       <p>✓ Pemicu waktu cloud otomatis terdaftar di project Standalone Anda dan akan mengeksekusi sinkronisasi tiap 5 menit 24 jam non-stop.</p>
                       <p>✓ <strong>100% Bebas Blokir:</strong> Sangat hemat kuota (~4 menit eksekusi per hari dari limit 90 menit/hari).</p>
                     </div>
+                  </li>
+                  <li>
+                    <strong>Bersihkan Baris Kosong &amp; Zombie:</strong> Untuk membersihkan 8 baris kosong pada tanggal 28 Oktober 2026 (baris 1557 s.d. 1564) atau slot tanggal kosong lainnya, pilih fungsi <code className="bg-slate-900 px-1.5 py-0.5 rounded text-rose-300 font-mono">BERSIHKAN_BARIS_KOSONG_DAN_ZOMBIE</code> pada dropdown lalu klik <strong className="text-white">▶ Jalankan (Run)</strong>.
                   </li>
                 </ol>
               </div>
