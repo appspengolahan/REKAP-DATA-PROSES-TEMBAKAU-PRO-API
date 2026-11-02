@@ -213,12 +213,12 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
           hasil: item.hasil,
           susutKg: item.susutKg,
           susutPct: item.susutPct,
-          gagangKg: item.gagangKg,
-          gagangPct: item.nettoBaku > 0 ? Number(((item.gagangKg / item.nettoBaku) * 100).toFixed(2)) : 0,
-          airKg: item.airKg,
-          debuKg: item.debuKg,
-          debuAirKg: (item.airKg || 0) + (item.debuKg || 0),
-          debuAirPct: item.nettoBaku > 0 ? Number((((item.airKg + item.debuKg) / item.nettoBaku) * 100).toFixed(2)) : 0
+          gagangKg: Math.max(0, item.gagangKg || 0),
+          gagangPct: item.nettoBaku > 0 ? Number(((Math.max(0, item.gagangKg || 0) / item.nettoBaku) * 100).toFixed(2)) : 0,
+          airKg: Math.max(0, item.airKg || 0),
+          debuKg: Math.max(0, item.debuKg || 0),
+          debuAirKg: Math.max(0, item.airKg || 0) + Math.max(0, item.debuKg || 0),
+          debuAirPct: item.nettoBaku > 0 ? Number((((Math.max(0, item.airKg || 0) + Math.max(0, item.debuKg || 0)) / item.nettoBaku) * 100).toFixed(2)) : 0
         };
       });
 
@@ -469,164 +469,179 @@ function CEK_STATUS_PEMICU() {
  * namun Kolom F (Jenis Tembakau) KOSONG dan tidak memiliki bobot baku/hasil.
  */
 function BERSIHKAN_BARIS_KOSONG_DAN_ZOMBIE() {
-  var ssRekap = SpreadsheetApp.openById(CONFIG_INTEGRASI_TEMBAKAU.REKAP_SS_ID);
-  var shRekap = ssRekap.getSheetByName(CONFIG_INTEGRASI_TEMBAKAU.REKAP_SHEET_NAME);
-  if (!shRekap) return { success: false, error: 'Sheet Rekap tidak ditemukan' };
-
-  var lastRowRekap = shRekap.getLastRow();
-  var rekapCount = Math.max(0, lastRowRekap - CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW + 1);
-  if (rekapCount === 0) return { success: false, message: 'Sheet Rekap kosong' };
-
-  var rekapValues = shRekap.getRange(CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW, 1, rekapCount, 14).getValues();
-  var deletedRows = 0;
-
-  // Scan dari baris paling bawah ke atas agar indeks baris tidak bergeser
-  for (var k = rekapValues.length - 1; k >= 0; k--) {
-    var actualRow = CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW + k;
-    var rowData = rekapValues[k];
-    var rTgl = rowData[1];
-    var rJenis = String(rowData[5] || '').trim();
-    var rBaku = parseDecimalNumber(rowData[7]);
-    var rHasil = parseDecimalNumber(rowData[8]);
-
-    // Kriteria baris kosong / zombie:
-    // Kolom B (Tanggal) ada isinya (misal '28 Okt 2026'), tetapi Kolom F (Jenis Tembakau) kosong melompong
-    // dan tidak memiliki bobot baku / hasil (rBaku === 0 && rHasil === 0)
-    if (rTgl && rTgl.toString().trim() !== '' && (!rJenis || rJenis === '') && rBaku === 0 && rHasil === 0) {
-      Logger.log('🗑️ Menghapus baris hantu kosong #' + actualRow + ' (Tanggal: ' + rTgl + ')');
-      shRekap.deleteRow(actualRow);
-      deletedRows++;
-    }
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) {
+    return { success: false, concurrent: true, message: 'Operasi lain sedang berjalan. Silakan coba sesaat lagi.' };
   }
-
-  var msg = '🧹 Pembersihan Tuntas: ' + deletedRows + ' baris hantu/kosong berhasil dihapus dari Sheet Rekap!';
-  Logger.log(msg);
   try {
-    SpreadsheetApp.getUi().alert('🧹 Pembersihan Baris Kosong', msg, SpreadsheetApp.getUi().ButtonSet.OK);
-  } catch(e) {}
+    var ssRekap = SpreadsheetApp.openById(CONFIG_INTEGRASI_TEMBAKAU.REKAP_SS_ID);
+    var shRekap = ssRekap.getSheetByName(CONFIG_INTEGRASI_TEMBAKAU.REKAP_SHEET_NAME);
+    if (!shRekap) return { success: false, error: 'Sheet Rekap tidak ditemukan' };
 
-  return { success: true, deletedRows: deletedRows, message: msg };
+    var lastRowRekap = shRekap.getLastRow();
+    var rekapCount = Math.max(0, lastRowRekap - CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW + 1);
+    if (rekapCount === 0) return { success: false, message: 'Sheet Rekap kosong' };
+
+    var rekapValues = shRekap.getRange(CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW, 1, rekapCount, 14).getValues();
+    var deletedRows = 0;
+
+    // Scan dari baris paling bawah ke atas agar indeks baris tidak bergeser
+    for (var k = rekapValues.length - 1; k >= 0; k--) {
+      var actualRow = CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW + k;
+      var rowData = rekapValues[k];
+      var rTgl = rowData[1];
+      var rJenis = String(rowData[5] || '').trim();
+      var rBaku = parseDecimalNumber(rowData[7]);
+      var rHasil = parseDecimalNumber(rowData[8]);
+
+      // Kriteria baris kosong / zombie:
+      // Kolom B (Tanggal) ada isinya (misal '28 Okt 2026'), tetapi Kolom F (Jenis Tembakau) kosong melompong
+      // dan tidak memiliki bobot baku / hasil (rBaku === 0 && rHasil === 0)
+      if (rTgl && rTgl.toString().trim() !== '' && (!rJenis || rJenis === '') && rBaku === 0 && rHasil === 0) {
+        Logger.log('🗑️ Menghapus baris hantu kosong #' + actualRow + ' (Tanggal: ' + rTgl + ')');
+        shRekap.deleteRow(actualRow);
+        deletedRows++;
+      }
+    }
+
+    var msg = '🧹 Pembersihan Tuntas: ' + deletedRows + ' baris hantu/kosong berhasil dihapus dari Sheet Rekap!';
+    Logger.log(msg);
+    try {
+      SpreadsheetApp.getUi().alert('🧹 Pembersihan Baris Kosong', msg, SpreadsheetApp.getUi().ButtonSet.OK);
+    } catch(e) {}
+
+    return { success: true, deletedRows: deletedRows, message: msg };
+  } finally {
+    try { lock.releaseLock(); } catch(e) {}
+  }
 }
 
 /**
  * 6. PILIH INI LALU KLIK "JALANKAN (RUN)" UNTUK MENYELARASKAN GAGANG, AIR & DEBU DARI DHP
  * Menyalin data timbangan murni Gagang, Kadar Air, dan Debu APA ADANYA dari sheet DHP
- * ke Kolom L, M, dan N di Sheet Rekap tanpa rumus atau kalkulasi rekaan.
+ * ke Kolom L, M, dan N di Sheet Rekap dengan sanitasi proteksi fisika neraca massa.
  */
 function SINKRONKAN_GAGANG_AIR_DEBU_DARI_DHP() {
-  var ssRekap = SpreadsheetApp.openById(CONFIG_INTEGRASI_TEMBAKAU.REKAP_SS_ID);
-  var shRekap = ssRekap.getSheetByName(CONFIG_INTEGRASI_TEMBAKAU.REKAP_SHEET_NAME);
-  var ssDhp = SpreadsheetApp.openById(CONFIG_INTEGRASI_TEMBAKAU.DHP_SS_ID);
-  var shDhp = ssDhp.getSheetByName(CONFIG_INTEGRASI_TEMBAKAU.DHP_SHEET_NAME);
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) {
+    return { success: false, concurrent: true, message: 'Operasi sinkronisasi lain sedang berjalan.' };
+  }
+  try {
+    var ssRekap = SpreadsheetApp.openById(CONFIG_INTEGRASI_TEMBAKAU.REKAP_SS_ID);
+    var shRekap = ssRekap.getSheetByName(CONFIG_INTEGRASI_TEMBAKAU.REKAP_SHEET_NAME);
+    var ssDhp = SpreadsheetApp.openById(CONFIG_INTEGRASI_TEMBAKAU.DHP_SS_ID);
+    var shDhp = ssDhp.getSheetByName(CONFIG_INTEGRASI_TEMBAKAU.DHP_SHEET_NAME);
 
-  if (!shRekap || !shDhp) return { success: false, error: 'Sheet Rekap atau DHP tidak ditemukan' };
+    if (!shRekap || !shDhp) return { success: false, error: 'Sheet Rekap atau DHP tidak ditemukan' };
 
-  var lastRowDhp = shDhp.getLastRow();
-  if (lastRowDhp < 3) return { success: false, error: 'Data DHP kosong' };
+    var lastRowDhp = shDhp.getLastRow();
+    if (lastRowDhp < 3) return { success: false, error: 'Data DHP kosong' };
 
-  var dhpValues = shDhp.getRange(3, 1, lastRowDhp - 2, shDhp.getLastColumn()).getValues();
+    var dhpValues = shDhp.getRange(3, 1, lastRowDhp - 2, shDhp.getLastColumn()).getValues();
 
-  var INDO_MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
-  var INDO_MONTH_MAP = {
-    'januari': 0, 'jan': 0, 'februari': 1, 'feb': 1, 'maret': 2, 'mar': 2,
-    'april': 3, 'apr': 3, 'mei': 4, 'may': 4, 'juni': 5, 'jun': 5,
-    'juli': 6, 'jul': 6, 'agustus': 7, 'agu': 7, 'ags': 7, 'aug': 7,
-    'september': 8, 'sep': 8, 'oktober': 9, 'okt': 9, 'oct': 9,
-    'november': 10, 'nov': 10, 'desember': 11, 'des': 11, 'dec': 11
-  };
+    var INDO_MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+    var INDO_MONTH_MAP = {
+      'januari': 0, 'jan': 0, 'februari': 1, 'feb': 1, 'maret': 2, 'mar': 2,
+      'april': 3, 'apr': 3, 'mei': 4, 'may': 4, 'juni': 5, 'jun': 5,
+      'juli': 6, 'jul': 6, 'agustus': 7, 'agu': 7, 'ags': 7, 'aug': 7,
+      'september': 8, 'sep': 8, 'oktober': 9, 'okt': 9, 'oct': 9,
+      'november': 10, 'nov': 10, 'desember': 11, 'des': 11, 'dec': 11
+    };
 
-  function parseTanggal(raw) {
-    if (!raw) return null;
-    if (raw instanceof Date) return isNaN(raw.getTime()) ? null : raw;
-    var s = String(raw).replace(/^[a-zA-Z]+,\\s*/, '').trim();
-    var mText = s.match(/^(\\d{1,2})\\s+([a-zA-Z]+)\\s+(\\d{4})/);
-    if (mText) {
-      var d = parseInt(mText[1], 10);
-      var m = mText[2].toLowerCase();
-      var y = parseInt(mText[3], 10);
-      if (m in INDO_MONTH_MAP) return new Date(y, INDO_MONTH_MAP[m], d);
+    function parseTanggal(raw) {
+      if (!raw) return null;
+      if (raw instanceof Date) return isNaN(raw.getTime()) ? null : raw;
+      var s = String(raw).replace(/^[a-zA-Z]+,\\s*/, '').trim();
+      var mText = s.match(/^(\\d{1,2})\\s+([a-zA-Z]+)\\s+(\\d{4})/);
+      if (mText) {
+        var d = parseInt(mText[1], 10);
+        var m = mText[2].toLowerCase();
+        var y = parseInt(mText[3], 10);
+        if (m in INDO_MONTH_MAP) return new Date(y, INDO_MONTH_MAP[m], d);
+      }
+      var mIso = s.match(/^(\\d{4})-(\\d{1,2})-(\\d{1,2})/);
+      if (mIso) return new Date(parseInt(mIso[1], 10), parseInt(mIso[2], 10) - 1, parseInt(mIso[3], 10));
+      return new Date(s);
     }
-    var mIso = s.match(/^(\\d{4})-(\\d{1,2})-(\\d{1,2})/);
-    if (mIso) return new Date(parseInt(mIso[1], 10), parseInt(mIso[2], 10) - 1, parseInt(mIso[3], 10));
-    return new Date(s);
-  }
 
-  function formatTgl(d) {
-    if (!d || isNaN(d.getTime())) return '';
-    return d.getDate() + ' ' + INDO_MONTH_SHORT[d.getMonth()] + ' ' + d.getFullYear();
-  }
-
-  function clean(s) {
-    return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-  }
-
-  var dhpBatches = [];
-  for (var j = 0; j < dhpValues.length; j++) {
-    var r = dhpValues[j];
-    var rawTgl = r[2];
-    var rawJenis = String(r[3] || '').trim();
-    var baku = parseDecimalNumber(r[4]);
-    var gagang = parseDecimalNumber(r[5]);
-    var air = parseDecimalNumber(r[6]);
-    var debu = parseDecimalNumber(r[7]);
-    var hasil = parseDecimalNumber(r[8]);
-
-    if (rawJenis && (baku > 0 || hasil > 0)) {
-      var dObj = parseTanggal(rawTgl);
-      if (!dObj) continue;
-      dhpBatches.push({
-        dateLabel: formatTgl(dObj).toLowerCase(),
-        jenis: clean(rawJenis),
-        baku: baku,
-        hasil: hasil,
-        gagang: gagang,
-        air: air,
-        debu: debu
-      });
+    function formatTgl(d) {
+      if (!d || isNaN(d.getTime())) return '';
+      return d.getDate() + ' ' + INDO_MONTH_SHORT[d.getMonth()] + ' ' + d.getFullYear();
     }
-  }
 
-  var lastRowRekap = shRekap.getLastRow();
-  var rekapCount = Math.max(0, lastRowRekap - CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW + 1);
-  if (rekapCount === 0) return { success: false, message: 'Sheet Rekap kosong' };
+    function clean(s) {
+      return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    }
 
-  var rekapValues = shRekap.getRange(CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW, 1, rekapCount, 14).getValues();
-  var updatedCount = 0;
+    var dhpBatches = [];
+    for (var j = 0; j < dhpValues.length; j++) {
+      var r = dhpValues[j];
+      var rawTgl = r[2];
+      var rawJenis = String(r[3] || '').trim();
+      var baku = parseDecimalNumber(r[4]);
+      // 🛡️ Sanitasi Fisika: Gagang, Air, Debu tidak boleh bernilai negatif
+      var gagang = Math.max(0, parseDecimalNumber(r[5]));
+      var air = Math.max(0, parseDecimalNumber(r[6]));
+      var debu = Math.max(0, parseDecimalNumber(r[7]));
+      var hasil = parseDecimalNumber(r[8]);
 
-  for (var k = 0; k < rekapValues.length; k++) {
-    var actualRow = CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW + k;
-    var rowData = rekapValues[k];
-    var rTgl = rowData[1];
-    var rJenis = clean(rowData[5]);
-    if (!rTgl || !rJenis) continue;
-
-    var rDateObj = parseTanggal(rTgl);
-    var rLabel = rDateObj ? formatTgl(rDateObj).toLowerCase() : String(rTgl).trim().toLowerCase();
-
-    for (var b = 0; b < dhpBatches.length; b++) {
-      var bItem = dhpBatches[b];
-      if (rLabel === bItem.dateLabel && rJenis === bItem.jenis) {
-        // Tulis apa adanya nilai murni angka dari DHP:
-        shRekap.getRange(actualRow, 12).setValue(bItem.gagang); // Kolom L: Gagang (nilai murni DHP)
-        if (bItem.air > 0) {
-          shRekap.getRange(actualRow, 13).setValue(bItem.air);  // Kolom M: Air
-        } else {
-          shRekap.getRange(actualRow, 13).clearContent();
-        }
-        shRekap.getRange(actualRow, 14).setValue(bItem.debu);   // Kolom N: Debu (nilai murni DHP apa adanya)
-        updatedCount++;
-        break;
+      if (rawJenis && (baku > 0 || hasil > 0)) {
+        var dObj = parseTanggal(rawTgl);
+        if (!dObj) continue;
+        dhpBatches.push({
+          dateLabel: formatTgl(dObj).toLowerCase(),
+          jenis: clean(rawJenis),
+          baku: baku,
+          hasil: hasil,
+          gagang: gagang,
+          air: air,
+          debu: debu
+        });
       }
     }
+
+    var lastRowRekap = shRekap.getLastRow();
+    var rekapCount = Math.max(0, lastRowRekap - CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW + 1);
+    if (rekapCount === 0) return { success: false, message: 'Sheet Rekap kosong' };
+
+    var rekapValues = shRekap.getRange(CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW, 1, rekapCount, 14).getValues();
+    var updatedCount = 0;
+
+    for (var k = 0; k < rekapValues.length; k++) {
+      var actualRow = CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW + k;
+      var rowData = rekapValues[k];
+      var rTgl = rowData[1];
+      var rJenis = clean(rowData[5]);
+      if (!rTgl || !rJenis) continue;
+
+      var rDateObj = parseTanggal(rTgl);
+      var rLabel = rDateObj ? formatTgl(rDateObj).toLowerCase() : String(rTgl).trim().toLowerCase();
+
+      for (var b = 0; b < dhpBatches.length; b++) {
+        var bItem = dhpBatches[b];
+        if (rLabel === bItem.dateLabel && rJenis === bItem.jenis) {
+          // ⚡ Penulisan Batch 1 Panggilan API untuk Kolom L, M, N (3x lebih cepat & anti-timeout):
+          shRekap.getRange(actualRow, 12, 1, 3).setValues([[
+            bItem.gagang,
+            (bItem.air > 0 ? bItem.air : ''),
+            bItem.debu
+          ]]);
+          updatedCount++;
+          break;
+        }
+      }
+    }
+
+    var msg = '✅ Penyelarasan Sukses: ' + updatedCount + ' baris di Sheet Rekap berhasil diperbarui data Gagang, Kadar Air, dan Debu murni dari DHP!';
+    Logger.log(msg);
+    try {
+      SpreadsheetApp.getUi().alert('⚖️ Sinkronisasi Fraksi DHP', msg, SpreadsheetApp.getUi().ButtonSet.OK);
+    } catch(e) {}
+
+    return { success: true, updatedCount: updatedCount, message: msg };
+  } finally {
+    try { lock.releaseLock(); } catch(e) {}
   }
-
-  var msg = '✅ Penyelarasan Sukses: ' + updatedCount + ' baris di Sheet Rekap berhasil diperbarui data Gagang, Kadar Air, dan Debu murni dari DHP!';
-  Logger.log(msg);
-  try {
-    SpreadsheetApp.getUi().alert('⚖️ Sinkronisasi Fraksi DHP', msg, SpreadsheetApp.getUi().ButtonSet.OK);
-  } catch(e) {}
-
-  return { success: true, updatedCount: updatedCount, message: msg };
 }
 
 function matikanAutoPushSilent() {
@@ -667,26 +682,76 @@ function onOpen() {
   }
 }
 
+/**
+ * =========================================================================
+ * HELPER KETAHANAN TINGGI (HIGH-RESILIENCE HELPERS)
+ * =========================================================================
+ */
+
+/**
+ * PENCARI BARIS TERAKHIR RIIL (Anti-Ghost Row)
+ * Memindai Kolom B (Tanggal) dan Kolom F (Jenis Tembakau) dari bawah ke atas
+ * untuk memastikan posisi penambahan baris baru tepat dan tanpa celah baris kosong.
+ */
+function findActualLastRow_(sheet) {
+  var lastRow = sheet.getLastRow();
+  if (lastRow < CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW) return CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW - 1;
+  var rowCount = lastRow - CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW + 1;
+  var colValues = sheet.getRange(CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW, 2, rowCount, 5).getValues();
+  for (var i = colValues.length - 1; i >= 0; i--) {
+    var tgl = colValues[i][0]; // Kolom B
+    var jenis = colValues[i][4]; // Kolom F
+    if (tgl && String(tgl).trim() !== '' && jenis && String(jenis).trim() !== '') {
+      return CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW + i;
+    }
+  }
+  return CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW - 1;
+}
+
+/**
+ * VALIDASI & SANITASI FISIKA PROSES (Neraca Massa & Proteksi Angka Negatif)
+ * Mengamankan agar timbangan Gagang, Air, dan Debu tidak pernah bernilai negatif (< 0).
+ */
+function validasiFisikaProses_(baku, hasil, gagang, air, debu) {
+  return {
+    baku: Math.max(0, Number(baku) || 0),
+    hasil: Math.max(0, Number(hasil) || 0),
+    gagang: Math.max(0, Number(gagang) || 0),
+    air: Math.max(0, Number(air) || 0),
+    debu: Math.max(0, Number(debu) || 0)
+  };
+}
+
 function sinkronkanDhpKeRekap(isManual) {
   if (isManual === undefined) isManual = false;
-  var ssRekap = SpreadsheetApp.openById(CONFIG_INTEGRASI_TEMBAKAU.REKAP_SS_ID);
-  var shRekap = ssRekap.getSheetByName(CONFIG_INTEGRASI_TEMBAKAU.REKAP_SHEET_NAME);
-  
-  var ssDhp = SpreadsheetApp.openById(CONFIG_INTEGRASI_TEMBAKAU.DHP_SS_ID);
-  var shDhp = ssDhp.getSheetByName(CONFIG_INTEGRASI_TEMBAKAU.DHP_SHEET_NAME);
 
-  if (!shRekap || !shDhp) {
-    var errMsg = 'Error: Sheet Rekap atau Sheet DHP tidak ditemukan!';
-    Logger.log(errMsg);
-    return { success: false, error: errMsg };
+  // 🛡️ LOCKSERVICE CONCURRENCY GUARD: Mencegah tabrakan antara pemicu otomatis 5-menit dan klik manual
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) {
+    var waitMsg = '⚠️ Sinkronisasi lain sedang berjalan (Concurrency Lock aktif). Operasi ditunda untuk keamanan data.';
+    Logger.log(waitMsg);
+    return { success: false, concurrent: true, message: waitMsg };
   }
 
-  // 1. Ambil data aktif dari DHP Tembakau (Tab INTEGRASI DATA)
-  var lastRowDhp = shDhp.getLastRow();
-  if (lastRowDhp < 3) {
-    Logger.log('Data di DHP belum tersedia atau kosong.');
-    return { success: false, error: 'Data DHP kosong' };
-  }
+  try {
+    var ssRekap = SpreadsheetApp.openById(CONFIG_INTEGRASI_TEMBAKAU.REKAP_SS_ID);
+    var shRekap = ssRekap.getSheetByName(CONFIG_INTEGRASI_TEMBAKAU.REKAP_SHEET_NAME);
+    
+    var ssDhp = SpreadsheetApp.openById(CONFIG_INTEGRASI_TEMBAKAU.DHP_SS_ID);
+    var shDhp = ssDhp.getSheetByName(CONFIG_INTEGRASI_TEMBAKAU.DHP_SHEET_NAME);
+
+    if (!shRekap || !shDhp) {
+      var errMsg = 'Error: Sheet Rekap atau Sheet DHP tidak ditemukan!';
+      Logger.log(errMsg);
+      return { success: false, error: errMsg };
+    }
+
+    // 1. Ambil data aktif dari DHP Tembakau (Tab INTEGRASI DATA)
+    var lastRowDhp = shDhp.getLastRow();
+    if (lastRowDhp < 3) {
+      Logger.log('Data di DHP belum tersedia atau kosong.');
+      return { success: false, error: 'Data DHP kosong' };
+    }
   
   // Baris 1: Summary, Baris 2: Header, Data mulai baris 3
   var dhpValues = shDhp.getRange(3, 1, lastRowDhp - 2, shDhp.getLastColumn()).getValues();
@@ -772,9 +837,10 @@ function sinkronkanDhpKeRekap(isManual) {
     var rawTgl = row[2]; // Kolom C: Tanggal (misal: "Selasa, 20 Oktober 2026")
     var rawJenis = String(row[3] || '').trim(); // Kolom D: Jenis Tembakau
     var rawBaku = parseDecimalNumber(row[4]); // Kolom E: Netto Baku
-    var gagang = parseDecimalNumber(row[5]); // Kolom F: Gagang
-    var air = parseDecimalNumber(row[6]); // Kolom G: Air
-    var debu = parseDecimalNumber(row[7]); // Kolom H: Debu
+    // 🛡️ Sanitasi Fisika: Gagang, Air, dan Debu tidak boleh bernilai negatif (< 0)
+    var gagang = Math.max(0, parseDecimalNumber(row[5])); // Kolom F: Gagang
+    var air = Math.max(0, parseDecimalNumber(row[6])); // Kolom G: Air
+    var debu = Math.max(0, parseDecimalNumber(row[7])); // Kolom H: Debu
     var hasil = parseDecimalNumber(row[8]); // Kolom I: Netto Hasil
     var susut = parseDecimalNumber(row[9]) || (rawBaku - hasil); // Kolom J
 
@@ -817,7 +883,8 @@ function sinkronkanDhpKeRekap(isManual) {
 
   var updatedCount = 0;
   var matchedDhpIndices = new Set();
-  var actualMaxRow = CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW - 1;
+  // ⚡ PENCARI BARIS TERAKHIR RIIL (Anti-Ghost Row):
+  var actualMaxRow = findActualLastRow_(shRekap);
 
   function cleanStr(s) {
     return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -895,18 +962,12 @@ function sinkronkanDhpKeRekap(isManual) {
               shRekap.getRange(rowIdx, 9).setValue(0);
             }
 
-            // Kolom L (Col 12): Gagang
-            shRekap.getRange(rowIdx, 12).setValue(batch.gagang);
-
-            // Kolom M (Col 13): Air
-            if (batch.air > 0) {
-              shRekap.getRange(rowIdx, 13).setValue(batch.air);
-            } else {
-              shRekap.getRange(rowIdx, 13).clearContent();
-            }
-
-            // Kolom N (Col 14): Debu
-            shRekap.getRange(rowIdx, 14).setValue(batch.debu);
+            // Kolom L, M, N (Col 12, 13, 14): Fraksi Susut (Batch 1-Panggilan API)
+            shRekap.getRange(rowIdx, 12, 1, 3).setValues([[
+              Math.max(0, batch.gagang),
+              (batch.air > 0 ? batch.air : ''),
+              Math.max(0, batch.debu)
+            ]]);
 
             // SANGAT PENTING:
             // - Kolom C (3): JANGAN DISENTUH (Formula Bulan otomatis)
@@ -953,13 +1014,11 @@ function sinkronkanDhpKeRekap(isManual) {
         if (item.hasil > 0) {
           shRekap.getRange(foundDraftRowIdx, 9).setValue(item.hasil);   // I: Netto Hasil
         }
-        shRekap.getRange(foundDraftRowIdx, 12).setValue(item.gagang);   // L: Gagang
-        if (item.air > 0) {
-          shRekap.getRange(foundDraftRowIdx, 13).setValue(item.air);    // M: Air
-        } else {
-          shRekap.getRange(foundDraftRowIdx, 13).clearContent();
-        }
-        shRekap.getRange(foundDraftRowIdx, 14).setValue(item.debu);     // N: Debu
+        shRekap.getRange(foundDraftRowIdx, 12, 1, 3).setValues([[
+          Math.max(0, item.gagang),
+          (item.air > 0 ? item.air : ''),
+          Math.max(0, item.debu)
+        ]]);
         updatedCount++;
         matchedDhpIndices.add(m);
         continue;
@@ -974,11 +1033,11 @@ function sinkronkanDhpKeRekap(isManual) {
       shRekap.getRange(targetRow, 7).setValue(item.jalur);     // G: Jenis/Jalur (SKT/SKM)
       shRekap.getRange(targetRow, 8).setValue(item.baku);      // H: Netto Baku
       shRekap.getRange(targetRow, 9).setValue(item.hasil);     // I: Netto Hasil
-      shRekap.getRange(targetRow, 12).setValue(item.gagang);   // L: Gagang
-      if (item.air > 0) {
-        shRekap.getRange(targetRow, 13).setValue(item.air);    // M: Air
-      }
-      shRekap.getRange(targetRow, 14).setValue(item.debu);     // N: Debu
+      shRekap.getRange(targetRow, 12, 1, 3).setValues([[
+        Math.max(0, item.gagang),
+        (item.air > 0 ? item.air : ''),
+        Math.max(0, item.debu)
+      ]]);
 
       // JANGAN MENIMPA RUMUS PADA KOLOM C, D, E, J, K:
       // Periksa apakah baris target sudah memiliki formula (seperti template baris kosong).
@@ -1075,6 +1134,9 @@ function sinkronkanDhpKeRekap(isManual) {
     purgedCount: purgedCount,
     message: summaryMsg
   };
+  } finally {
+    try { lock.releaseLock(); } catch(e) {}
+  }
 }
 
 
@@ -1086,6 +1148,11 @@ function sinkronkanDhpKeRekap(isManual) {
  * =========================================================================
  */
 function BERSIHKAN_DUPLIKAT_DAN_REKONSILIASI() {
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) {
+    return { success: false, concurrent: true, message: 'Operasi lain sedang berjalan. Silakan coba lagi.' };
+  }
+  try {
   var ssRekap = SpreadsheetApp.openById(CONFIG_INTEGRASI_TEMBAKAU.REKAP_SS_ID);
   var shRekap = ssRekap.getSheetByName(CONFIG_INTEGRASI_TEMBAKAU.REKAP_SHEET_NAME);
   var ssDhp = SpreadsheetApp.openById(CONFIG_INTEGRASI_TEMBAKAU.DHP_SS_ID);
@@ -1232,13 +1299,11 @@ function BERSIHKAN_DUPLIKAT_DAN_REKONSILIASI() {
         if (bItem.hasil > 0) {
           shRekap.getRange(actualRow, 9).setValue(bItem.hasil);   // I: Netto Hasil
         }
-        shRekap.getRange(actualRow, 12).setValue(bItem.gagang); // L: Gagang
-        if (bItem.air > 0) {
-          shRekap.getRange(actualRow, 13).setValue(bItem.air);  // M: Air
-        } else {
-          shRekap.getRange(actualRow, 13).clearContent();
-        }
-        shRekap.getRange(actualRow, 14).setValue(bItem.debu);   // N: Debu
+        shRekap.getRange(actualRow, 12, 1, 3).setValues([[
+          Math.max(0, bItem.gagang),
+          (bItem.air > 0 ? bItem.air : ''),
+          Math.max(0, bItem.debu)
+        ]]);
         reconciledRows++;
       }
     } else {
@@ -1311,6 +1376,9 @@ function BERSIHKAN_DUPLIKAT_DAN_REKONSILIASI() {
     finalBatchCount: dhpBatches.length,
     message: msg
   };
+  } finally {
+    try { lock.releaseLock(); } catch(e) {}
+  }
 }
 
 function parseDecimalNumber(val) {
@@ -1877,9 +1945,20 @@ function doGet(e) {
                               )}
                             </td>
                             <td className="py-2.5 px-3">
-                              <span className="font-bold text-slate-900 text-xs">
-                                {item.jenisTembakau}
-                              </span>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-bold text-slate-900 text-xs">
+                                  {item.jenisTembakau}
+                                </span>
+                                {item.physicsWarning && (
+                                  <span
+                                    className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-0.5"
+                                    title={item.physicsWarning}
+                                  >
+                                    <ShieldCheck className="w-2.5 h-2.5 text-amber-700 shrink-0" />
+                                    <span>Sanitasi Neraca</span>
+                                  </span>
+                                )}
+                              </div>
                             </td>
                             <td className="py-2.5 px-2 text-center">
                               <span

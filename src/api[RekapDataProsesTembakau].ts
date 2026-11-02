@@ -1702,10 +1702,22 @@ export class RekapDataProsesTembakauService {
       const susutPct = rawBaku > 0 ? (susutKg / rawBaku) * 100 : 0;
       const waktu = (row[12] || '-').trim();
 
+      // 🛡️ Layer 2 Process Physics Sanity Check & Clamping (Proteksi Neraca Massa)
+      let physicsWarning: string | undefined = undefined;
+      if (debuKg < 0) {
+        physicsWarning = `Debu bernilai negatif (${debuKg} Kg) dari sumber DHP disanitasi ke 0 Kg untuk menjaga integritas neraca massa.`;
+      } else if (gagangKg < 0 || airKg < 0) {
+        physicsWarning = `Fraksi susut bernilai negatif disanitasi ke 0 Kg.`;
+      } else if (rawBaku > 0 && hasil > rawBaku) {
+        physicsWarning = `Netto Hasil (${hasil} Kg) melebihi Netto Baku (${rawBaku} Kg) — Anomali fisika neraca massa.`;
+      } else if (susutPct > 35) {
+        physicsWarning = `Susut sebesar ${Math.round(susutPct * 10) / 10}% melebihi ambang batas toleransi proses (35%).`;
+      }
+
       const roundedHasil = Math.round(hasil * 10) / 10;
-      const roundedGagang = Math.round(gagangKg * 10) / 10;
-      const roundedAir = Math.round(airKg * 10) / 10;
-      const roundedDebu = Math.round(debuKg * 10) / 10;
+      const roundedGagang = Math.max(0, Math.round(gagangKg * 10) / 10);
+      const roundedAir = Math.max(0, Math.round(airKg * 10) / 10);
+      const roundedDebu = Math.max(0, Math.round(debuKg * 10) / 10);
 
       const rekapGagang = matchedRekap ? Math.round((matchedRekap.gagangKg || 0) * 10) / 10 : undefined;
       const rekapAir = matchedRekap ? Math.round((matchedRekap.airKg || 0) * 10) / 10 : undefined;
@@ -1814,7 +1826,8 @@ export class RekapDataProsesTembakauService {
         hasDebuMismatch,
         rekapDebu,
         rekapHasil,
-        rekapBaku
+        rekapBaku,
+        physicsWarning
       });
     }
 

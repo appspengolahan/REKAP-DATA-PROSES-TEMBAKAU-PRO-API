@@ -146,6 +146,7 @@ export interface DhpBatchItem {
   rekapAir?: number;
   hasDebuMismatch?: boolean;
   rekapDebu?: number;
+  physicsWarning?: string;
 }
 
 export interface DhpIntegrationData {
