@@ -999,9 +999,16 @@ export class RekapDataProsesTembakauService {
       const susutKg = parseNum(r[8]) || Math.round((baku - hasil) * 10) / 10;
       const susutPct = parseNum(r[9]) || (baku > 0 ? Math.round(((susutKg / baku) * 100) * 100) / 100 : 0);
       const gagangKg = parseNum(r[10]);
-      const debuAirKg = parseNum(r[11]);
-      const airKg = Math.round(debuAirKg * 0.6 * 10) / 10;
-      const debuKg = Math.round((debuAirKg - airKg) * 10) / 10;
+      let airKg = 0;
+      let debuKg = 0;
+      if (r[12] !== undefined && r[12] !== '') {
+        airKg = parseNum(r[11]);
+        debuKg = parseNum(r[12]);
+      } else {
+        debuKg = parseNum(r[11]);
+        airKg = 0;
+      }
+      const debuAirKg = Math.round((airKg + debuKg) * 10) / 10;
 
       parsed.push({
         srcRow,

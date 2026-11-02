@@ -508,6 +508,127 @@ function BERSIHKAN_BARIS_KOSONG_DAN_ZOMBIE() {
   return { success: true, deletedRows: deletedRows, message: msg };
 }
 
+/**
+ * 6. PILIH INI LALU KLIK "JALANKAN (RUN)" UNTUK MENYELARASKAN GAGANG, AIR & DEBU DARI DHP
+ * Menyalin data timbangan murni Gagang, Kadar Air, dan Debu APA ADANYA dari sheet DHP
+ * ke Kolom L, M, dan N di Sheet Rekap tanpa rumus atau kalkulasi rekaan.
+ */
+function SINKRONKAN_GAGANG_AIR_DEBU_DARI_DHP() {
+  var ssRekap = SpreadsheetApp.openById(CONFIG_INTEGRASI_TEMBAKAU.REKAP_SS_ID);
+  var shRekap = ssRekap.getSheetByName(CONFIG_INTEGRASI_TEMBAKAU.REKAP_SHEET_NAME);
+  var ssDhp = SpreadsheetApp.openById(CONFIG_INTEGRASI_TEMBAKAU.DHP_SS_ID);
+  var shDhp = ssDhp.getSheetByName(CONFIG_INTEGRASI_TEMBAKAU.DHP_SHEET_NAME);
+
+  if (!shRekap || !shDhp) return { success: false, error: 'Sheet Rekap atau DHP tidak ditemukan' };
+
+  var lastRowDhp = shDhp.getLastRow();
+  if (lastRowDhp < 3) return { success: false, error: 'Data DHP kosong' };
+
+  var dhpValues = shDhp.getRange(3, 1, lastRowDhp - 2, shDhp.getLastColumn()).getValues();
+
+  var INDO_MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+  var INDO_MONTH_MAP = {
+    'januari': 0, 'jan': 0, 'februari': 1, 'feb': 1, 'maret': 2, 'mar': 2,
+    'april': 3, 'apr': 3, 'mei': 4, 'may': 4, 'juni': 5, 'jun': 5,
+    'juli': 6, 'jul': 6, 'agustus': 7, 'agu': 7, 'ags': 7, 'aug': 7,
+    'september': 8, 'sep': 8, 'oktober': 9, 'okt': 9, 'oct': 9,
+    'november': 10, 'nov': 10, 'desember': 11, 'des': 11, 'dec': 11
+  };
+
+  function parseTanggal(raw) {
+    if (!raw) return null;
+    if (raw instanceof Date) return isNaN(raw.getTime()) ? null : raw;
+    var s = String(raw).replace(/^[a-zA-Z]+,\\s*/, '').trim();
+    var mText = s.match(/^(\\d{1,2})\\s+([a-zA-Z]+)\\s+(\\d{4})/);
+    if (mText) {
+      var d = parseInt(mText[1], 10);
+      var m = mText[2].toLowerCase();
+      var y = parseInt(mText[3], 10);
+      if (m in INDO_MONTH_MAP) return new Date(y, INDO_MONTH_MAP[m], d);
+    }
+    var mIso = s.match(/^(\\d{4})-(\\d{1,2})-(\\d{1,2})/);
+    if (mIso) return new Date(parseInt(mIso[1], 10), parseInt(mIso[2], 10) - 1, parseInt(mIso[3], 10));
+    return new Date(s);
+  }
+
+  function formatTgl(d) {
+    if (!d || isNaN(d.getTime())) return '';
+    return d.getDate() + ' ' + INDO_MONTH_SHORT[d.getMonth()] + ' ' + d.getFullYear();
+  }
+
+  function clean(s) {
+    return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  }
+
+  var dhpBatches = [];
+  for (var j = 0; j < dhpValues.length; j++) {
+    var r = dhpValues[j];
+    var rawTgl = r[2];
+    var rawJenis = String(r[3] || '').trim();
+    var baku = parseDecimalNumber(r[4]);
+    var gagang = parseDecimalNumber(r[5]);
+    var air = parseDecimalNumber(r[6]);
+    var debu = parseDecimalNumber(r[7]);
+    var hasil = parseDecimalNumber(r[8]);
+
+    if (rawJenis && (baku > 0 || hasil > 0)) {
+      var dObj = parseTanggal(rawTgl);
+      if (!dObj) continue;
+      dhpBatches.push({
+        dateLabel: formatTgl(dObj).toLowerCase(),
+        jenis: clean(rawJenis),
+        baku: baku,
+        hasil: hasil,
+        gagang: gagang,
+        air: air,
+        debu: debu
+      });
+    }
+  }
+
+  var lastRowRekap = shRekap.getLastRow();
+  var rekapCount = Math.max(0, lastRowRekap - CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW + 1);
+  if (rekapCount === 0) return { success: false, message: 'Sheet Rekap kosong' };
+
+  var rekapValues = shRekap.getRange(CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW, 1, rekapCount, 14).getValues();
+  var updatedCount = 0;
+
+  for (var k = 0; k < rekapValues.length; k++) {
+    var actualRow = CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW + k;
+    var rowData = rekapValues[k];
+    var rTgl = rowData[1];
+    var rJenis = clean(rowData[5]);
+    if (!rTgl || !rJenis) continue;
+
+    var rDateObj = parseTanggal(rTgl);
+    var rLabel = rDateObj ? formatTgl(rDateObj).toLowerCase() : String(rTgl).trim().toLowerCase();
+
+    for (var b = 0; b < dhpBatches.length; b++) {
+      var bItem = dhpBatches[b];
+      if (rLabel === bItem.dateLabel && rJenis === bItem.jenis) {
+        // Tulis apa adanya nilai murni angka dari DHP:
+        shRekap.getRange(actualRow, 12).setValue(bItem.gagang); // Kolom L: Gagang (nilai murni DHP)
+        if (bItem.air > 0) {
+          shRekap.getRange(actualRow, 13).setValue(bItem.air);  // Kolom M: Air
+        } else {
+          shRekap.getRange(actualRow, 13).clearContent();
+        }
+        shRekap.getRange(actualRow, 14).setValue(bItem.debu);   // Kolom N: Debu (nilai murni DHP apa adanya)
+        updatedCount++;
+        break;
+      }
+    }
+  }
+
+  var msg = '✅ Penyelarasan Sukses: ' + updatedCount + ' baris di Sheet Rekap berhasil diperbarui data Gagang, Kadar Air, dan Debu murni dari DHP!';
+  Logger.log(msg);
+  try {
+    SpreadsheetApp.getUi().alert('⚖️ Sinkronisasi Fraksi DHP', msg, SpreadsheetApp.getUi().ButtonSet.OK);
+  } catch(e) {}
+
+  return { success: true, updatedCount: updatedCount, message: msg };
+}
+
 function matikanAutoPushSilent() {
   var triggers = ScriptApp.getProjectTriggers();
   for (var i = 0; i < triggers.length; i++) {
@@ -533,6 +654,7 @@ function onOpen() {
       .createMenu('⚡ Integrasi DHP Tembakau')
       .addItem('▶ Jalankan Sinkronisasi Sekarang', 'sinkronkanDhpKeRekapManual')
       .addSeparator()
+      .addItem('⚖️ Selaraskan Gagang, Air & Debu dari DHP (Nilai Murni)', 'SINKRONKAN_GAGANG_AIR_DEBU_DARI_DHP')
       .addItem('🧹 Bersihkan Baris Kosong & Zombie (Hapus Slot 28 Okt)', 'BERSIHKAN_BARIS_KOSONG_DAN_ZOMBIE')
       .addItem('🔄 Bersihkan Batch Dibatalkan & Rekonsiliasi Tanggal Aktif', 'BERSIHKAN_DUPLIKAT_DAN_REKONSILIASI')
       .addSeparator()
@@ -1209,7 +1331,9 @@ function doPost(e) {
     var action = data.action || (e && e.parameter && e.parameter.action) || '';
 
     var result;
-    if (action === 'cleanZombie' || action === 'cleanEmpty') {
+    if (action === 'syncFractions' || action === 'syncDebu') {
+      result = SINKRONKAN_GAGANG_AIR_DEBU_DARI_DHP();
+    } else if (action === 'cleanZombie' || action === 'cleanEmpty') {
       result = BERSIHKAN_BARIS_KOSONG_DAN_ZOMBIE();
     } else if (action === 'cleanDuplicates' || action === 'cleanCancelled' || action === 'reconcile') {
       BERSIHKAN_BARIS_KOSONG_DAN_ZOMBIE();
@@ -1234,6 +1358,11 @@ function doPost(e) {
 function doGet(e) {
   var action = (e && e.parameter && e.parameter.action) || '';
   var res;
+  if (action === 'syncFractions' || action === 'syncDebu') {
+    res = SINKRONKAN_GAGANG_AIR_DEBU_DARI_DHP();
+    return ContentService.createTextOutput(JSON.stringify(res))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
   if (action === 'cleanZombie' || action === 'cleanEmpty') {
     res = BERSIHKAN_BARIS_KOSONG_DAN_ZOMBIE();
     return ContentService.createTextOutput(JSON.stringify(res))
@@ -2628,6 +2757,9 @@ function doGet(e) {
                   </li>
                   <li>
                     <strong>Bersihkan Baris Kosong &amp; Zombie:</strong> Untuk membersihkan 8 baris kosong pada tanggal 28 Oktober 2026 (baris 1557 s.d. 1564) atau slot tanggal kosong lainnya, pilih fungsi <code className="bg-slate-900 px-1.5 py-0.5 rounded text-rose-300 font-mono">BERSIHKAN_BARIS_KOSONG_DAN_ZOMBIE</code> pada dropdown lalu klik <strong className="text-white">▶ Jalankan (Run)</strong>.
+                  </li>
+                  <li>
+                    <strong>Selaraskan Gagang, Kadar Air &amp; Debu (Nilai Murni DHP):</strong> Jika data Kolom Debu di sheet rekap ingin diselaraskan apa adanya sesuai catatan DHP (menghilangkan rumus minus), pilih fungsi <code className="bg-slate-900 px-1.5 py-0.5 rounded text-cyan-300 font-mono">SINKRONKAN_GAGANG_AIR_DEBU_DARI_DHP</code> pada dropdown lalu klik <strong className="text-white">▶ Jalankan (Run)</strong>.
                   </li>
                 </ol>
               </div>
