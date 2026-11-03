@@ -1024,6 +1024,28 @@ function sinkronkanDhpKeRekap(isManual) {
         continue;
       }
 
+      // 🛡️ PROTEKSI RESIDUAL BUFFER DHP (Anti-Duplikasi Sisa Template Hari Sebelumnya):
+      // Jika batch di DHP ini masih ber-hasil 0, dan jenis tembakau serta bobot bakunya persis sama
+      // dengan batch yang SUDAH SELESAI (hasil > 0) pada tanggal sebelumnya di Rekap,
+      // jangan masukkan ke Rekap karena ini adalah sisa baris template kemarin yang belum ditimpa operator DHP.
+      var isResidualFromYesterday = false;
+      if (item.hasil === 0) {
+        for (var pScan = rekapValues.length - 1; pScan >= 0; pScan--) {
+          var pRow = rekapValues[pScan];
+          var pJenis = cleanStr(pRow[5]);
+          var pHasil = parseDecimalNumber(pRow[8]);
+          var pBaku = parseDecimalNumber(pRow[7]);
+          if (pJenis === cleanStr(item.jenis) && pHasil > 0 && Math.abs(pBaku - item.baku) < 2) {
+            isResidualFromYesterday = true;
+            break;
+          }
+        }
+      }
+      if (isResidualFromYesterday) {
+        Logger.log('🛡️ Melewati sisa template kemarin ber-hasil 0: ' + item.jenis + ' (' + item.baku + ' Kg)');
+        continue;
+      }
+
       var targetRow = actualMaxRow + 1;
       actualMaxRow = targetRow;
 
