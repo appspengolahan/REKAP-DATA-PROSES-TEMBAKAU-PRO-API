@@ -322,7 +322,7 @@ export class RekapDataProsesTembakauService {
       }
     }
 
-    const finalCleaned = result.filter(r => {
+    const draftFiltered = result.filter(r => {
       if ((r.hasil || 0) === 0) {
         const sig = `${cleanStr(r.jenisTembakau)}|${Math.round((r.baku || 0) * 10) / 10}`;
         if (finalizedVarieties.has(sig)) {
@@ -331,6 +331,35 @@ export class RekapDataProsesTembakauService {
       }
       return true;
     });
+
+    // Langkah 4: Singkirkan klon duplikat lintas tanggal (Anti-Ghost Clone dari sisa template)
+    // Jika sebuah baris pada tanggal tertentu memiliki jenis, baku, dan hasil yang persis kembar dengan
+    // baris di tanggal sebelumnya, maka baris pada tanggal yang lebih baru adalah duplikasi tak sengaja akibat sisa template.
+    const seenCompletedBatches = new Map<string, string>(); // key: jenis|baku|hasil -> first date seen
+    const finalCleaned: RawRowData[] = [];
+
+    // Urutkan berdasarkan tanggal ascending agar tanggal terdahulu menjadi pemilik sah transaksi
+    const sortedByDate = [...draftFiltered].sort((a, b) => {
+      const dA = parseIndonesianDate(a.tanggal)?.getTime() || 0;
+      const dB = parseIndonesianDate(b.tanggal)?.getTime() || 0;
+      return dA - dB;
+    });
+
+    for (const r of sortedByDate) {
+      if ((r.hasil || 0) > 0) {
+        const sig = `${cleanStr(r.jenisTembakau)}|${Math.round((r.baku || 0) * 10) / 10}|${Math.round((r.hasil || 0) * 10) / 10}`;
+        if (seenCompletedBatches.has(sig)) {
+          const firstDate = seenCompletedBatches.get(sig);
+          if (firstDate !== r.tanggal) {
+            // Ini adalah klon duplikat dari tanggal sebelumnya (misal Paiton 4 Nov vs 3 Nov)! Singkirkan!
+            continue;
+          }
+        } else {
+          seenCompletedBatches.set(sig, r.tanggal);
+        }
+      }
+      finalCleaned.push(r);
+    }
 
     return finalCleaned;
   }

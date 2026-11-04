@@ -1024,25 +1024,28 @@ function sinkronkanDhpKeRekap(isManual) {
         continue;
       }
 
-      // 🛡️ PROTEKSI RESIDUAL BUFFER DHP (Anti-Duplikasi Sisa Template Hari Sebelumnya):
-      // Jika batch di DHP ini masih ber-hasil 0, dan jenis tembakau serta bobot bakunya persis sama
-      // dengan batch yang SUDAH SELESAI (hasil > 0) pada tanggal sebelumnya di Rekap,
-      // jangan masukkan ke Rekap karena ini adalah sisa baris template kemarin yang belum ditimpa operator DHP.
-      var isResidualFromYesterday = false;
-      if (item.hasil === 0) {
-        for (var pScan = rekapValues.length - 1; pScan >= 0; pScan--) {
-          var pRow = rekapValues[pScan];
+      // 🛡️ BENTENG LAPIS BAJA (ANTI-DUPLIKASI SISA HARI KEMARIN):
+      // Jika batch di DHP ini memiliki Jenis dan Bobot Baku yang SAMA PERSIS dengan batch
+      // yang SUDAH TERCATAT dan SELESAI (hasil > 0) pada tanggal sebelumnya di Rekap:
+      // TOLAK penambahan baris baru ini secara mutlak! Ini 100% sisa baris kemarin di DHP yang belum dihapus operator.
+      var isAlreadyProcessedYesterday = false;
+      for (var pScan = rekapValues.length - 1; pScan >= 0; pScan--) {
+        var pRow = rekapValues[pScan];
+        var pTgl = pRow[1];
+        var pDateObj = parseTanggalIndo(pTgl);
+        var pLabel = pDateObj ? formatKolomBTanggal(pDateObj).toLowerCase() : String(pTgl).trim().toLowerCase();
+        if (pLabel !== item.dateLabel.toLowerCase()) {
           var pJenis = cleanStr(pRow[5]);
           var pHasil = parseDecimalNumber(pRow[8]);
           var pBaku = parseDecimalNumber(pRow[7]);
           if (pJenis === cleanStr(item.jenis) && pHasil > 0 && Math.abs(pBaku - item.baku) < 2) {
-            isResidualFromYesterday = true;
+            isAlreadyProcessedYesterday = true;
             break;
           }
         }
       }
-      if (isResidualFromYesterday) {
-        Logger.log('🛡️ Melewati sisa template kemarin ber-hasil 0: ' + item.jenis + ' (' + item.baku + ' Kg)');
+      if (isAlreadyProcessedYesterday) {
+        Logger.log('🛡️ REJECT MUTLAK: ' + item.jenis + ' (Baku: ' + item.baku + ' Kg) sudah diproses tuntas di hari sebelumnya. Dilarang duplikasi ke tanggal ' + item.dateLabel);
         continue;
       }
 
@@ -1084,7 +1087,7 @@ function sinkronkanDhpKeRekap(isManual) {
   // 4. MEKANISME OTOMATIS: REVERSE SCANNING & AUTO-PURGE BATCH DIBATALKAN / GHOST ROW
   // Menelusuri baris dari bawah ke atas (bottom-up agar aman).
   // - Kasus 0: Baris Zombie (Kolom B terisi Tanggal, tapi Kolom F Jenis Tembakau KOSONG dan Baku/Hasil 0) -> Hapus
-  // - Kasus 1: Baris pada tanggal aktif yang TIDAK menerima transaksi riil DHP dan hasil = 0 (dibatalkan) -> Hapus
+  // - Kasus 1: Baris pada tanggal aktif yang TIDAK menerima transaksi riil DHP (klon kemarin atau hasil 0) -> Hapus
   // - Kasus 2: Baris dari tanggal lama yang ber-hasil 0 (draft usang) di mana batch-nya sudah diproses pada tanggal aktif -> Hapus
   var purgedCount = 0;
   if (dhpBatches.length > 0) {
@@ -1119,14 +1122,33 @@ function sinkronkanDhpKeRekap(isManual) {
         }
       }
 
-      // KASUS 1: Baris pada tanggal aktif DHP
+      // KASUS 1: Baris pada tanggal aktif DHP yang TIDAK ADA di lembar DHP
       if (scanLabel === activeTargetDateLabel) {
-        if (!isMatchingActiveDhp && rScanHasil === 0) {
-          var allDhpDone = (matchedDhpIndices.size >= dhpBatches.length);
-          if (rScanBaku === 0 || isManual || allDhpDone) {
-            Logger.log('🗑️ Auto-Purge baris dibatalkan #' + checkRow + ': ' + rScanJenis + ' (' + rScanTgl + ')');
+        if (!isMatchingActiveDhp) {
+          // Periksa apakah baris ini adalah duplikasi dari transaksi kemarin (jenis & baku sama persis di tanggal lampau)
+          // ATAU baris ber-hasil 0 yang dibatalkan
+          var isCloneOfPastDay = false;
+          for (var pScan = 0; pScan < rekapValues.length; pScan++) {
+            if (pScan === kScan) continue;
+            var pRow = rekapValues[pScan];
+            var pTgl = pRow[1];
+            var pDateObj = parseTanggalIndo(pTgl);
+            var pLabel = pDateObj ? formatKolomBTanggal(pDateObj).toLowerCase() : String(pTgl).trim().toLowerCase();
+            if (pLabel !== activeTargetDateLabel && cleanStr(pRow[5]) === cleanStr(rScanJenis)) {
+              var pBakuVal = parseDecimalNumber(pRow[7]);
+              var pHasilVal = parseDecimalNumber(pRow[8]);
+              if (Math.abs(pBakuVal - rScanBaku) < 2 && pHasilVal > 0) {
+                isCloneOfPastDay = true;
+                break;
+              }
+            }
+          }
+
+          if (rScanHasil === 0 || isCloneOfPastDay) {
+            Logger.log('🗑️ Auto-Purge baris hantu/duplikasi kemarin #' + checkRow + ': ' + rScanJenis + ' (' + rScanTgl + ', Baku ' + rScanBaku + ' Kg)');
             shRekap.deleteRow(checkRow);
             purgedCount++;
+            continue;
           }
         }
       } else {
@@ -1275,6 +1297,7 @@ function BERSIHKAN_DUPLIKAT_DAN_REKONSILIASI() {
     var actualRow = CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW + k;
     var rowData = rekapValues[k];
     var rTgl = rowData[1];
+    var rJenis = String(rowData[5] || '').trim();
     var rBaku = parseDecimalNumber(rowData[7]);
     var rHasil = parseDecimalNumber(rowData[8]);
 
@@ -1302,11 +1325,26 @@ function BERSIHKAN_DUPLIKAT_DAN_REKONSILIASI() {
       }
 
       if (foundIdx === -1) {
-        // Baris anomali / dibatalkan / ghost row yang tidak tercatat di DHP
-        // Pengaman: Hanya hapus jika Netto Hasil masih 0 atau kosong (tidak ada output riil)
+        // Baris anomali / dibatalkan / duplikat sisa kemarin yang tidak tercatat di DHP
         var rHasilRow = parseDecimalNumber(rowData[8]);
-        if (rHasilRow === 0) {
-          Logger.log('🗑️ Hapus baris dibatalkan #' + actualRow + ': ' + rJenis + ' (' + rLabel + ')');
+        
+        // Cek apakah ini adalah klon/duplikat dari transaksi tanggal kemarin yang sudah selesai
+        var isCloneOfPastDay = false;
+        for (var p = 0; p < rekapValues.length; p++) {
+          if (p === k) continue;
+          var pRow = rekapValues[p];
+          var pDateObjPast = parseTanggal(pRow[1]);
+          var pLabelPast = pDateObjPast ? formatTgl(pDateObjPast) : String(pRow[1]).trim();
+          if (pLabelPast.toLowerCase() !== targetDateLabel.toLowerCase()) {
+            if (clean(pRow[5]) === clean(rJenis) && Math.abs(parseDecimalNumber(pRow[7]) - rBaku) < 2 && parseDecimalNumber(pRow[8]) > 0) {
+              isCloneOfPastDay = true;
+              break;
+            }
+          }
+        }
+
+        if (rHasilRow === 0 || isCloneOfPastDay) {
+          Logger.log('🗑️ Hapus baris duplikat/dibatalkan #' + actualRow + ': ' + rJenis + ' (' + rLabel + ') [Klon Kemarin: ' + isCloneOfPastDay + ']');
           shRekap.deleteRow(actualRow);
           deletedRows++;
         } else {
