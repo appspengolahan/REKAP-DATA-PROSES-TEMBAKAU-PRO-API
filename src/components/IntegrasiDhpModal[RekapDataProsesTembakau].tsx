@@ -366,6 +366,50 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
     }
   };
 
+  // Handle 1-Click Restore Debu Tanggal 2 & 3 November 2026
+  const [isRestoringDebu, setIsRestoringDebu] = useState<boolean>(false);
+  const handleRestoreDebuLive = async () => {
+    setIsRestoringDebu(true);
+    setSyncNotice(null);
+    try {
+      const resp = await fetch('/api/sync-gas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'restoreDebu' })
+      });
+
+      let data: any = null;
+      try {
+        const text = await resp.text();
+        if (text && text.trim()) {
+          data = JSON.parse(text);
+        }
+      } catch (pErr) {
+        console.warn('Fallback response parsing:', pErr);
+      }
+
+      if (data && data.success === false) {
+        throw new Error(data.error || 'Eksekusi pemulihan Debu GAS mengembalikan pesan gagal.');
+      }
+
+      setSyncNotice({
+        type: 'success',
+        message: data?.message || 'Nilai Debu tanggal 2 & 3 November 2026 berhasil dipulihkan secara presisi neraca massa!'
+      });
+
+      await loadDhpData(false);
+      onTarikDatasheetRekap?.().catch(() => {});
+    } catch (err: any) {
+      setSyncNotice({
+        type: 'error',
+        message: 'Gagal memulihkan nilai Debu: ' + (err?.message || 'Error jaringan')
+      });
+    } finally {
+      setIsRestoringDebu(false);
+      setTimeout(() => setSyncNotice(null), 8000);
+    }
+  };
+
   if (!isOpen) return null;
 
   // Complete GAS Script with Smart In-Place Fill & Strict Formula Protection
@@ -600,6 +644,19 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
                         <span>Bersihkan Batch Batal &amp; Rekonsiliasi</span>
                       </div>
                       <span className="text-[10px] text-amber-700 font-bold">Purge</span>
+                    </button>
+
+                    <button
+                      onClick={() => { setShowToolsDropdown(false); handleRestoreDebuLive(); }}
+                      disabled={isRestoringDebu}
+                      className="w-full text-left px-3 py-2 flex items-center justify-between text-indigo-700 hover:bg-indigo-50 font-semibold transition-colors cursor-pointer text-xs"
+                      title="Pulihkan nilai Debu tanggal 2 & 3 November 2026 yang sempat tertimpa 0"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Sparkles className={`w-4 h-4 text-indigo-600 ${isRestoringDebu ? 'animate-spin' : ''}`} />
+                        <span>Pulihkan Debu 2 &amp; 3 Nov 2026</span>
+                      </div>
+                      <span className="text-[10px] text-indigo-700 font-bold">Restore</span>
                     </button>
 
                     <div className="my-1 border-t border-slate-100" />

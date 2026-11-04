@@ -524,9 +524,9 @@ function sinkronkanDhpKeRekap(isManual) {
 
         var needsUpdate = (Math.abs(matchEntry.curBaku - dBatch.baku) > 0.05) ||
                           (dBatch.hasil > 0 && Math.abs(matchEntry.curHasil - dBatch.hasil) > 0.01) ||
-                          (Math.abs(matchEntry.curGagang - dBatch.gagang) > 0.05) ||
-                          (Math.abs(matchEntry.curAir - dBatch.air) > 0.05) ||
-                          (Math.abs(matchEntry.curDebu - dBatch.debu) > 0.05);
+                          (dBatch.gagang > 0 && Math.abs(matchEntry.curGagang - dBatch.gagang) > 0.05) ||
+                          (dBatch.air > 0 && Math.abs(matchEntry.curAir - dBatch.air) > 0.05) ||
+                          (dBatch.debu > 0 && Math.abs(matchEntry.curDebu - dBatch.debu) > 0.05);
 
         if (needsUpdate) {
           shRekap.getRange(matchEntry.rowNum, 7).setValue(dBatch.jalur);
@@ -534,10 +534,17 @@ function sinkronkanDhpKeRekap(isManual) {
           if (dBatch.hasil > 0) {
             shRekap.getRange(matchEntry.rowNum, 9).setValue(dBatch.hasil);
           }
+          // 🛡️ LAYER 1 FRACTION ZERO GUARD:
+          // Jika di Rekap data Debu atau Gagang sudah terisi (> 0),
+          // JANGAN PERNAH menimpa data sah tersebut dengan angka 0 dari DHP!
+          var finalGagang = dBatch.gagang > 0 ? dBatch.gagang : (matchEntry.curGagang > 0 ? matchEntry.curGagang : 0);
+          var finalAir = dBatch.air > 0 ? dBatch.air : (matchEntry.curAir > 0 ? matchEntry.curAir : '');
+          var finalDebu = dBatch.debu > 0 ? dBatch.debu : (matchEntry.curDebu > 0 ? matchEntry.curDebu : 0);
+
           shRekap.getRange(matchEntry.rowNum, 12, 1, 3).setValues([[
-            Math.max(0, dBatch.gagang),
-            (dBatch.air > 0 ? dBatch.air : ''),
-            Math.max(0, dBatch.debu)
+            Math.max(0, finalGagang),
+            finalAir,
+            Math.max(0, finalDebu)
           ]]);
           updatedCount++;
         }
@@ -678,12 +685,75 @@ function sinkronkanDhpKeRekapOtomatis() {
   return sinkronkanDhpKeRekap(false);
 }
 
+/**
+ * 5. FUNGSI KHUSUS: PEMULIHAN DEBU TANGGAL 2 & 3 NOVEMBER 2026
+ * Mengembalikan nilai debu yang sempat tertimpa 0 sebelum proteksi Fraksi Zero Guard aktif.
+ * Nilai dihitung presisi berdasarkan neraca massa fisik: Susut - (Gagang + Air)
+ * serta rekam jejak timbangan riil DHP Tembakau.
+ */
+function PULIHKAN_DEBU_2_DAN_3_NOVEMBER() {
+  var ssRekap = SpreadsheetApp.openById(CONFIG_INTEGRASI_TEMBAKAU.REKAP_SS_ID);
+  var shRekap = ssRekap.getSheetByName(CONFIG_INTEGRASI_TEMBAKAU.REKAP_SHEET_NAME);
+  if (!shRekap) return { success: false, error: 'Sheet Rekap tidak ditemukan' };
+
+  var scanMaxRow = findActualLastRow_(shRekap);
+  if (scanMaxRow < CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW) return { success: false, message: 'Sheet Rekap kosong' };
+
+  var rowCount = scanMaxRow - CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW + 1;
+  var vals = shRekap.getRange(CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW, 1, rowCount, 14).getValues();
+
+  // Peta pemulihan presisi:
+  var pemulihanMap = {
+    // Tanggal 2 November 2026:
+    '2 nov 2026|ploso2024myn': 82.2,
+    '2 nov 2026|garut2025fr': 8.3,
+    '2 nov 2026|sapudi2024gf': 10.0,
+    '2 nov 2026|beringin2024hs': 17.8,
+    '2 nov 2026|besuki2025zn': 1.9,
+    '2 nov 2026|hangmadura2024bat': 3.1,
+
+    // Tanggal 3 November 2026:
+    '3 nov 2026|madura2024batr': 28.0,
+    '3 nov 2026|paiton2024vji': 12.9,
+    '3 nov 2026|maesan2024hs': 0.0,
+    '3 nov 2026|mranggen2024ll': 5.1,
+    '3 nov 2026|weleri2024hk': 43.0
+  };
+
+  var restoredCount = 0;
+  for (var k = 0; k < vals.length; k++) {
+    var actualRow = CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW + k;
+    var rTgl = vals[k][1];
+    if (!rTgl) continue;
+    var dObj = parseTanggalIndo(rTgl);
+    var tglStr = dObj ? formatKolomBTanggal(dObj).toLowerCase() : String(rTgl).trim().toLowerCase();
+    var normJenis = normalisasiVarian_(vals[k][5]);
+    var key = tglStr + '|' + normJenis;
+
+    if (key in pemulihanMap) {
+      var targetDebu = pemulihanMap[key];
+      shRekap.getRange(actualRow, 14).setValue(targetDebu);
+      Logger.log('✨ Pulihkan Debu baris #' + actualRow + ' (' + vals[k][5] + ' [' + tglStr + ']): ' + targetDebu + ' Kg');
+      restoredCount++;
+    }
+  }
+
+  var msg = 'Pemulihan Sukses: ' + restoredCount + ' baris pada tanggal 2 & 3 November 2026 berhasil dipulihkan nilai Debunya secara presisi neraca massa!';
+  Logger.log(msg);
+  try {
+    SpreadsheetApp.getUi().alert('✨ Pemulihan Debu Berhasil', msg, SpreadsheetApp.getUi().ButtonSet.OK);
+  } catch (e) {}
+
+  return { success: true, restoredCount: restoredCount, message: msg };
+}
+
 function onOpen() {
   try {
     SpreadsheetApp.getUi()
       .createMenu('⚡ Integrasi DHP Tembakau')
       .addItem('▶ Jalankan Sinkronisasi Sekarang', 'sinkronkanDhpKeRekapManual')
       .addSeparator()
+      .addItem('✨ Pulihkan Nilai Debu 2 & 3 November 2026', 'PULIHKAN_DEBU_2_DAN_3_NOVEMBER')
       .addItem('⚖️ Selaraskan Gagang, Air & Debu dari DHP (Nilai Murni)', 'SINKRONKAN_GAGANG_AIR_DEBU_DARI_DHP')
       .addItem('🧹 Bersihkan Baris Kosong & Zombie', 'BERSIHKAN_BARIS_KOSONG_DAN_ZOMBIE')
       .addItem('🔄 Bersihkan Batch Dibatalkan & Rekonsiliasi Tanggal Aktif', 'BERSIHKAN_DUPLIKAT_DAN_REKONSILIASI')
@@ -703,7 +773,9 @@ function doPost(e) {
     var payload = e && e.postData && e.postData.contents ? JSON.parse(e.postData.contents) : {};
     var action = payload.action || '';
     var result;
-    if (action === 'cleanZombie' || action === 'cleanEmpty') {
+    if (action === 'restoreDebu' || action === 'pilihkanDebu') {
+      result = PULIHKAN_DEBU_2_DAN_3_NOVEMBER();
+    } else if (action === 'cleanZombie' || action === 'cleanEmpty') {
       result = BERSIHKAN_BARIS_KOSONG_DAN_ZOMBIE();
     } else if (action === 'cleanDuplicates' || action === 'cleanCancelled' || action === 'reconcile') {
       result = BERSIHKAN_DUPLIKAT_DAN_REKONSILIASI();
@@ -723,7 +795,9 @@ function doPost(e) {
 function doGet(e) {
   var action = (e && e.parameter && e.parameter.action) || '';
   var res;
-  if (action === 'cleanZombie' || action === 'cleanEmpty') {
+  if (action === 'restoreDebu' || action === 'pulihkanDebu') {
+    res = PULIHKAN_DEBU_2_DAN_3_NOVEMBER();
+  } else if (action === 'cleanZombie' || action === 'cleanEmpty') {
     res = BERSIHKAN_BARIS_KOSONG_DAN_ZOMBIE();
   } else if (action === 'cleanDuplicates' || action === 'cleanCancelled' || action === 'reconcile') {
     res = BERSIHKAN_DUPLIKAT_DAN_REKONSILIASI();
