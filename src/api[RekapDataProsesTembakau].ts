@@ -242,7 +242,7 @@ export class RekapDataProsesTembakauService {
   public static deduplicateAndCleanRows(rows: RawRowData[]): RawRowData[] {
     if (!rows || rows.length === 0) return [];
 
-    const cleanStr = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const cleanStr = (s: string) => (s || '').toLowerCase().replace(/\b(skt|skm)\b/gi, '').replace(/[^a-z0-9]/g, '');
 
     // Langkah 1: Filter baris anomali spesifik yang sudah terbukti zombie / ghost cache
     const sanitized = rows.filter(r => {
@@ -1558,7 +1558,7 @@ export class RekapDataProsesTembakauService {
     const rekapMap = new Map<string, RekapRowRef>();
     currentRows.forEach(r => {
       const tglClean = (r.tanggal || '').trim().toLowerCase();
-      const jenisClean = (r.jenisTembakau || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+      const jenisClean = (r.jenisTembakau || '').trim().toLowerCase().replace(/\b(skt|skm)\b/gi, '').replace(/[^a-z0-9]/g, '');
       const jalurClean = (r.jenisProses || '').trim().toLowerCase();
       const bakuRound = Math.round((r.baku || 0) * 10) / 10;
 
@@ -1702,7 +1702,7 @@ export class RekapDataProsesTembakauService {
       }
 
       const isoDate = parseToIsoDate(rawTgl);
-      const cleanJenis = jenis.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const cleanJenis = jenis.toLowerCase().replace(/\b(skt|skm)\b/gi, '').replace(/[^a-z0-9]/g, '');
       const cleanJalur = jalur.toLowerCase();
       const bakuRound = Math.round(rawBaku * 10) / 10;
       const matchKeyIso = `${isoDate}|${cleanJenis}|${cleanJalur}`;
@@ -1739,8 +1739,8 @@ export class RekapDataProsesTembakauService {
         physicsWarning = `Fraksi susut bernilai negatif disanitasi ke 0 Kg.`;
       } else if (rawBaku > 0 && hasil > rawBaku) {
         physicsWarning = `Netto Hasil (${hasil} Kg) melebihi Netto Baku (${rawBaku} Kg) — Anomali fisika neraca massa.`;
-      } else if (susutPct > 35) {
-        physicsWarning = `Susut sebesar ${Math.round(susutPct * 10) / 10}% melebihi ambang batas toleransi proses (35%).`;
+      } else if (susutPct > 65) {
+        physicsWarning = `Susut sebesar ${Math.round(susutPct * 10) / 10}% melebihi ambang batas toleransi proses (65%).`;
       }
 
       const roundedHasil = Math.round(hasil * 10) / 10;
