@@ -9,13 +9,13 @@
  *
  * STANDAR ARSITEKTUR 5-LAYER DEFENSE & OPTIMASI KECEPATAN (TERINTEGRASI DHP KROSOK):
  * - Layer 1 (Non-Destructive Zero Guard): Menolak mutlak penimpaan Netto Hasil > 0 dengan 0
- *   (termasuk saat pergantian tanggal otomatis pukul 00:00 WIB di Sheet DHP).
- * - Layer 2 (Physics & Mass-Balance Boundary): Mengkarantina otomatis baris DHP jika
- *   Gagang/Air/Debu < 0 Kg atau Susut ekstrem > 65% / < -15% agar salah ketik timbangan tidak merusak Rekap.
- * - Layer 3 (Cross-Day Duplicate Shield & Idempotent Ledger): Menolak mutlak penambahan sisa batch kemarin
- *   ke tanggal baru jika jenis & baku sudah selesai di hari sebelumnya.
- * - Layer 4 (Reverse Scan Auto-Purge & Master Row Preserver): Membersihkan baris batal/klon kemarin secara
- *   Bottom-Up tanpa merusak formula C, D, E, J, K. Baris 12 dilindungi secara sakral (clearContent, bukan deleteRow).
+ *   serta melindungi data Gagang/Air/Debu sah agar tidak tertimpa 0.
+ * - Layer 2 (Physics & Mass-Balance Boundary): Mengabaikan baris TOTAL/ringkasan DHP dan
+ *   memvalidasi neraca massa agar salah ketik timbangan tidak merusak Rekap.
+ * - Layer 3 (Idempotent Ledger & Single-Date Duplicate Lock): Mengunci mutlak agar tidak ada
+ *   duplikasi varian pada tanggal yang sama, sekaligus mendukung produksi ulang varian reguler di hari berbeda.
+ * - Layer 4 (Reverse Scan Auto-Purge & Master Row Preserver): Membersihkan baris batal dan draft
+ *   tertunda hari lampau secara Bottom-Up tanpa merusak formula C, D, E, J, K.
  * - Layer 5 (Resilient Error Boundary & Fast Row Scanner): Menggunakan findActualLastRow_()
  *   sejak awal untuk melewati ratusan baris rumus kosong (bebas timeout / JSON selalu utuh).
  * ============================================================================
@@ -32,13 +32,13 @@ export const gasScriptCode = `/**
  *
  * STANDAR ARSITEKTUR 5-LAYER DEFENSE & OPTIMASI KECEPATAN:
  * - Layer 1 (Non-Destructive Zero Guard): Menolak mutlak penimpaan Netto Hasil > 0 dengan 0
- *   (termasuk saat pergantian tanggal otomatis pukul 00:00 WIB di Sheet DHP).
- * - Layer 2 (Physics & Mass-Balance Boundary): Mengkarantina otomatis baris DHP jika
- *   Gagang/Air/Debu < 0 Kg atau Susut ekstrem > 65% / < -15% agar salah ketik timbangan tidak merusak Rekap.
- * - Layer 3 (Cross-Day Duplicate Shield & Idempotent Ledger): Menolak mutlak penambahan sisa batch kemarin
- *   ke tanggal baru jika jenis & baku sudah selesai di hari sebelumnya.
- * - Layer 4 (Reverse Scan Auto-Purge & Master Row Preserver): Membersihkan baris batal/klon kemarin secara
- *   Bottom-Up tanpa merusak formula C, D, E, J, K. Baris 12 dilindungi secara sakral (clearContent, bukan deleteRow).
+ *   serta melindungi data Gagang/Air/Debu sah agar tidak tertimpa 0.
+ * - Layer 2 (Physics & Mass-Balance Boundary): Mengabaikan baris TOTAL/ringkasan DHP dan
+ *   memvalidasi neraca massa agar salah ketik timbangan tidak merusak Rekap.
+ * - Layer 3 (Idempotent Ledger & Single-Date Duplicate Lock): Mengunci mutlak agar tidak ada
+ *   duplikasi varian pada tanggal yang sama, sekaligus mendukung produksi ulang varian reguler di hari berbeda.
+ * - Layer 4 (Reverse Scan Auto-Purge & Master Row Preserver): Membersihkan baris batal dan draft
+ *   tertunda hari lampau secara Bottom-Up tanpa merusak formula C, D, E, J, K.
  * - Layer 5 (Resilient Error Boundary & Fast Row Scanner): Menggunakan findActualLastRow_()
  *   sejak awal untuk melewati ratusan baris rumus kosong (bebas timeout / JSON selalu utuh).
  * ============================================================================
@@ -233,14 +233,14 @@ function sinkronkanDhpKeRekap(isManual) {
     }
 
     var allActiveDhp = []; // Seluruh varian aktif di DHP
-    var completedDhp = []; // Varian selesai (Hasil > 0) yang lulus batas fisika
+    var completedDhp = []; // Varian yang siap dibukukan ke Rekap
     var quarantinedCount = 0;
     var targetActiveDateLabel = '';
     var targetActiveIsoDate = '';
 
     for (var j = 0; j < dhpValues.length; j++) {
       var row = dhpValues[j];
-      var rawTgl = row[2]; // Kolom C: Tanggal (misal: "Rabu, 04 November 2026")
+      var rawTgl = row[2]; // Kolom C: Tanggal (misal: "Senin, 09 November 2026")
       var rawJenis = String(row[3] || '').trim(); // Kolom D: Jenis Tembakau
       var rawBaku = parseDecimalNumber(row[4]); // Kolom E: Netto Baku
       var gagang = Math.max(0, parseDecimalNumber(row[5])); // Kolom F: Gagang
@@ -249,12 +249,18 @@ function sinkronkanDhpKeRekap(isManual) {
       var hasil = parseDecimalNumber(row[8]); // Kolom I: Netto Hasil
       var susut = parseDecimalNumber(row[9]) || (rawBaku - hasil); // Kolom J
 
-      if (rawJenis && (rawBaku > 0 || hasil > 0)) {
+      // Abaikan baris kosong, header berulang, atau baris TOTAL / JUMLAH di lembar DHP
+      var jUpper = rawJenis.toUpperCase();
+      if (!rawJenis || jUpper === 'JENIS TEMBAKAU' || jUpper.indexOf('TOTAL') !== -1 || jUpper.indexOf('JUMLAH') !== -1) {
+        continue;
+      }
+
+      if (rawBaku > 0 || hasil > 0) {
         var dateObj = parseTanggalIndo(rawTgl);
         if (!dateObj) continue;
 
-        var dateLabel = formatKolomBTanggal(dateObj); // "4 Nov 2026"
-        var isoDate = formatIsoDateStr(dateObj); // "2026-11-04"
+        var dateLabel = formatKolomBTanggal(dateObj); // "9 Nov 2026"
+        var isoDate = formatIsoDateStr(dateObj); // "2026-11-09"
         if (!targetActiveDateLabel) {
           targetActiveDateLabel = dateLabel;
           targetActiveIsoDate = isoDate;
@@ -283,7 +289,12 @@ function sinkronkanDhpKeRekap(isManual) {
         var cekFisika = validasiFisikaTembakau_(rawBaku, hasil, gagang, air, debu);
         if (!cekFisika.valid) {
           quarantinedCount++;
-          Logger.log('⚠️ KARANTINA FISIKA: ' + rawJenis + ' -> ' + cekFisika.reason);
+          Logger.log('⚠️ PERINGATAN FISIKA: ' + rawJenis + ' -> ' + cekFisika.reason);
+          // Jika batch masih draft / timbangan awal (hasil < baku * 0.35), tetap masukkan dengan hasil = 0 agar baris terdaftar di Rekap
+          if (hasil > 0 && ((rawBaku - hasil) / rawBaku) * 100 > 65) {
+            dhpEntry.hasil = 0; // tandai draft sampai timbangan tuntas
+            completedDhp.push(dhpEntry);
+          }
         } else {
           completedDhp.push(dhpEntry);
         }
@@ -372,31 +383,13 @@ function sinkronkanDhpKeRekap(isManual) {
         }
       }
 
-      // Bottom-Up Elimination: Hapus baris batal atau kloning sisa kemarin
+      // Bottom-Up Elimination: Hapus baris batal atau kloning pada tanggal aktif
       for (var k = activeRekapRows.length - 1; k >= 0; k--) {
         var item = activeRekapRows[k];
         if (item.matched) continue;
 
-        // Cek apakah ini kloningan dari transaksi hari kemarin yang sudah selesai
-        var isCloneOfPastDay = false;
-        for (var pScan = 0; pScan < rekapValues.length; pScan++) {
-          if (pScan === item.kIndex) continue;
-          var pRow = rekapValues[pScan];
-          var pTgl = pRow[1];
-          var pDateObj = parseTanggalIndo(pTgl);
-          var pIso = pDateObj ? formatIsoDateStr(pDateObj) : String(pTgl).trim();
-          if (pIso !== targetActiveIsoDate && normalisasiVarian_(pRow[5]) === item.normJenis) {
-            var pBakuVal = parseDecimalNumber(pRow[7]);
-            var pHasilVal = parseDecimalNumber(pRow[8]);
-            if (Math.abs(pBakuVal - item.rBaku) < 2 && pHasilVal > 0) {
-              isCloneOfPastDay = true;
-              break;
-            }
-          }
-        }
-
-        if (item.rHasil === 0 || isCloneOfPastDay) {
-          Logger.log('🗑️ Auto-Purge baris anomali/klon kemarin #' + item.rowNum + ': ' + item.rJenis + ' [Klon: ' + isCloneOfPastDay + ']');
+        if (item.rHasil === 0) {
+          Logger.log('🗑️ Auto-Purge baris draft tidak terdaftar #' + item.rowNum + ': ' + item.rJenis);
           if (item.rowNum === 12 && findActualLastRow_(shRekap) <= 12) {
             shRekap.getRange(12, 2).clearContent();
             shRekap.getRange(12, 6, 1, 4).clearContent();
@@ -491,7 +484,7 @@ function sinkronkanDhpKeRekap(isManual) {
       var dBatch = completedDhp[c];
       var matchEntry = null;
 
-      // Cari kecocokan presisi (Tanggal + Varian + Baku)
+      // Cari kecocokan presisi pada TANGGAL YANG SAMA (Tanggal + Varian + Baku)
       for (var re = 0; re < rekapEntriesLive.length; re++) {
         var cand = rekapEntriesLive[re];
         if (cand.used || cand.isoDate !== dBatch.isoDate) continue;
@@ -501,7 +494,7 @@ function sinkronkanDhpKeRekap(isManual) {
         }
       }
 
-      // Jika belum cocok, cari baris template/draft (Hasil === 0)
+      // Jika belum cocok, cari baris template/draft pada TANGGAL YANG SAMA (Hasil === 0)
       if (!matchEntry) {
         for (var re2 = 0; re2 < rekapEntriesLive.length; re2++) {
           var candT = rekapEntriesLive[re2];
@@ -514,24 +507,7 @@ function sinkronkanDhpKeRekap(isManual) {
       }
 
       if (!matchEntry) {
-        // 🛡️ LAYER 3: CROSS-DAY DUPLICATE SHIELD (REJECT SISA HARI KEMARIN MUTLAK)
-        var isAlreadyProcessedYesterday = false;
-        for (var p = 0; p < rekapEntriesLive.length; p++) {
-          var past = rekapEntriesLive[p];
-          if (past.isoDate !== dBatch.isoDate && past.normJenis === dBatch.normJenis && past.curHasil > 0) {
-            if (Math.abs(past.curBaku - dBatch.baku) < 2) {
-              isAlreadyProcessedYesterday = true;
-              break;
-            }
-          }
-        }
-
-        if (isAlreadyProcessedYesterday) {
-          Logger.log('🛡️ REJECT MUTLAK: ' + dBatch.jenis + ' (' + dBatch.baku + ' Kg) sudah diproses tuntas di hari sebelumnya. Dilarang duplikasi ke tanggal ' + dBatch.dateLabel);
-          continue;
-        }
-
-        // Tambah baris baru
+        // Tambah baris baru untuk tanggal ini (Mendukung produksi ulang varian yang sama pada hari yang berbeda)
         currentRow++;
         shRekap.getRange(currentRow, 2).setValue(dBatch.dateLabel); // B: Tanggal
         shRekap.getRange(currentRow, 6).setValue(dBatch.jenis);     // F: Jenis Tembakau
@@ -540,7 +516,6 @@ function sinkronkanDhpKeRekap(isManual) {
         shRekap.getRange(currentRow, 9).setValue(dBatch.hasil);     // I: Netto Hasil
         
         // Kolom L, M, N (Gagang, Air, Debu):
-        // Jika batch baru masih draft (hasil === 0), debu & gagang diisi 0 (bukan susut 100% dari DHP)!
         var initDebu = dBatch.hasil > 0 ? Math.max(0, dBatch.debu) : 0;
         var initGagang = dBatch.hasil > 0 ? Math.max(0, dBatch.gagang) : 0;
         var initAir = dBatch.hasil > 0 && dBatch.air > 0 ? dBatch.air : '';
@@ -550,7 +525,7 @@ function sinkronkanDhpKeRekap(isManual) {
           initDebu
         ]]);
 
-        // Salin Rumus C..E dan J..K menggunakan Range Blok (Optimasi Kecepatan DHP Krosok)
+        // Salin Rumus C..E dan J..K menggunakan Range Blok (Standar DHP Krosok Aman 100%)
         if (currentRow > CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW) {
           var prevRow = currentRow - 1;
           if (!shRekap.getRange(currentRow, 3).getFormula()) {
@@ -569,6 +544,7 @@ function sinkronkanDhpKeRekap(isManual) {
           }
         }
         appendedCount++;
+        Logger.log('➕ Tambah Batch Baru: ' + dBatch.dateLabel + ' | ' + dBatch.jenis + ' | ' + dBatch.baku + ' Kg (Hasil: ' + dBatch.hasil + ' Kg)');
       } else {
         matchEntry.used = true;
         // Layer 1: HARAM menimpa hasil > 0 dengan <= 0
@@ -599,6 +575,7 @@ function sinkronkanDhpKeRekap(isManual) {
             Math.max(0, finalDebu)
           ]]);
           updatedCount++;
+          Logger.log('🔄 Update Batch: ' + dBatch.dateLabel + ' | ' + dBatch.jenis + ' | Hasil: ' + dBatch.hasil + ' Kg');
         }
       }
     }
