@@ -410,6 +410,52 @@ function sinkronkanDhpKeRekap(isManual) {
           Logger.log('🛡️ Proteksi Baris #' + item.rowNum + ' (' + item.rJenis + '): Memiliki Hasil ' + item.rHasil + ' Kg.');
         }
       }
+
+      // 🧹 PURGE SISA DRAFT BATAL / TERTUNDA DARI HARI LAMPAU (Bottom-Up)
+      // Mencari baris pada tanggal lampau (< targetActiveIsoDate) yang memiliki rHasil === 0
+      // dan variannya dijadwalkan ulang di lembar DHP hari ini (misal sisa 4 Nov yang dijadwalkan ke 9 Nov)
+      var maxFresh = findActualLastRow_(shRekap);
+      if (maxFresh >= CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW) {
+        var freshCount = maxFresh - CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW + 1;
+        var rekapValuesFresh = shRekap.getRange(CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW, 1, freshCount, 14).getValues();
+        for (var pIdx = rekapValuesFresh.length - 1; pIdx >= 0; pIdx--) {
+          var pRowVal = rekapValuesFresh[pIdx];
+          var pActualRow = CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW + pIdx;
+          var pTglRaw = pRowVal[1];
+          if (!pTglRaw) continue;
+          var pDObj = parseTanggalIndo(pTglRaw);
+          var pIso = pDObj ? formatIsoDateStr(pDObj) : String(pTglRaw).trim();
+          var pJenis = String(pRowVal[5] || '').trim();
+          var pBaku = parseDecimalNumber(pRowVal[7]);
+          var pHasil = parseDecimalNumber(pRowVal[8]);
+
+          // Syarat mutlak pembersihan draft lampau:
+          // 1. Tanggal sebelum tanggal aktif (pIso !== targetActiveIsoDate)
+          // 2. Netto Hasil MUTLAK 0 (tidak pernah ada timbangan hasil riil)
+          // 3. Varian tersebut saat ini ada di lembar DHP tanggal aktif (dijadwalkan ulang)
+          if (pIso && pIso !== targetActiveIsoDate && pHasil === 0 && pBaku > 0 && pJenis) {
+            var pNorm = normalisasiVarian_(pJenis);
+            var isReScheduledToday = false;
+            for (var da = 0; da < allActiveDhp.length; da++) {
+              if (allActiveDhp[da].normJenis === pNorm) {
+                isReScheduledToday = true;
+                break;
+              }
+            }
+            if (isReScheduledToday) {
+              Logger.log('🗑️ Auto-Purge draft tertunda lampau #' + pActualRow + ' (' + pJenis + ' [' + pIso + '], Hasil: 0 Kg) -> Dijadwalkan ke ' + targetActiveDateLabel);
+              if (pActualRow === 12 && findActualLastRow_(shRekap) <= 12) {
+                shRekap.getRange(12, 2).clearContent();
+                shRekap.getRange(12, 6, 1, 4).clearContent();
+                shRekap.getRange(12, 12, 1, 3).clearContent();
+              } else {
+                shRekap.deleteRow(pActualRow);
+              }
+              purgedCount++;
+            }
+          }
+        }
+      }
     }
 
     // --- TAHAP C: PEMBUKUAN & UPDATE BATCH SELESAI DENGAN 5-LAYER DEFENSE ---
@@ -492,10 +538,16 @@ function sinkronkanDhpKeRekap(isManual) {
         shRekap.getRange(currentRow, 7).setValue(dBatch.jalur);     // G: Jalur (SKT/SKM)
         shRekap.getRange(currentRow, 8).setValue(dBatch.baku);      // H: Netto Baku
         shRekap.getRange(currentRow, 9).setValue(dBatch.hasil);     // I: Netto Hasil
+        
+        // Kolom L, M, N (Gagang, Air, Debu):
+        // Jika batch baru masih draft (hasil === 0), debu & gagang diisi 0 (bukan susut 100% dari DHP)!
+        var initDebu = dBatch.hasil > 0 ? Math.max(0, dBatch.debu) : 0;
+        var initGagang = dBatch.hasil > 0 ? Math.max(0, dBatch.gagang) : 0;
+        var initAir = dBatch.hasil > 0 && dBatch.air > 0 ? dBatch.air : '';
         shRekap.getRange(currentRow, 12, 1, 3).setValues([[
-          Math.max(0, dBatch.gagang),
-          (dBatch.air > 0 ? dBatch.air : ''),
-          Math.max(0, dBatch.debu)
+          initGagang,
+          initAir,
+          initDebu
         ]]);
 
         // Salin Rumus C..E dan J..K menggunakan Range Blok (Optimasi Kecepatan DHP Krosok)
