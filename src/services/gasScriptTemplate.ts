@@ -550,32 +550,42 @@ function sinkronkanDhpKeRekap(isManual) {
         // Layer 1: HARAM menimpa hasil > 0 dengan <= 0
         if (matchEntry.curHasil > 0 && dBatch.hasil <= 0) continue;
 
-        var needsUpdate = (Math.abs(matchEntry.curBaku - dBatch.baku) > 0.05) ||
+        // Cek apakah baris ini adalah draft yang memiliki angka Debu semu (curHasil === 0 tapi curDebu > 0)
+        var isLegacyDraftWithGhostDebu = (matchEntry.curHasil === 0 && dBatch.hasil === 0 && matchEntry.curDebu > 0);
+
+        var needsUpdate = isLegacyDraftWithGhostDebu ||
+                          (Math.abs(matchEntry.curBaku - dBatch.baku) > 0.05) ||
                           (dBatch.hasil > 0 && Math.abs(matchEntry.curHasil - dBatch.hasil) > 0.01) ||
-                          (dBatch.gagang > 0 && Math.abs(matchEntry.curGagang - dBatch.gagang) > 0.05) ||
-                          (dBatch.air > 0 && Math.abs(matchEntry.curAir - dBatch.air) > 0.05) ||
-                          (dBatch.debu > 0 && Math.abs(matchEntry.curDebu - dBatch.debu) > 0.05);
+                          (dBatch.hasil > 0 && Math.abs(matchEntry.curGagang - dBatch.gagang) > 0.05) ||
+                          (dBatch.hasil > 0 && Math.abs(matchEntry.curAir - dBatch.air) > 0.05) ||
+                          (dBatch.hasil > 0 && Math.abs(matchEntry.curDebu - dBatch.debu) > 0.05);
 
         if (needsUpdate) {
           shRekap.getRange(matchEntry.rowNum, 7).setValue(dBatch.jalur);
           shRekap.getRange(matchEntry.rowNum, 8).setValue(dBatch.baku);
+          
           if (dBatch.hasil > 0) {
+            // KONDISI A: BATCH SELESAI DI DHP (Hasil > 0)
+            // Seluruh data Netto Hasil, Gagang, Air & Debu disinkronkan MURNI 100% dari DHP
             shRekap.getRange(matchEntry.rowNum, 9).setValue(dBatch.hasil);
+            shRekap.getRange(matchEntry.rowNum, 12, 1, 3).setValues([[
+              Math.max(0, dBatch.gagang),
+              dBatch.air > 0 ? dBatch.air : '',
+              Math.max(0, dBatch.debu)
+            ]]);
+            Logger.log('🔄 Selesai & Sinkron Murni: ' + dBatch.dateLabel + ' | ' + dBatch.jenis + ' | Hasil: ' + dBatch.hasil + ' Kg | Debu: ' + dBatch.debu + ' Kg');
+          } else {
+            // KONDISI B: BATCH MASIH PROSES / DRAFT DI DHP (Hasil === 0)
+            // Netto Hasil tetap 0, dan Debu WAJIB 0 (membersihkan angka susut semu 100% dari lembar DHP)
+            shRekap.getRange(matchEntry.rowNum, 9).setValue(0);
+            shRekap.getRange(matchEntry.rowNum, 12, 1, 3).setValues([[
+              Math.max(0, dBatch.gagang),
+              '',
+              0
+            ]]);
+            Logger.log('🧹 Bersihkan Debu Semu Draft: ' + dBatch.dateLabel + ' | ' + dBatch.jenis + ' -> Debu dinolkan selagi menunggu timbangan Hasil');
           }
-          // 🛡️ LAYER 1 FRACTION ZERO GUARD:
-          // Jika di Rekap data Debu atau Gagang sudah terisi (> 0),
-          // JANGAN PERNAH menimpa data sah tersebut dengan angka 0 dari DHP!
-          var finalGagang = dBatch.gagang > 0 ? dBatch.gagang : (matchEntry.curGagang > 0 ? matchEntry.curGagang : 0);
-          var finalAir = dBatch.air > 0 ? dBatch.air : (matchEntry.curAir > 0 ? matchEntry.curAir : '');
-          var finalDebu = dBatch.debu > 0 ? dBatch.debu : (matchEntry.curDebu > 0 ? matchEntry.curDebu : 0);
-
-          shRekap.getRange(matchEntry.rowNum, 12, 1, 3).setValues([[
-            Math.max(0, finalGagang),
-            finalAir,
-            Math.max(0, finalDebu)
-          ]]);
           updatedCount++;
-          Logger.log('🔄 Update Batch: ' + dBatch.dateLabel + ' | ' + dBatch.jenis + ' | Hasil: ' + dBatch.hasil + ' Kg');
         }
       }
     }
