@@ -223,10 +223,11 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
         };
       });
 
-      // 1. Post to backend proxy / GAS Web App
+      // 1. Post to backend proxy / GAS Web App (dengan fallback langsung ke GAS CORS jika di Cloudflare)
       const gasUrl = gasConfig?.apiUrl || 'https://script.google.com/macros/s/AKfycbw34wezcB4YC4N-n2nL0ll9jofM3i9s5OHYxLZJ4Xu32_AmCEDcIAYi9V1AdPg2iACM/exec';
+      let postedViaProxy = false;
       try {
-        await fetch('/api/sync-gas', {
+        const proxyResp = await fetch('/api/sync-gas', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -234,12 +235,20 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
             records: newRecords
           })
         });
+        const contentType = proxyResp.headers.get('content-type') || '';
+        if (proxyResp.ok && !contentType.includes('text/html')) {
+          postedViaProxy = true;
+        }
       } catch (postErr) {
+        // Fallback to direct GAS call
+      }
+
+      if (!postedViaProxy) {
         try {
           await fetch(gasUrl, {
             method: 'POST',
             mode: 'no-cors',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'text/plain' },
             body: JSON.stringify({
               action: 'syncDhpToRekap',
               records: newRecords
@@ -327,20 +336,38 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
       RekapDataProsesTembakauService.saveRawData(scrubbed);
 
       // 2. Kirim perintah pembersihan & rekonsiliasi ke Google Apps Script (Live Google Sheets)
-      const resp = await fetch('/api/sync-gas', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'cleanCancelled' })
-      });
-
+      const gasUrl = gasConfig?.apiUrl || 'https://script.google.com/macros/s/AKfycbw34wezcB4YC4N-n2nL0ll9jofM3i9s5OHYxLZJ4Xu32_AmCEDcIAYi9V1AdPg2iACM/exec';
       let data: any = null;
+      let reconciledViaProxy = false;
       try {
-        const text = await resp.text();
-        if (text && text.trim()) {
-          data = JSON.parse(text);
+        const resp = await fetch('/api/sync-gas', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'cleanCancelled' })
+        });
+        const contentType = resp.headers.get('content-type') || '';
+        if (resp.ok && !contentType.includes('text/html')) {
+          const text = await resp.text();
+          if (text && text.trim() && !text.includes('<!DOCTYPE') && !text.includes('<html')) {
+            data = JSON.parse(text);
+            reconciledViaProxy = true;
+          }
         }
       } catch (pErr) {
         console.warn('Fallback response parsing:', pErr);
+      }
+
+      if (!reconciledViaProxy) {
+        try {
+          await fetch(gasUrl, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({ action: 'cleanCancelled' })
+          });
+        } catch (e) {
+          console.warn('Network notice during direct GAS reconcile:', e);
+        }
       }
 
       if (data && data.success === false) {
@@ -380,22 +407,38 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
   const handleDownloadPdf = async () => {
     setIsDownloadingPdf(true);
     try {
-      const response = await fetch('/api/download-panduan-pdf');
-      if (!response.ok) {
-        throw new Error('Gagal mengambil file PDF dari server');
+      let blob: Blob | null = null;
+      try {
+        const response = await fetch('/api/download-panduan-pdf');
+        const ct = response.headers.get('content-type') || '';
+        if (response.ok && !ct.includes('text/html')) {
+          blob = await response.blob();
+        }
+      } catch (e) {}
+
+      // Fallback ke file PDF statis di dist / public jika proxy tidak ada (misal di Cloudflare Pages)
+      if (!blob) {
+        const directResp = await fetch('/PANDUAN_TEKNIS_AUTO_PUSH_GAS.pdf');
+        if (directResp.ok) {
+          blob = await directResp.blob();
+        }
       }
-      const blob = await response.blob();
-      const blobUrl = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = blobUrl;
-      link.download = 'PANDUAN_TEKNIS_AUTO_PUSH_GAS.pdf';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      setTimeout(() => window.URL.revokeObjectURL(blobUrl), 3000);
+
+      if (blob) {
+        const blobUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = 'PANDUAN_TEKNIS_AUTO_PUSH_GAS.pdf';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => window.URL.revokeObjectURL(blobUrl), 3000);
+      } else {
+        window.open('/PANDUAN_TEKNIS_AUTO_PUSH_GAS.pdf', '_blank');
+      }
     } catch (err) {
       console.warn('Direct fetch download failed, fallback to direct link:', err);
-      window.open('/api/download-panduan-pdf', '_blank');
+      window.open('/PANDUAN_TEKNIS_AUTO_PUSH_GAS.pdf', '_blank');
     } finally {
       setIsDownloadingPdf(false);
     }
@@ -605,7 +648,7 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
                     <div className="my-1 border-t border-slate-100" />
 
                     <a
-                      href="/api/download-template-dhp-excel"
+                      href="/TEMPLATE_DHP_TEMBAKAU_ADMIN_PROSES.xlsx"
                       download="TEMPLATE_DHP_TEMBAKAU_ADMIN_PROSES.xlsx"
                       onClick={() => setShowToolsDropdown(false)}
                       className="px-3 py-2 flex items-center justify-between text-emerald-800 hover:bg-emerald-50 font-semibold transition-colors"
@@ -1072,10 +1115,13 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
 
                 <div className="flex items-center gap-2">
                   <select
-                    value={analisisHarian?.tanggal || selectedAnalisisTanggal}
+                    value={selectedAnalisisTanggal}
                     onChange={(e) => setSelectedAnalisisTanggal(e.target.value)}
                     className="px-3 py-1.5 rounded-lg border border-slate-600 bg-slate-900 text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer"
                   >
+                    <option value="">
+                      Transaksi Terkini ({availableAnalisisDates[availableAnalisisDates.length - 1] || 'Terbaru'})
+                    </option>
                     {availableAnalisisDates.map(tgl => (
                       <option key={tgl} value={tgl}>{tgl}</option>
                     ))}
@@ -1692,7 +1738,7 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
                   </button>
 
                   <a
-                    href="/api/view-panduan-pdf"
+                    href="/PANDUAN_TEKNIS_AUTO_PUSH_GAS.pdf"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 shadow-sm transition-all"
@@ -1798,7 +1844,7 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
 
                 <div className="flex flex-wrap items-center gap-2 shrink-0">
                   <a
-                    href="/api/download-template-dhp-excel"
+                    href="/TEMPLATE_DHP_TEMBAKAU_ADMIN_PROSES.xlsx"
                     download="TEMPLATE_DHP_TEMBAKAU_ADMIN_PROSES.xlsx"
                     className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-900 bg-emerald-400 hover:bg-emerald-300 shadow-md transition-all cursor-pointer"
                   >

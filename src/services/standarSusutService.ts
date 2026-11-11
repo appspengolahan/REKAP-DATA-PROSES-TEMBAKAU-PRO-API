@@ -413,8 +413,8 @@ export class StandarSusutService {
     const uniqueDates = Array.from(new Set(dhpBatches.map(b => b.tanggalFormatted || b.tanggalRaw))).filter(Boolean);
     if (uniqueDates.length === 0) return null;
 
-    // Tentukan tanggal target (pilihan pengguna atau tanggal terkini)
-    const targetDate = selectedTanggal && uniqueDates.includes(selectedTanggal) 
+    // Tentukan tanggal target: jika selectedTanggal kosong '' (default transaksi terkini), gunakan tanggal terbaru
+    const targetDate = (selectedTanggal && selectedTanggal.trim() !== '' && uniqueDates.includes(selectedTanggal)) 
       ? selectedTanggal 
       : uniqueDates[uniqueDates.length - 1];
 
