@@ -309,6 +309,25 @@ export class RekapDataProsesTembakauService {
   private static cachedGasConfig: GasConfig | null = null;
   private static cachedServerDashboard: ServerDashboardPayload | null = null;
   private static dedupeWeakCache = new WeakMap<RawRowData[], RawRowData[]>();
+  private static inFlightSyncPromise: Promise<{ success: boolean; message: string; rowCount: number }> | null = null;
+  private static inFlightSheetPullPromise: Promise<{ success: boolean; message: string; count: number; tabUsed: string }> | null = null;
+  private static consecutiveSyncFailures = 0;
+  private static nextAllowedAutoSyncAt = 0;
+  private static lastSyncCompletedAt = 0;
+
+  public static getLastSyncCompletedAt(): number {
+    return this.lastSyncCompletedAt;
+  }
+
+  private static async fetchTextWithTimeout(url: string, timeoutMs = 10000): Promise<Response> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await fetch(url, { method: 'GET', signal: controller.signal });
+    } finally {
+      clearTimeout(timer);
+    }
+  }
 
   public static getGasConfig(): GasConfig {
     if (this.cachedGasConfig) {
@@ -614,340 +633,405 @@ export class RekapDataProsesTembakauService {
 
   /**
    * Sync background with Google Apps Script / Google Sheet
+   * Dilengkapi In-Flight Mutex Lock, Anti-Shrinkage, & Exponential Backoff
    */
-  public static async syncFromGas(): Promise<{ success: boolean; message: string; rowCount: number }> {
-    const config = this.getGasConfig();
-    let endpoint = (config.apiUrl || DEFAULT_GAS_URL).trim();
-
-    try {
-      // Clean URL: don't double query
-      let urlWithAction = endpoint;
-      if (!endpoint.includes('user_content_key') && !endpoint.includes('action=')) {
-        urlWithAction = endpoint.includes('?') 
-          ? `${endpoint}&action=getDashboardData` 
-          : `${endpoint}?action=getDashboardData`;
-      }
-
-      let json: any = null;
-
-      // 1. First attempt: Try server-side proxy route (/api/sync-gas) unless static hosting mode detected
-      if (!isStaticHostingMode()) {
-        try {
-          const proxyResp = await fetch(`/api/sync-gas?url=${encodeURIComponent(urlWithAction)}`, {
-            method: 'GET'
-          });
-          if (proxyResp.ok && !isHtmlPayloadResponse(proxyResp)) {
-            const rawText = await proxyResp.text();
-            if (!isHtmlPayloadResponse(proxyResp, rawText)) {
-              json = JSON.parse(rawText);
-            }
-          }
-        } catch (proxyErr) {
-          // Proxy not available in static mode, fallback to direct fetch
-        }
-      }
-
-      // 2. Second attempt: Direct CORS fetch (if proxy not available)
-      if (!json) {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000);
-        try {
-          const resp = await fetch(urlWithAction, {
-            method: 'GET',
-            redirect: 'follow',
-            signal: controller.signal
-          });
-          clearTimeout(timeoutId);
-
-          if (resp.ok) {
-            json = await resp.json();
-          }
-        } catch (fetchErr: any) {
-          clearTimeout(timeoutId);
-          // 3. Third attempt: JSONP fallback
-          try {
-            json = await this.fetchJsonp(urlWithAction, 8000);
-          } catch (jsonpErr) {
-            // Direct and JSONP network blocked or timed out
-          }
-        }
-      }
-
-      if (json && (json.status === 'success' || json.ringkasanTahunan || json.filterOptions)) {
-        // Save precomputed server dashboard payload
-        this.saveServerDashboardData(json);
-
-        let rowCount = 0;
-        if (Array.isArray(json.rawRows) && json.rawRows.length > 0) {
-          this.saveRawData(json.rawRows);
-          rowCount = json.rawRows.length;
-        } else if (json.ringkasanTahunan && json.ringkasanTahunan.jumlahData) {
-          rowCount = json.ringkasanTahunan.jumlahData;
-        } else {
-          rowCount = this.getRawData().length;
-        }
-
-        this.saveGasConfig({
-          lastSync: new Date().toISOString(),
-          status: 'online'
-        });
-
-        return {
-          success: true,
-          message: `Sinkronisasi live sukses! Terhubung dengan Google Sheet (${rowCount} baris).`,
-          rowCount
-        };
-      } else {
-        // Try fallback to pull sheet directly
-        const sheetRes = await this.pullDirectFromSheet();
-        if (sheetRes.success && sheetRes.count > 0) {
-          return {
-            success: true,
-            message: `Auto-sync aktif via Google Sheet (${sheetRes.count} baris riil).`,
-            rowCount: sheetRes.count
-          };
-        }
-
-        this.saveGasConfig({
-          lastSync: new Date().toISOString(),
-          status: 'online'
-        });
-        return {
-          success: true,
-          message: json?.message || 'Data lokal aktif ter-cache.',
-          rowCount: this.getRawData().length
-        };
-      }
-    } catch (err: any) {
-      console.warn('Sync ke GAS dialihkan ke datasheet:', err?.message || err);
-      try {
-        const sheetRes = await this.pullDirectFromSheet();
-        if (sheetRes.success && sheetRes.count > 0) {
-          return {
-            success: true,
-            message: `Auto-sync aktif via Google Sheet (${sheetRes.count} baris riil).`,
-            rowCount: sheetRes.count
-          };
-        }
-      } catch (fallbackErr) {
-        console.warn('Fallback sheet notice:', fallbackErr);
-      }
-
-      this.saveGasConfig({
-        status: 'offline',
-        errorMessage: err?.message || 'Mode data lokal'
-      });
+  public static async syncFromGas(options?: { isAuto?: boolean }): Promise<{ success: boolean; message: string; rowCount: number }> {
+    const isAuto = Boolean(options?.isAuto);
+    if (isAuto && Date.now() < this.nextAllowedAutoSyncAt) {
       return {
         success: false,
-        message: `Offline mode aktif: Menggunakan data lokal tersimpan.`,
+        message: 'Menunggu jeda pendinginan kuota Google Sheet sebelum sinkronisasi otomatis berikutnya.',
         rowCount: this.getRawData().length
       };
     }
+
+    if (this.inFlightSyncPromise) {
+      return this.inFlightSyncPromise;
+    }
+
+    const runSync = async (): Promise<{ success: boolean; message: string; rowCount: number }> => {
+      const config = this.getGasConfig();
+      const endpoint = (config.apiUrl || DEFAULT_GAS_URL).trim();
+
+      const recordFailure = () => {
+        this.consecutiveSyncFailures += 1;
+        const backoffMs = Math.min(120000, 30000 * Math.pow(2, this.consecutiveSyncFailures - 1));
+        this.nextAllowedAutoSyncAt = Date.now() + backoffMs;
+      };
+
+      const recordSuccess = () => {
+        this.consecutiveSyncFailures = 0;
+        this.nextAllowedAutoSyncAt = 0;
+        this.lastSyncCompletedAt = Date.now();
+      };
+
+      try {
+        // Clean URL: don't double query
+        let urlWithAction = endpoint;
+        if (!endpoint.includes('user_content_key') && !endpoint.includes('action=')) {
+          urlWithAction = endpoint.includes('?')
+            ? `${endpoint}&action=getDashboardData`
+            : `${endpoint}?action=getDashboardData`;
+        }
+
+        let json: any = null;
+
+        // 1. First attempt: Try server-side proxy route (/api/sync-gas) unless static hosting mode detected
+        if (!isStaticHostingMode()) {
+          try {
+            const proxyResp = await this.fetchTextWithTimeout(`/api/sync-gas?url=${encodeURIComponent(urlWithAction)}`, 8000);
+            if (proxyResp.ok && !isHtmlPayloadResponse(proxyResp)) {
+              const rawText = await proxyResp.text();
+              if (!isHtmlPayloadResponse(proxyResp, rawText)) {
+                json = JSON.parse(rawText);
+              }
+            }
+          } catch (proxyErr) {
+            // Proxy not available in static mode, fallback to direct fetch
+          }
+        }
+
+        // 2. Second attempt: Direct CORS fetch (if proxy not available)
+        if (!json) {
+          try {
+            const resp = await this.fetchTextWithTimeout(urlWithAction, 8000);
+            if (resp.ok && !isHtmlPayloadResponse(resp)) {
+              const rawText = await resp.text();
+              if (!isHtmlPayloadResponse(resp, rawText)) {
+                json = JSON.parse(rawText);
+              }
+            }
+          } catch (fetchErr: any) {
+            // 3. Third attempt: JSONP fallback
+            try {
+              json = await this.fetchJsonp(urlWithAction, 8000);
+            } catch (jsonpErr) {
+              // Direct and JSONP network blocked or timed out
+            }
+          }
+        }
+
+        if (json && (json.status === 'success' || json.ringkasanTahunan || json.filterOptions)) {
+          this.saveServerDashboardData(json);
+
+          const existingRows = this.getRawData();
+          let rowCount = existingRows.length;
+          if (Array.isArray(json.rawRows) && json.rawRows.length > 0) {
+            const minAcceptable = existingRows.length >= 100
+              ? Math.max(50, Math.floor(existingRows.length * 0.4))
+              : 1;
+            if (json.rawRows.length >= minAcceptable) {
+              this.saveRawData(json.rawRows);
+              rowCount = json.rawRows.length;
+            }
+          } else if (json.ringkasanTahunan && json.ringkasanTahunan.jumlahData) {
+            rowCount = json.ringkasanTahunan.jumlahData;
+          }
+
+          recordSuccess();
+          this.saveGasConfig({
+            lastSync: new Date().toISOString(),
+            status: 'online'
+          });
+
+          return {
+            success: true,
+            message: `Sinkronisasi live sukses! Terhubung dengan Google Sheet (${rowCount} baris).`,
+            rowCount
+          };
+        } else {
+          // Try fallback to pull sheet directly
+          const sheetRes = await this.pullDirectFromSheet();
+          if (sheetRes.success && sheetRes.count > 0 && sheetRes.tabUsed !== 'Cache Lokal') {
+            recordSuccess();
+            return {
+              success: true,
+              message: `Auto-sync aktif via Google Sheet (${sheetRes.count} baris riil).`,
+              rowCount: sheetRes.count
+            };
+          }
+
+          recordFailure();
+          return {
+            success: false,
+            message: json?.message || 'Data lokal aktif ter-cache (Google Sheet sedang sibuk).',
+            rowCount: this.getRawData().length
+          };
+        }
+      } catch (err: any) {
+        console.warn('Sync ke GAS dialihkan ke datasheet:', err?.message || err);
+        try {
+          const sheetRes = await this.pullDirectFromSheet();
+          if (sheetRes.success && sheetRes.count > 0 && sheetRes.tabUsed !== 'Cache Lokal') {
+            recordSuccess();
+            return {
+              success: true,
+              message: `Auto-sync aktif via Google Sheet (${sheetRes.count} baris riil).`,
+              rowCount: sheetRes.count
+            };
+          }
+        } catch (fallbackErr) {
+          console.warn('Fallback sheet notice:', fallbackErr);
+        }
+
+        recordFailure();
+        this.saveGasConfig({
+          status: 'offline',
+          errorMessage: err?.message || 'Mode data lokal'
+        });
+        return {
+          success: false,
+          message: `Offline mode aktif: Menggunakan data lokal tersimpan.`,
+          rowCount: this.getRawData().length
+        };
+      }
+    };
+
+    this.inFlightSyncPromise = runSync().finally(() => {
+      this.inFlightSyncPromise = null;
+    });
+
+    return this.inFlightSyncPromise;
   }
 
   /**
    * Tarik Data Langsung dari Datasheet Google Sheets (via gviz CSV)
    * Mengambil data riil langsung dari Google Sheet tanpa ketergantungan deployment script.
-   * Mendukung tab '_CACHE_REKAP_TBK' (1.487 baris riil 2025-2026) maupun 'REKAP SUSUT TEMBAKAU' (sheet operasional).
+   * Dilengkapi proteksi Anti-Shrinkage dan Safe-Merge agar cache tidak pernah terpotong saat rate-limit.
    */
   public static async pullDirectFromSheet(
     spreadsheetId: string = '1LnixFRQXFjDaR_LYoOUvsj84Y_Lb5W8samFOPWrDSC0',
     preferredTab: string = 'AUTO'
   ): Promise<{ success: boolean; message: string; count: number; tabUsed: string }> {
-    try {
-      let rows: RawRowData[] = [];
-      let tabUsed = '';
+    if (preferredTab === 'AUTO' && this.inFlightSheetPullPromise) {
+      return this.inFlightSheetPullPromise;
+    }
 
-      // Mode 1: AUTO - Coba tab _CACHE_REKAP_TBK terlebih dahulu (dataset terlengkap 1.487 baris)
-      if (preferredTab === 'AUTO' || preferredTab === '_CACHE_REKAP_TBK') {
-        // 1a. Try server-side proxy route first unless static mode detected
-        if (!isStaticHostingMode()) {
-          try {
-            const proxyResp = await fetch(`/api/pull-sheet?spreadsheetId=${spreadsheetId}&sheet=_CACHE_REKAP_TBK`);
-            if (proxyResp.ok && !isHtmlPayloadResponse(proxyResp)) {
-              const rawText = await proxyResp.text();
-              if (!isHtmlPayloadResponse(proxyResp, rawText)) {
-                const data = JSON.parse(rawText);
-                if (data?.success && data?.csv) {
-                  const parsed = this.parseCSVText(data.csv);
+    const executePull = async (): Promise<{ success: boolean; message: string; count: number; tabUsed: string }> => {
+      try {
+        let rows: RawRowData[] = [];
+        let tabUsed = '';
+        let hasFullDataset = false;
+        const minFullRowThreshold = preferredTab === 'AUTO' ? 100 : 1;
+
+        // Mode 1: AUTO - Coba tab _CACHE_REKAP_TBK terlebih dahulu (dataset terlengkap 1.487+ baris)
+        if (preferredTab === 'AUTO' || preferredTab === '_CACHE_REKAP_TBK') {
+          if (!isStaticHostingMode()) {
+            try {
+              const proxyResp = await this.fetchTextWithTimeout(`/api/pull-sheet?spreadsheetId=${spreadsheetId}&sheet=_CACHE_REKAP_TBK`, 10000);
+              if (proxyResp.ok && !isHtmlPayloadResponse(proxyResp)) {
+                const rawText = await proxyResp.text();
+                if (!isHtmlPayloadResponse(proxyResp, rawText)) {
+                  const data = JSON.parse(rawText);
+                  if (data?.success && data?.csv) {
+                    const parsed = this.parseCSVText(data.csv);
+                    if (parsed.length >= 100) {
+                      rows = parsed;
+                      tabUsed = '_CACHE_REKAP_TBK';
+                      hasFullDataset = true;
+                    }
+                  }
+                }
+              }
+            } catch (proxyErr) {
+              // Fall back to direct fetch
+            }
+          }
+
+          if (rows.length === 0) {
+            try {
+              const cacheUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv&sheet=_CACHE_REKAP_TBK`;
+              const resp = await this.fetchTextWithTimeout(cacheUrl, 10000);
+              if (resp.ok) {
+                const text = await resp.text();
+                if (text && !text.trim().startsWith('<') && !text.includes('google-signin') && !text.includes('<!DOCTYPE html>')) {
+                  const parsed = this.parseCSVText(text);
                   if (parsed.length >= 100) {
                     rows = parsed;
                     tabUsed = '_CACHE_REKAP_TBK';
+                    hasFullDataset = true;
                   }
                 }
               }
+            } catch (e) {
+              console.warn('Direct browser fetch _CACHE_REKAP_TBK notice:', (e as any)?.message);
             }
-          } catch (proxyErr) {
-            // Fall back to direct fetch
           }
         }
 
-        // 1b. Direct fetch fallback if proxy not available
-        if (rows.length === 0) {
-          try {
-            const cacheUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv&sheet=_CACHE_REKAP_TBK`;
-            const resp = await fetch(cacheUrl, { method: 'GET' });
+        // Mode 2: Jika belum dapat atau user minta REKAP SUSUT TEMBAKAU
+        if (rows.length === 0 || preferredTab === 'REKAP SUSUT TEMBAKAU') {
+          if (!isStaticHostingMode()) {
+            try {
+              const proxyResp = await this.fetchTextWithTimeout(`/api/pull-sheet?spreadsheetId=${spreadsheetId}&sheet=REKAP%20SUSUT%20TEMBAKAU`, 10000);
+              if (proxyResp.ok && !isHtmlPayloadResponse(proxyResp)) {
+                const rawText = await proxyResp.text();
+                if (!isHtmlPayloadResponse(proxyResp, rawText)) {
+                  const data = JSON.parse(rawText);
+                  if (data?.success && data?.csv) {
+                    const parsed = this.parseRekapSusutTembakauCSV(data.csv);
+                    if (parsed.length >= minFullRowThreshold) {
+                      rows = parsed;
+                      tabUsed = 'REKAP SUSUT TEMBAKAU';
+                      hasFullDataset = true;
+                    }
+                  }
+                }
+              }
+            } catch (proxyErr) {
+              // Fall back to direct fetch
+            }
+          }
+
+          if (rows.length === 0) {
+            try {
+              const directUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv&sheet=REKAP%20SUSUT%20TEMBAKAU`;
+              const resp2 = await this.fetchTextWithTimeout(directUrl, 10000);
+              if (resp2.ok) {
+                const text2 = await resp2.text();
+                if (text2 && !text2.trim().startsWith('<') && !text2.includes('google-signin') && !text2.includes('<!DOCTYPE html>')) {
+                  const parsed2 = this.parseRekapSusutTembakauCSV(text2);
+                  if (parsed2.length >= minFullRowThreshold) {
+                    rows = parsed2;
+                    tabUsed = 'REKAP SUSUT TEMBAKAU';
+                    hasFullDataset = true;
+                  }
+                }
+              }
+            } catch (e) {
+              console.warn('Direct browser fetch REKAP SUSUT TEMBAKAU notice:', (e as any)?.message);
+            }
+          }
+        }
+
+        // Mode 3: Fetch active latest range (A1500:N1600) from operational REKAP SUSUT TEMBAKAU
+        try {
+          let activeCsv = '';
+          if (!isStaticHostingMode()) {
+            try {
+              const proxyResp = await this.fetchTextWithTimeout(`/api/pull-sheet?spreadsheetId=${spreadsheetId}&sheet=REKAP%20SUSUT%20TEMBAKAU&range=A1500:N1600`, 10000);
+              if (proxyResp.ok && !isHtmlPayloadResponse(proxyResp)) {
+                const rawText = await proxyResp.text();
+                if (!isHtmlPayloadResponse(proxyResp, rawText)) {
+                  const data = JSON.parse(rawText);
+                  if (data?.success && data?.csv) {
+                    activeCsv = data.csv;
+                  }
+                }
+              }
+            } catch (e) {}
+          }
+
+          if (!activeCsv) {
+            const directUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv&sheet=REKAP%20SUSUT%20TEMBAKAU&range=A1500:N1600`;
+            const resp = await this.fetchTextWithTimeout(directUrl, 10000);
             if (resp.ok) {
               const text = await resp.text();
               if (text && !text.trim().startsWith('<') && !text.includes('google-signin') && !text.includes('<!DOCTYPE html>')) {
-                const parsed = this.parseCSVText(text);
-                if (parsed.length >= 100) {
-                  rows = parsed;
-                  tabUsed = '_CACHE_REKAP_TBK';
-                }
+                activeCsv = text;
               }
             }
-          } catch (e) {
-            console.warn('Direct browser fetch _CACHE_REKAP_TBK notice:', (e as any)?.message);
           }
-        }
-      }
 
-      // Mode 2: Jika belum dapat atau user minta REKAP SUSUT TEMBAKAU
-      if (rows.length === 0 || preferredTab === 'REKAP SUSUT TEMBAKAU') {
-        // 2a. Try server proxy unless static mode detected
-        if (!isStaticHostingMode()) {
-          try {
-            const proxyResp = await fetch(`/api/pull-sheet?spreadsheetId=${spreadsheetId}&sheet=REKAP%20SUSUT%20TEMBAKAU`);
-            if (proxyResp.ok && !isHtmlPayloadResponse(proxyResp)) {
-              const rawText = await proxyResp.text();
-              if (!isHtmlPayloadResponse(proxyResp, rawText)) {
-                const data = JSON.parse(rawText);
-                if (data?.success && data?.csv) {
-                  const parsed = this.parseRekapSusutTembakauCSV(data.csv);
-                  if (parsed.length > 0) {
-                    rows = parsed;
-                    tabUsed = 'REKAP SUSUT TEMBAKAU';
-                  }
+          if (activeCsv) {
+            const activeRows = this.parseActiveRekapRangeCSV(activeCsv, 1500);
+            if (activeRows.length > 0) {
+              const activeMinRow = Math.min(...activeRows.map(a => a.srcRow || 1500));
+              const activeMaxRow = Math.max(...activeRows.map(a => a.srcRow || 1500));
+              const activeSrcRowSet = new Set(activeRows.map(a => a.srcRow));
+
+              // Jika Mode 1 & Mode 2 gagal (rate-limit/timeout) dan hanya Mode 3 yang berhasil,
+              // pertahankan SELURUH dataset cache lama (2025 + 2026 sebelum baris 1500) sebagai basis merge!
+              if (!hasFullDataset) {
+                rows = [...this.getRawData()];
+              }
+
+              rows = rows.filter(r => {
+                if (r.srcRow && r.srcRow >= activeMinRow && r.srcRow <= (activeMaxRow + 50)) {
+                  return activeSrcRowSet.has(r.srcRow);
+                }
+                return true;
+              });
+
+              for (const act of activeRows) {
+                const idx = rows.findIndex(r => r.srcRow === act.srcRow);
+                if (idx !== -1) {
+                  rows[idx] = { ...rows[idx], ...act };
+                } else {
+                  rows.push(act);
                 }
               }
+              if (!tabUsed) tabUsed = 'REKAP SUSUT TEMBAKAU (Live + Cache)';
+              else tabUsed += ' + REKAP SUSUT (Live)';
             }
-          } catch (proxyErr) {
-            // Fall back to direct fetch
           }
+        } catch (actErr) {
+          console.warn('Notice fetching active range from REKAP SUSUT TEMBAKAU:', actErr);
         }
 
-        // 2b. Direct fetch
+        const existingAll = this.getRawData();
         if (rows.length === 0) {
-          try {
-            const directUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv&sheet=REKAP%20SUSUT%20TEMBAKAU`;
-            const resp2 = await fetch(directUrl, { method: 'GET' });
-            if (resp2.ok) {
-              const text2 = await resp2.text();
-              if (text2 && !text2.trim().startsWith('<') && !text2.includes('google-signin') && !text2.includes('<!DOCTYPE html>')) {
-                rows = this.parseRekapSusutTembakauCSV(text2);
-                tabUsed = 'REKAP SUSUT TEMBAKAU';
-              }
-            }
-          } catch (e) {
-            console.warn('Direct browser fetch REKAP SUSUT TEMBAKAU notice:', (e as any)?.message);
-          }
-        }
-      }
-
-      // Mode 3: ALWAYS fetch the active latest range (A1500:N1600) from operational REKAP SUSUT TEMBAKAU
-      // so any active transactions (e.g. from 7 Oktober to 20 Oktober 2026 and beyond) are ALWAYS merged!
-      try {
-        let activeCsv = '';
-        if (!isStaticHostingMode()) {
-          try {
-            const proxyResp = await fetch(`/api/pull-sheet?spreadsheetId=${spreadsheetId}&sheet=REKAP%20SUSUT%20TEMBAKAU&range=A1500:N1600`);
-            if (proxyResp.ok && !isHtmlPayloadResponse(proxyResp)) {
-              const rawText = await proxyResp.text();
-              if (!isHtmlPayloadResponse(proxyResp, rawText)) {
-                const data = JSON.parse(rawText);
-                if (data?.success && data?.csv) {
-                  activeCsv = data.csv;
-                }
-              }
-            }
-          } catch (e) {}
+          return {
+            success: true,
+            message: `Menggunakan data tersimpan (${existingAll.length} baris riil).`,
+            count: existingAll.length,
+            tabUsed: 'Cache Lokal'
+          };
         }
 
-        if (!activeCsv) {
-          const directUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv&sheet=REKAP%20SUSUT%20TEMBAKAU&range=A1500:N1600`;
-          const resp = await fetch(directUrl, { method: 'GET' });
-          if (resp.ok) {
-            const text = await resp.text();
-            if (text && !text.trim().startsWith('<') && !text.includes('google-signin') && !text.includes('<!DOCTYPE html>')) {
-              activeCsv = text;
-            }
+        // Ensure historical 2025 records are preserved if the pulled sheet only contains latest 2026 entries
+        const existing2025 = existingAll.filter(r => r.tahun === '2025');
+        const combinedRows = [...rows];
+        for (const r25 of existing2025) {
+          if (!combinedRows.some(cr => cr.batchNo === r25.batchNo || (cr.tanggal === r25.tanggal && cr.jenisTembakau === r25.jenisTembakau && cr.baku === r25.baku))) {
+            combinedRows.push(r25);
           }
         }
 
-        if (activeCsv) {
-          const activeRows = this.parseActiveRekapRangeCSV(activeCsv, 1500);
-          if (activeRows.length > 0) {
-            // Dapatkan nomor baris riil terkecil dan terbesar dari range operasional aktif
-            const activeMinRow = Math.min(...activeRows.map(a => a.srcRow || 1500));
-            const activeMaxRow = Math.max(...activeRows.map(a => a.srcRow || 1500));
-            const activeSrcRowSet = new Set(activeRows.map(a => a.srcRow));
-
-            // 🛡️ Bersihkan baris hantu (seperti baris 1557) yang pernah masuk dari cache lama tapi sebenarnya kosong/terhapus di sheet operasional riil
-            rows = rows.filter(r => {
-              if (r.srcRow && r.srcRow >= activeMinRow && r.srcRow <= (activeMaxRow + 50)) {
-                return activeSrcRowSet.has(r.srcRow);
-              }
-              return true;
-            });
-
-            for (const act of activeRows) {
-              const idx = rows.findIndex(r => r.srcRow === act.srcRow);
-              if (idx !== -1) {
-                rows[idx] = { ...rows[idx], ...act };
-              } else {
-                rows.push(act);
-              }
-            }
-            if (!tabUsed) tabUsed = 'REKAP SUSUT TEMBAKAU (Live)';
-            else tabUsed += ' + REKAP SUSUT (Live)';
-          }
+        // Anti-shrinkage guard: jangan pernah menimpa cache penuh dengan dataset yang menyusut drastis akibat CSV terpotong
+        if (existingAll.length >= 100 && combinedRows.length < Math.max(50, Math.floor(existingAll.length * 0.4))) {
+          console.warn(`Anti-shrinkage guard triggered: pulled ${combinedRows.length} rows vs cached ${existingAll.length} rows. Keeping cache.`);
+          return {
+            success: true,
+            message: `Data terpotong sementara oleh jaringan, mempertahankan cache lengkap (${existingAll.length} baris).`,
+            count: existingAll.length,
+            tabUsed: 'Cache Lokal'
+          };
         }
-      } catch (actErr) {
-        console.warn('Notice fetching active range from REKAP SUSUT TEMBAKAU:', actErr);
-      }
 
-      if (rows.length === 0) {
-        // Use existing cached/initial rows without throwing
+        this.saveRawData(combinedRows);
+        this.lastSyncCompletedAt = Date.now();
+        this.saveGasConfig({
+          lastSync: new Date().toISOString(),
+          status: 'online'
+        });
+
+        return {
+          success: true,
+          message: `Berhasil menarik ${combinedRows.length} baris data riil langsung dari datasheet Google Sheet (Tab: ${tabUsed})!`,
+          count: combinedRows.length,
+          tabUsed
+        };
+      } catch (err: any) {
+        console.warn('pullDirectFromSheet info:', err?.message || err);
         const cached = this.getRawData();
         return {
           success: true,
-          message: `Menggunakan data tersimpan (${cached.length} baris riil).`,
+          message: `Mode data lokal aktif: ${cached.length} baris data tersedia.`,
           count: cached.length,
           tabUsed: 'Cache Lokal'
         };
       }
+    };
 
-      // Ensure historical 2025 records are preserved if the pulled sheet only contains latest 2026 entries
-      const existing2025 = this.getRawData().filter(r => r.tahun === '2025');
-      const combinedRows = [...rows];
-      for (const r25 of existing2025) {
-        if (!combinedRows.some(cr => cr.batchNo === r25.batchNo || (cr.tanggal === r25.tanggal && cr.jenisTembakau === r25.jenisTembakau && cr.baku === r25.baku))) {
-          combinedRows.push(r25);
-        }
-      }
-      this.saveRawData(combinedRows);
-      this.saveGasConfig({
-        lastSync: new Date().toISOString(),
-        status: 'online'
+    if (preferredTab === 'AUTO') {
+      this.inFlightSheetPullPromise = executePull().finally(() => {
+        this.inFlightSheetPullPromise = null;
       });
-
-      return {
-        success: true,
-        message: `Berhasil menarik ${rows.length} baris data riil langsung dari datasheet Google Sheet (Tab: ${tabUsed})!`,
-        count: rows.length,
-        tabUsed
-      };
-    } catch (err: any) {
-      console.warn('pullDirectFromSheet info:', err?.message || err);
-      const cached = this.getRawData();
-      return {
-        success: true,
-        message: `Mode data lokal aktif: ${cached.length} baris data tersedia.`,
-        count: cached.length,
-        tabUsed: 'Cache Lokal'
-      };
+      return this.inFlightSheetPullPromise;
     }
+
+    return executePull();
   }
 
   public static parseActiveRekapRangeCSV(text: string, startRowNumber: number = 1500): RawRowData[] {
@@ -1737,7 +1821,7 @@ export class RekapDataProsesTembakauService {
     // 1. Coba lewat proxy server kecuali sudah terdeteksi static hosting
     if (!isStaticHostingMode()) {
       try {
-        const resp = await fetch(`/api/pull-sheet?spreadsheetId=${dhpSpreadsheetId}&sheet=${encodeURIComponent(dhpSheetName)}`);
+        const resp = await this.fetchTextWithTimeout(`/api/pull-sheet?spreadsheetId=${dhpSpreadsheetId}&sheet=${encodeURIComponent(dhpSheetName)}`, 10000);
         if (resp.ok && !isHtmlPayloadResponse(resp)) {
           const rawText = await resp.text();
           if (!isHtmlPayloadResponse(resp, rawText)) {
@@ -1756,7 +1840,7 @@ export class RekapDataProsesTembakauService {
     if (!csvText) {
       try {
         const directUrl = `https://docs.google.com/spreadsheets/d/${dhpSpreadsheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(dhpSheetName)}`;
-        const directResp = await fetch(directUrl);
+        const directResp = await this.fetchTextWithTimeout(directUrl, 10000);
         if (directResp.ok) {
           const text = await directResp.text();
           if (text && !text.trim().startsWith('<') && !text.includes('google-signin') && !text.includes('<!DOCTYPE html>')) {

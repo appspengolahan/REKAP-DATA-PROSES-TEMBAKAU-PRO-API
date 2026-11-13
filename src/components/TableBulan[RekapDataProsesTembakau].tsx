@@ -10,7 +10,7 @@ interface TableBulanProps {
   jenisProses?: string;
 }
 
-export const TableBulanRekapDataProsesTembakau: React.FC<TableBulanProps> = ({ 
+export const TableBulanRekapDataProsesTembakau: React.FC<TableBulanProps> = React.memo(({ 
   data, 
   periodeLabel, 
   jenisProses 
@@ -191,4 +191,4 @@ export const TableBulanRekapDataProsesTembakau: React.FC<TableBulanProps> = ({
       </div>
     </div>
   );
-};
+});

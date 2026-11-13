@@ -56,21 +56,31 @@ const STORAGE_KEY_LOCATION = 'PP1_ACTIVE_FACTORY_LOCATION_ID';
 const STORAGE_KEY_WEATHER_CACHE = 'PP1_WEATHER_CACHE_DATA_V1';
 
 export class WeatherService {
+  private static cachedWeatherByLoc = new Map<string, RealtimeWeatherData>();
+  private static cachedLocationPreset: FactoryLocationPreset | null = null;
+
   public static getSelectedLocation(): FactoryLocationPreset {
+    if (this.cachedLocationPreset) return this.cachedLocationPreset;
     try {
       const savedId = localStorage.getItem(STORAGE_KEY_LOCATION);
       // Jika belum diset atau masih menggunakan default lama, prioritaskan PT BATU KARANG Wagir Malang
       if (savedId && savedId !== 'weleri') {
         const found = FACTORY_LOCATIONS.find(loc => loc.id === savedId);
-        if (found) return found;
+        if (found) {
+          this.cachedLocationPreset = found;
+          return found;
+        }
       }
     } catch (e) {
       // fallback
     }
-    return FACTORY_LOCATIONS[0]; // default: PT BATU KARANG (Wagir, Malang)
+    this.cachedLocationPreset = FACTORY_LOCATIONS[0]; // default: PT BATU KARANG (Wagir, Malang)
+    return this.cachedLocationPreset;
   }
 
   public static setSelectedLocation(id: string): void {
+    const found = FACTORY_LOCATIONS.find(loc => loc.id === id);
+    if (found) this.cachedLocationPreset = found;
     try {
       localStorage.setItem(STORAGE_KEY_LOCATION, id);
     } catch (e) {
@@ -151,14 +161,20 @@ export class WeatherService {
   public static async fetchCurrentWeather(locationPreset?: FactoryLocationPreset, forceRefresh: boolean = false): Promise<RealtimeWeatherData> {
     const loc = locationPreset || this.getSelectedLocation();
 
-    // Cek cache lokal jika valid (< 15 menit)
+    // Cek cache memori & lokal jika valid (< 15 menit)
     if (!forceRefresh) {
+      const memCached = this.cachedWeatherByLoc.get(loc.id);
+      if (memCached) {
+        const diffMin = (Date.now() - new Date(memCached.fetchedAt).getTime()) / (1000 * 60);
+        if (diffMin < 15) return memCached;
+      }
       try {
         const cachedRaw = localStorage.getItem(`${STORAGE_KEY_WEATHER_CACHE}_${loc.id}`);
         if (cachedRaw) {
           const cached = JSON.parse(cachedRaw);
           const diffMinutes = (Date.now() - new Date(cached.fetchedAt).getTime()) / (1000 * 60);
           if (diffMinutes < 15) {
+            this.cachedWeatherByLoc.set(loc.id, cached);
             return cached;
           }
         }
@@ -169,7 +185,9 @@ export class WeatherService {
 
     try {
       const url = `https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,is_day&timezone=Asia%2FJakarta`;
-      const resp = await fetch(url);
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 8000);
+      const resp = await fetch(url, { signal: controller.signal }).finally(() => clearTimeout(timer));
       if (!resp.ok) {
         throw new Error(`Open-Meteo response status: ${resp.status}`);
       }
@@ -195,6 +213,7 @@ export class WeatherService {
         hygroIndex: hygro
       };
 
+      this.cachedWeatherByLoc.set(loc.id, result);
       try {
         localStorage.setItem(`${STORAGE_KEY_WEATHER_CACHE}_${loc.id}`, JSON.stringify(result));
       } catch (e) {

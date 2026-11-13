@@ -25,7 +25,7 @@ interface DataExplorerProps {
   userRole: UserRole;
 }
 
-export const DataExplorerRekapDataProsesTembakau: React.FC<DataExplorerProps> = ({
+export const DataExplorerRekapDataProsesTembakau: React.FC<DataExplorerProps> = React.memo(({
   rows,
   onAddNewBatch,
   userRole
@@ -174,14 +174,14 @@ export const DataExplorerRekapDataProsesTembakau: React.FC<DataExplorerProps> = 
       <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200">
         <div className="flex flex-wrap items-center gap-2 flex-1">
           {/* Search box */}
-          <div className="relative flex-1 min-w-[220px] max-w-sm">
-            <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
+          <div className="relative flex-1 min-w-0 w-full sm:min-w-[220px] sm:max-w-sm">
+            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
               placeholder="Cari hari, tanggal, nomor batch, jenis tembakau..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="w-full pl-8 pr-3 py-2 min-h-[44px] sm:min-h-0 sm:py-1.5 text-xs border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
           </div>
 
@@ -189,7 +189,7 @@ export const DataExplorerRekapDataProsesTembakau: React.FC<DataExplorerProps> = 
           <select
             value={filterJalur}
             onChange={(e) => setFilterJalur(e.target.value)}
-            className="text-xs border border-slate-200 rounded-xl px-2.5 py-1.5 bg-white text-slate-700 font-medium focus:outline-none"
+            className="text-xs border border-slate-200 rounded-xl px-2.5 py-2 min-h-[44px] sm:min-h-0 sm:py-1.5 bg-white text-slate-700 font-medium focus:outline-none"
           >
             <option value="Semua">Semua Jalur</option>
             <option value="SKT">SKT (Tangan)</option>
@@ -200,7 +200,7 @@ export const DataExplorerRekapDataProsesTembakau: React.FC<DataExplorerProps> = 
           <button
             type="button"
             onClick={handleToggleSort}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
+            className={`flex items-center gap-1.5 px-3 py-2 min-h-[44px] sm:min-h-0 sm:py-1.5 rounded-xl text-xs font-semibold border transition-all ${
               sortOrder === 'desc'
                 ? 'bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100/70'
                 : 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100/70'
@@ -229,13 +229,13 @@ export const DataExplorerRekapDataProsesTembakau: React.FC<DataExplorerProps> = 
         </div>
 
         {/* Right side controls: Page size & Add Button */}
-        <div className="flex items-center gap-2 justify-end">
+        <div className="flex flex-wrap items-center gap-2 justify-end">
           <div className="flex items-center gap-1.5 text-xs text-slate-500">
             <span className="text-[11px]">Baris:</span>
             <select
               value={pageSize}
               onChange={(e) => setPageSize(parseInt(e.target.value, 10))}
-              className="text-xs border border-slate-200 rounded-lg px-2 py-1 bg-white text-slate-700 font-medium focus:outline-none"
+              className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 min-h-[44px] sm:min-h-0 sm:py-1 bg-white text-slate-700 font-medium focus:outline-none"
             >
               <option value="25">25</option>
               <option value="50">50</option>
@@ -653,4 +653,4 @@ export const DataExplorerRekapDataProsesTembakau: React.FC<DataExplorerProps> = 
       />
     </div>
   );
-};
+});

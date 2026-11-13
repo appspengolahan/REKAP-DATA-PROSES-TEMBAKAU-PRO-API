@@ -49,7 +49,7 @@ interface DashboardViewProps {
   onExportTabPdf: (tabName: string) => void;
 }
 
-export const DashboardViewRekapDataProsesTembakau: React.FC<DashboardViewProps> = ({
+export const DashboardViewRekapDataProsesTembakau: React.FC<DashboardViewProps> = React.memo(({
   ringkasanTahunan,
   ringkasanBulanan,
   ringkasanPeriode,
@@ -108,7 +108,7 @@ export const DashboardViewRekapDataProsesTembakau: React.FC<DashboardViewProps> 
         <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={onExportSummaryPdf}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition-colors shadow-sm"
+            className="flex items-center gap-1.5 px-3 py-2 min-h-[44px] sm:min-h-0 sm:py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition-colors shadow-sm"
             title="Export Ringkasan Tahunan & Bulanan (PDF)"
           >
             <FileText className="w-3.5 h-3.5 text-blue-400" />
@@ -136,37 +136,37 @@ export const DashboardViewRekapDataProsesTembakau: React.FC<DashboardViewProps> 
       />
 
       {/* Sub Tabs Selection */}
-      <div className="flex items-center justify-between border-b border-slate-200 pt-2 no-print">
-        <div className="flex gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pt-2 pb-1 sm:pb-0 no-print">
+        <div className="flex flex-wrap gap-1.5 sm:gap-2">
           <button
             onClick={() => setActiveSubTab('bulan')}
-            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all ${
+            className={`flex items-center gap-2 px-3 sm:px-4 py-2.5 min-h-[44px] text-xs font-bold border-b-2 transition-all ${
               activeSubTab === 'bulan'
                 ? 'border-blue-600 text-blue-600'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
-            <CalendarDays className="w-4 h-4" />
+            <CalendarDays className="w-4 h-4 shrink-0" />
             <span>Rekap per Bulan</span>
           </button>
 
           <button
             onClick={() => setActiveSubTab('jenis')}
-            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all ${
+            className={`flex items-center gap-2 px-3 sm:px-4 py-2.5 min-h-[44px] text-xs font-bold border-b-2 transition-all ${
               activeSubTab === 'jenis'
                 ? 'border-blue-600 text-blue-600'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
-            <Layers className="w-4 h-4" />
+            <Layers className="w-4 h-4 shrink-0" />
             <span>Rekap per Jenis Tembakau (54 Varian)</span>
           </button>
         </div>
 
-        <div className="flex items-center gap-1.5 mb-1">
+        <div className="flex items-center gap-1.5 mb-1 ml-auto">
           <button
             onClick={() => window.print()}
-            className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-2 min-h-[44px] sm:min-h-0 sm:px-2.5 sm:py-1 text-xs font-semibold text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors cursor-pointer"
             title="Cetak langsung tab yang aktif saat ini"
           >
             <Printer className="w-3.5 h-3.5 text-slate-600" />
@@ -175,7 +175,7 @@ export const DashboardViewRekapDataProsesTembakau: React.FC<DashboardViewProps> 
 
           <button
             onClick={() => onExportTabPdf(activeSubTab === 'bulan' ? 'Rekap_Bulan' : 'Rekap_Jenis_Tembakau')}
-            className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-2xs transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-2 min-h-[44px] sm:min-h-0 sm:py-1 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-2xs transition-colors cursor-pointer"
             title="Export tab yang aktif ke format PDF"
           >
             <Download className="w-3.5 h-3.5" />
@@ -206,7 +206,7 @@ export const DashboardViewRekapDataProsesTembakau: React.FC<DashboardViewProps> 
                     e.stopPropagation();
                     setExpandedChart('monthlyLoss');
                   }}
-                  className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-slate-500 hover:text-blue-600 bg-slate-50 hover:bg-blue-50 rounded-lg border border-slate-200/90 group-hover:border-blue-300 transition-colors"
+                  className="flex items-center gap-1 px-2.5 py-2 min-h-[44px] sm:min-h-0 sm:px-2 sm:py-1 text-[11px] font-semibold text-slate-500 hover:text-blue-600 bg-slate-50 hover:bg-blue-50 rounded-lg border border-slate-200/90 group-hover:border-blue-300 transition-colors shrink-0"
                   title="Perbesar Grafik ke Tengah Layar"
                 >
                   <Maximize2 className="w-3.5 h-3.5" />
@@ -232,7 +232,7 @@ export const DashboardViewRekapDataProsesTembakau: React.FC<DashboardViewProps> 
                     e.stopPropagation();
                     setExpandedChart('bakuVsHasil');
                   }}
-                  className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-slate-500 hover:text-blue-600 bg-slate-50 hover:bg-blue-50 rounded-lg border border-slate-200/90 group-hover:border-blue-300 transition-colors"
+                  className="flex items-center gap-1 px-2.5 py-2 min-h-[44px] sm:min-h-0 sm:px-2 sm:py-1 text-[11px] font-semibold text-slate-500 hover:text-blue-600 bg-slate-50 hover:bg-blue-50 rounded-lg border border-slate-200/90 group-hover:border-blue-300 transition-colors shrink-0"
                   title="Perbesar Grafik ke Tengah Layar"
                 >
                   <Maximize2 className="w-3.5 h-3.5" />
@@ -279,7 +279,7 @@ export const DashboardViewRekapDataProsesTembakau: React.FC<DashboardViewProps> 
                     e.stopPropagation();
                     setExpandedChart('tobaccoVariant');
                   }}
-                  className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-slate-500 hover:text-blue-600 bg-slate-50 hover:bg-blue-50 rounded-lg border border-slate-200/90 group-hover:border-blue-300 transition-colors"
+                  className="flex items-center gap-1 px-2.5 py-2 min-h-[44px] sm:min-h-0 sm:px-2 sm:py-1 text-[11px] font-semibold text-slate-500 hover:text-blue-600 bg-slate-50 hover:bg-blue-50 rounded-lg border border-slate-200/90 group-hover:border-blue-300 transition-colors shrink-0"
                   title="Perbesar Grafik ke Tengah Layar"
                 >
                   <Maximize2 className="w-3.5 h-3.5" />
@@ -305,7 +305,7 @@ export const DashboardViewRekapDataProsesTembakau: React.FC<DashboardViewProps> 
                     e.stopPropagation();
                     setExpandedChart('trendJenis');
                   }}
-                  className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-slate-500 hover:text-blue-600 bg-slate-50 hover:bg-blue-50 rounded-lg border border-slate-200/90 group-hover:border-blue-300 transition-colors"
+                  className="flex items-center gap-1 px-2.5 py-2 min-h-[44px] sm:min-h-0 sm:px-2 sm:py-1 text-[11px] font-semibold text-slate-500 hover:text-blue-600 bg-slate-50 hover:bg-blue-50 rounded-lg border border-slate-200/90 group-hover:border-blue-300 transition-colors shrink-0"
                   title="Perbesar Grafik ke Tengah Layar"
                 >
                   <Maximize2 className="w-3.5 h-3.5" />
@@ -325,7 +325,7 @@ export const DashboardViewRekapDataProsesTembakau: React.FC<DashboardViewProps> 
 
           {/* Table Jenis Tembakau */}
           <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-sm">
-            <div className="flex items-center justify-between gap-2 mb-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
               <h3 className="font-bold text-sm text-slate-800">
                 Tabel Rekapitulasi per Jenis Tembakau
               </h3>
@@ -362,4 +362,4 @@ export const DashboardViewRekapDataProsesTembakau: React.FC<DashboardViewProps> 
 
     </div>
   );
-};
+});

@@ -178,47 +178,49 @@ export default function App() {
   }, [rows, periodeRange.tahunMulai, selectedTahun, activeJenisTrend, jenisProses]);
 
   // Refresh Trigger
-  const handleManualRefresh = async () => {
+  const handleManualRefresh = useCallback(async () => {
     setIsSyncing(true);
     try {
-      await RekapDataProsesTembakauService.syncFromGas();
+      await RekapDataProsesTembakauService.syncFromGas({ isAuto: false });
       setRows(RekapDataProsesTembakauService.getRawData());
       setGasConfig(RekapDataProsesTembakauService.getGasConfig());
       setServerDashboard(RekapDataProsesTembakauService.getServerDashboardData());
     } finally {
       setIsSyncing(false);
     }
-  };
+  }, []);
 
   // Toggle Auto Sync On / Off
-  const handleToggleAutoSync = async () => {
-    const next = !isAutoSync;
-    setIsAutoSync(next);
-    localStorage.setItem('PP1_AUTO_SYNC_ACTIVE', String(next));
+  const handleToggleAutoSync = useCallback(async () => {
+    setIsAutoSync((prev) => {
+      const next = !prev;
+      localStorage.setItem('PP1_AUTO_SYNC_ACTIVE', String(next));
+      if (next) {
+        setToastNotification({
+          message: 'Auto Sync AKTIF: Data Google Sheet akan terus terupdate otomatis secara berkala.',
+          type: 'success'
+        });
+        setTimeout(() => setToastNotification(null), 4000);
+        handleManualRefresh();
+      } else {
+        setToastNotification({
+          message: 'Auto Sync DINONAKTIFKAN: Mode sinkronisasi manual.',
+          type: 'info'
+        });
+        setTimeout(() => setToastNotification(null), 4000);
+      }
+      return next;
+    });
+  }, [handleManualRefresh]);
 
-    if (next) {
-      setToastNotification({
-        message: 'Auto Sync AKTIF: Data Google Sheet akan terus terupdate otomatis secara berkala.',
-        type: 'success'
-      });
-      setTimeout(() => setToastNotification(null), 4000);
-      handleManualRefresh();
-    } else {
-      setToastNotification({
-        message: 'Auto Sync DINONAKTIFKAN: Mode sinkronisasi manual.',
-        type: 'info'
-      });
-      setTimeout(() => setToastNotification(null), 4000);
-    }
-  };
-
-  // Auto Sync Background Periodic Interval (Runs every 25 seconds when Auto Sync is active)
+  // Auto Sync Background Periodic Interval (Runs every 25s only when tab is visible)
   useEffect(() => {
     if (!isAutoSync) return;
 
-    const intervalTimer = setInterval(async () => {
+    const runBackgroundSync = async () => {
+      if (typeof document !== 'undefined' && document.hidden) return;
       try {
-        const res = await RekapDataProsesTembakauService.syncFromGas();
+        const res = await RekapDataProsesTembakauService.syncFromGas({ isAuto: true });
         if (res.success) {
           const freshRows = RekapDataProsesTembakauService.getRawData();
           setRows(freshRows);
@@ -228,13 +230,25 @@ export default function App() {
       } catch (err) {
         console.warn('Auto sync interval silent skip', err);
       }
-    }, 25000); // 25 detik
+    };
 
-    return () => clearInterval(intervalTimer);
+    const intervalTimer = setInterval(runBackgroundSync, 25000);
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden && Date.now() - RekapDataProsesTembakauService.getLastSyncCompletedAt() >= 25000) {
+        runBackgroundSync();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(intervalTimer);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [isAutoSync]);
 
   // Tarik Data Langsung dari Datasheet Google Sheets (via gviz CSV)
-  const handleTarikDatasheet = async (tabName: string = 'AUTO') => {
+  const handleTarikDatasheet = useCallback(async (tabName: string = 'AUTO') => {
     setIsPullingDatasheet(true);
     try {
       const res = await RekapDataProsesTembakauService.pullDirectFromSheet(
@@ -268,13 +282,13 @@ export default function App() {
     } finally {
       setIsPullingDatasheet(false);
     }
-  };
+  }, []);
 
   // Add new batch entry
-  const handleAddNewBatch = (entryData: any) => {
-    const created = RekapDataProsesTembakauService.addNewBatchEntry(entryData);
+  const handleAddNewBatch = useCallback((entryData: any) => {
+    RekapDataProsesTembakauService.addNewBatchEntry(entryData);
     setRows(RekapDataProsesTembakauService.getRawData());
-  };
+  }, []);
 
   // Export PDF with naming convention: Monitoring_Board_Rekap_Data_Proses_Tembakau_[Tab/Field].pdf
   const handleExportPdf = useCallback((fieldOrTab: string = 'Ringkasan_Kesusutan') => {
@@ -295,17 +309,20 @@ export default function App() {
       
       {/* Floating Toast Notification */}
       {toastNotification && (
-        <div className="no-print fixed top-20 right-6 z-50 animate-in slide-in-from-top-4 duration-300">
-          <div className={`flex items-center gap-2.5 px-4 py-3 rounded-2xl shadow-xl border text-xs font-semibold ${
+        <div className="no-print fixed top-20 left-3 right-3 sm:left-auto sm:right-6 z-50 animate-in slide-in-from-top-4 duration-300">
+          <div className={`flex items-center justify-between gap-2.5 px-4 py-3 rounded-2xl shadow-xl border text-xs font-semibold ${
             toastNotification.type === 'success'
               ? 'bg-emerald-900 text-emerald-100 border-emerald-700/80 shadow-emerald-950/20'
               : 'bg-rose-900 text-rose-100 border-rose-700/80 shadow-rose-950/20'
           }`}>
-            <span className={`w-2 h-2 rounded-full ${toastNotification.type === 'success' ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`}></span>
-            <span>{toastNotification.message}</span>
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className={`w-2 h-2 shrink-0 rounded-full ${toastNotification.type === 'success' ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`}></span>
+              <span className="break-words">{toastNotification.message}</span>
+            </div>
             <button
               onClick={() => setToastNotification(null)}
-              className="ml-2 text-white/70 hover:text-white text-sm font-bold"
+              className="min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center ml-1 text-white/70 hover:text-white text-sm font-bold shrink-0"
+              aria-label="Tutup notifikasi"
             >
               ×
             </button>
@@ -437,9 +454,9 @@ export default function App() {
             {/* View 5: Data Explorer Batch */}
             {activeTab === 'data-explorer' && (
               <div className="space-y-4">
-                <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-sm">
-                  <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
-                    <div>
+                <div className="bg-white rounded-2xl border border-slate-200/90 p-3.5 sm:p-5 shadow-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100 mb-4">
+                    <div className="min-w-0">
                       <h2 className="text-base font-bold text-slate-800">
                         Log Data Harian & Verifikasi Batch Mentah
                       </h2>
@@ -447,10 +464,10 @@ export default function App() {
                         Penelusuran detail setiap baris entri sheet REKAP SUSUT TEMBAKAU
                       </p>
                     </div>
-                    <div className="no-print flex items-center gap-2">
+                    <div className="no-print flex flex-wrap items-center gap-2">
                       <button
                         onClick={() => window.print()}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-800 text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                        className="flex items-center gap-1.5 px-3 py-2 min-h-[44px] sm:min-h-0 sm:py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-800 text-xs font-semibold shadow-xs transition-colors cursor-pointer"
                         title="Cetak langsung ke printer fisik"
                       >
                         <Printer className="w-3.5 h-3.5 text-slate-700" />
@@ -458,7 +475,7 @@ export default function App() {
                       </button>
                       <button
                         onClick={() => handleExportPdf('Log_Data_Harian')}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition-colors cursor-pointer"
+                        className="flex items-center gap-1.5 px-3 py-2 min-h-[44px] sm:min-h-0 sm:py-1.5 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition-colors cursor-pointer"
                       >
                         <FileText className="w-3.5 h-3.5" />
                         <span>Export PDF</span>

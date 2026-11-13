@@ -20,7 +20,7 @@ interface SummaryCardsProps {
   onApplyPeriode: () => void;
 }
 
-export const SummaryCardsRekapDataProsesTembakau: React.FC<SummaryCardsProps> = ({
+export const SummaryCardsRekapDataProsesTembakau: React.FC<SummaryCardsProps> = React.memo(({
   ringkasanTahunan,
   ringkasanBulanan,
   ringkasanPeriode,
@@ -161,7 +161,7 @@ export const SummaryCardsRekapDataProsesTembakau: React.FC<SummaryCardsProps> = 
               <select
                 value={selectedTahun}
                 onChange={(e) => onTahunChange(e.target.value)}
-                className="no-print text-xs border border-slate-200 rounded-lg px-2 py-1 bg-white font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="no-print text-xs border border-slate-200 rounded-lg px-2 py-1 min-h-[44px] sm:min-h-0 bg-white font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
               >
                 <option value="Semua">Semua Tahun</option>
                 {tahunList.map((t) => (
@@ -191,7 +191,7 @@ export const SummaryCardsRekapDataProsesTembakau: React.FC<SummaryCardsProps> = 
               <select
                 value={selectedBulanRingkasan}
                 onChange={(e) => onBulanRingkasanChange(e.target.value)}
-                className="no-print text-xs border border-slate-200 rounded-lg px-2 py-1 bg-white font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                className="no-print text-xs border border-slate-200 rounded-lg px-2 py-1 min-h-[44px] sm:min-h-0 bg-white font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                 title="Pilih Bulan"
               >
                 <option value="Semua">Semua Bulan</option>
@@ -202,7 +202,7 @@ export const SummaryCardsRekapDataProsesTembakau: React.FC<SummaryCardsProps> = 
               <select
                 value={selectedTahunBulanan}
                 onChange={(e) => onTahunBulananChange(e.target.value)}
-                className="no-print text-xs border border-slate-200 rounded-lg px-2 py-1 bg-white font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                className="no-print text-xs border border-slate-200 rounded-lg px-2 py-1 min-h-[44px] sm:min-h-0 bg-white font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                 title="Pilih Tahun untuk Rekap Bulanan"
               >
                 <option value="Semua">Semua Tahun</option>
@@ -240,7 +240,7 @@ export const SummaryCardsRekapDataProsesTembakau: React.FC<SummaryCardsProps> = 
             <select
               value={periodeRange.bulanMulai}
               onChange={(e) => onPeriodeRangeChange({ ...periodeRange, bulanMulai: e.target.value })}
-              className="text-xs border border-slate-200 rounded-lg px-2 py-1 bg-white text-slate-700 font-medium focus:outline-none"
+              className="text-xs border border-slate-200 rounded-lg px-2 py-1 min-h-[44px] sm:min-h-0 bg-white text-slate-700 font-medium focus:outline-none"
             >
               {bulanList.map((b) => (
                 <option key={b} value={b}>{b}</option>
@@ -249,7 +249,7 @@ export const SummaryCardsRekapDataProsesTembakau: React.FC<SummaryCardsProps> = 
             <select
               value={periodeRange.tahunMulai}
               onChange={(e) => onPeriodeRangeChange({ ...periodeRange, tahunMulai: e.target.value })}
-              className="text-xs border border-slate-200 rounded-lg px-2 py-1 bg-white text-slate-700 font-medium focus:outline-none"
+              className="text-xs border border-slate-200 rounded-lg px-2 py-1 min-h-[44px] sm:min-h-0 bg-white text-slate-700 font-medium focus:outline-none"
             >
               <option value="Semua">Semua Tahun</option>
               {tahunList.filter(t => t !== 'Semua').map((t) => (
@@ -261,7 +261,7 @@ export const SummaryCardsRekapDataProsesTembakau: React.FC<SummaryCardsProps> = 
             <select
               value={periodeRange.bulanAkhir}
               onChange={(e) => onPeriodeRangeChange({ ...periodeRange, bulanAkhir: e.target.value })}
-              className="text-xs border border-slate-200 rounded-lg px-2 py-1 bg-white text-slate-700 font-medium focus:outline-none"
+              className="text-xs border border-slate-200 rounded-lg px-2 py-1 min-h-[44px] sm:min-h-0 bg-white text-slate-700 font-medium focus:outline-none"
             >
               {bulanList.map((b) => (
                 <option key={b} value={b}>{b}</option>
@@ -270,7 +270,7 @@ export const SummaryCardsRekapDataProsesTembakau: React.FC<SummaryCardsProps> = 
             <select
               value={periodeRange.tahunAkhir}
               onChange={(e) => onPeriodeRangeChange({ ...periodeRange, tahunAkhir: e.target.value })}
-              className="text-xs border border-slate-200 rounded-lg px-2 py-1 bg-white text-slate-700 font-medium focus:outline-none"
+              className="text-xs border border-slate-200 rounded-lg px-2 py-1 min-h-[44px] sm:min-h-0 bg-white text-slate-700 font-medium focus:outline-none"
             >
               <option value="Semua">Semua Tahun</option>
               {tahunList.filter(t => t !== 'Semua').map((t) => (
@@ -296,4 +296,4 @@ export const SummaryCardsRekapDataProsesTembakau: React.FC<SummaryCardsProps> = 
       </div>
     </div>
   );
-};
+});

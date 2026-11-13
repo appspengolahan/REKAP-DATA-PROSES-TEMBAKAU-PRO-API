@@ -3,7 +3,7 @@ import { GroupSummary } from '../types[RekapDataProsesTembakau]';
 import { formatKg, formatPct, formatInt } from '../api[RekapDataProsesTembakau]';
 
 // 1. Line Chart: Tren Susut (%) Bulanan
-export const MonthlyLossLineChart: React.FC<{ data: GroupSummary[]; isExpanded?: boolean }> = ({ data, isExpanded = false }) => {
+export const MonthlyLossLineChart: React.FC<{ data: GroupSummary[]; isExpanded?: boolean }> = React.memo(({ data, isExpanded = false }) => {
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
 
   if (!data || data.length === 0) {
@@ -95,12 +95,19 @@ export const MonthlyLossLineChart: React.FC<{ data: GroupSummary[]; isExpanded?:
             <circle
               cx={p.x}
               cy={p.y}
-              r={isExpanded ? 28 : 20}
+              r={isExpanded ? 28 : 22}
               fill="transparent"
               className="cursor-pointer"
-              onClick={() => setHoveredIdx((prev) => (prev === i ? null : i))}
-              onMouseEnter={() => setHoveredIdx(i)}
-              onMouseLeave={() => setHoveredIdx(null)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setHoveredIdx((prev) => (prev === i ? null : i));
+              }}
+              onPointerEnter={(e) => {
+                if (e.pointerType !== 'touch') setHoveredIdx(i);
+              }}
+              onPointerLeave={(e) => {
+                if (e.pointerType !== 'touch') setHoveredIdx(null);
+              }}
             />
             {/* X-axis label */}
             <text
@@ -118,10 +125,10 @@ export const MonthlyLossLineChart: React.FC<{ data: GroupSummary[]; isExpanded?:
       {/* Tooltip */}
       {hoveredIdx !== null && (
         <div 
-          className="absolute z-20 pointer-events-none bg-slate-900 text-white p-2.5 rounded-xl text-xs shadow-xl font-sans border border-slate-700 min-w-[140px]"
+          className="absolute z-20 pointer-events-none bg-slate-900 text-white p-2.5 rounded-xl text-xs shadow-xl font-sans border border-slate-700 min-w-[140px] max-w-[220px]"
           style={{
-            left: `${(points[hoveredIdx].x / width) * 100}%`,
-            top: `${(points[hoveredIdx].y / height) * 100}%`,
+            left: `clamp(80px, ${(points[hoveredIdx].x / width) * 100}%, calc(100% - 80px))`,
+            top: `${Math.max(24, (points[hoveredIdx].y / height) * 100)}%`,
             transform: 'translate(-50%, -125%)'
           }}
         >
@@ -133,10 +140,10 @@ export const MonthlyLossLineChart: React.FC<{ data: GroupSummary[]; isExpanded?:
       )}
     </div>
   );
-};
+});
 
 // 2. Bar Chart: Bahan Baku vs Hasil Jadi per Bulan
-export const BakuVsHasilBarChart: React.FC<{ data: GroupSummary[]; isExpanded?: boolean }> = ({ data, isExpanded = false }) => {
+export const BakuVsHasilBarChart: React.FC<{ data: GroupSummary[]; isExpanded?: boolean }> = React.memo(({ data, isExpanded = false }) => {
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
 
   if (!data || data.length === 0) {
@@ -156,11 +163,11 @@ export const BakuVsHasilBarChart: React.FC<{ data: GroupSummary[]; isExpanded?: 
 
   return (
     <div className="w-full relative select-none">
-      <div className="flex items-center justify-between text-xs mb-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs mb-2">
         <span className="text-[11px] text-slate-400 italic">
           *Angka di atas batang menunjukkan volume dalam Kilogram (Kg)
         </span>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3 sm:gap-4">
           <span className="flex items-center gap-1.5 text-slate-700 font-medium">
             <span className="w-3 h-3 rounded bg-blue-600"></span>
             Bahan Baku (Kg)
@@ -218,9 +225,16 @@ export const BakuVsHasilBarChart: React.FC<{ data: GroupSummary[]; isExpanded?: 
             <g 
               key={i} 
               className="cursor-pointer"
-              onClick={() => setHoveredIdx((prev) => (prev === i ? null : i))}
-              onMouseEnter={() => setHoveredIdx(i)}
-              onMouseLeave={() => setHoveredIdx(null)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setHoveredIdx((prev) => (prev === i ? null : i));
+              }}
+              onPointerEnter={(e) => {
+                if (e.pointerType !== 'touch') setHoveredIdx(i);
+              }}
+              onPointerLeave={(e) => {
+                if (e.pointerType !== 'touch') setHoveredIdx(null);
+              }}
             >
               {/* Baku Bar */}
               <rect
@@ -279,9 +293,9 @@ export const BakuVsHasilBarChart: React.FC<{ data: GroupSummary[]; isExpanded?: 
       {/* Tooltip */}
       {hoveredIdx !== null && (
         <div 
-          className="absolute z-20 pointer-events-none bg-slate-900 text-white p-3 rounded-xl text-xs shadow-xl font-sans border border-slate-700 min-w-[150px]"
+          className="absolute z-20 pointer-events-none bg-slate-900 text-white p-3 rounded-xl text-xs shadow-xl font-sans border border-slate-700 min-w-[150px] max-w-[220px]"
           style={{
-            left: `${((paddingX + hoveredIdx * barGroupWidth + barGroupWidth / 2) / width) * 100}%`,
+            left: `clamp(85px, ${((paddingX + hoveredIdx * barGroupWidth + barGroupWidth / 2) / width) * 100}%, calc(100% - 85px))`,
             top: '20%',
             transform: 'translateX(-50%)'
           }}
@@ -294,14 +308,14 @@ export const BakuVsHasilBarChart: React.FC<{ data: GroupSummary[]; isExpanded?: 
       )}
     </div>
   );
-};
+});
 
 // 3. Horizontal Bar Chart: Perbandingan Susut Antar Jenis Tembakau
 export const TobaccoVariantVolumeBarChart: React.FC<{ 
   data: GroupSummary[]; 
   isExpanded?: boolean;
   searchTerm?: string;
-}> = ({ data, isExpanded = false, searchTerm = '' }) => {
+}> = React.memo(({ data, isExpanded = false, searchTerm = '' }) => {
   if (!data || data.length === 0) {
     return <div className="p-8 text-center text-xs text-slate-400">Tidak ada data jenis tembakau</div>;
   }
@@ -367,14 +381,14 @@ export const TobaccoVariantVolumeBarChart: React.FC<{
       })}
     </div>
   );
-};
+});
 
 // 4. Trend Line Chart untuk SATU Jenis Tembakau
 export const TrendJenisLineChart: React.FC<{ 
   data: GroupSummary[];
   jenisTembakau: string;
   isExpanded?: boolean;
-}> = ({ data, jenisTembakau, isExpanded = false }) => {
+}> = React.memo(({ data, jenisTembakau, isExpanded = false }) => {
   if (!data || data.length === 0) {
     return (
       <div className="p-8 text-center text-xs text-slate-400">
@@ -455,4 +469,4 @@ export const TrendJenisLineChart: React.FC<{
       </svg>
     </div>
   );
-};
+});

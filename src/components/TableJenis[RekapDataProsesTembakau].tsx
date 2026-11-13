@@ -12,7 +12,7 @@ interface TableJenisProps {
   jenisProses?: string;
 }
 
-export const TableJenisRekapDataProsesTembakau: React.FC<TableJenisProps> = ({
+export const TableJenisRekapDataProsesTembakau: React.FC<TableJenisProps> = React.memo(({
   data,
   onSelectJenisTrend,
   selectedJenisTrend,
@@ -86,23 +86,23 @@ export const TableJenisRekapDataProsesTembakau: React.FC<TableJenisProps> = ({
     <div className="space-y-3">
       {/* Search Bar & Page Size */}
       <div className="flex items-center justify-between gap-2.5 flex-wrap no-print">
-        <div className="relative flex-1 min-w-[200px] max-w-xs">
+        <div className="relative flex-1 min-w-0 w-full sm:min-w-[200px] sm:max-w-xs">
           <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
             placeholder="Cari varian tembakau (dari 54 varian)..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-8 pr-3 py-2 sm:py-1.5 text-xs border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="w-full pl-8 pr-3 py-2 min-h-[44px] sm:min-h-0 sm:py-1.5 text-xs border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
         </div>
-        <div className="flex items-center gap-2.5 text-xs text-slate-500 ml-auto">
+        <div className="flex items-center gap-2.5 text-xs text-slate-500 ml-auto flex-wrap">
           <div className="flex items-center gap-1.5">
             <span className="text-[11px]">Baris:</span>
             <select
               value={pageSize}
               onChange={(e) => setPageSize(parseInt(e.target.value, 10))}
-              className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 sm:py-1 bg-white text-slate-700 font-medium focus:outline-none"
+              className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 min-h-[44px] sm:min-h-0 sm:py-1 bg-white text-slate-700 font-medium focus:outline-none"
             >
               <option value="25">25</option>
               <option value="50">50</option>
@@ -309,4 +309,4 @@ export const TableJenisRekapDataProsesTembakau: React.FC<TableJenisProps> = ({
       )}
     </div>
   );
-};
+});

@@ -38,7 +38,7 @@ const BULAN_OPTIONS = [
   'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
 ];
 
-export const RekapJenisViewRekapDataProsesTembakau: React.FC<RekapJenisViewProps> = ({
+export const RekapJenisViewRekapDataProsesTembakau: React.FC<RekapJenisViewProps> = React.memo(({
   rekapJenisTembakauPeriode,
   trendJenis,
   periodeRange,
@@ -127,7 +127,7 @@ export const RekapJenisViewRekapDataProsesTembakau: React.FC<RekapJenisViewProps
             {/* Opsi 1: Cetak Langsung (Direct Print) */}
             <button
               onClick={() => setIsCetakModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold shadow-xs transition-colors"
+              className="flex items-center gap-1.5 px-3 py-2 min-h-[44px] sm:min-h-0 sm:py-1.5 rounded-lg bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold shadow-xs transition-colors"
               title="Cetak langsung laporan ke printer fisik"
             >
               <Printer className="w-3.5 h-3.5 text-blue-300" />
@@ -137,7 +137,7 @@ export const RekapJenisViewRekapDataProsesTembakau: React.FC<RekapJenisViewProps
             {/* Opsi 2: Export PDF Dinamis */}
             <button
               onClick={() => setIsCetakModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs transition-colors"
+              className="flex items-center gap-1.5 px-3 py-2 min-h-[44px] sm:min-h-0 sm:py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs transition-colors"
               title="Unduh Laporan PDF Rekap Varian Tembakau (Dinamis Multi-Halaman)"
             >
               <FileText className="w-3.5 h-3.5" />
@@ -154,7 +154,7 @@ export const RekapJenisViewRekapDataProsesTembakau: React.FC<RekapJenisViewProps
               <span>Rentang Periode:</span>
             </div>
 
-            <div className="flex items-center gap-1.5 bg-slate-50 p-1.5 rounded-xl border border-slate-200/80 text-xs">
+            <div className="flex flex-wrap items-center gap-1.5 bg-slate-50 p-1.5 rounded-xl border border-slate-200/80 text-xs">
               <select
                 value={periodeRange.bulanMulai}
                 onChange={(e) => onPeriodeRangeChange({ ...periodeRange, bulanMulai: e.target.value })}
@@ -314,7 +314,7 @@ export const RekapJenisViewRekapDataProsesTembakau: React.FC<RekapJenisViewProps
                 e.stopPropagation();
                 setExpandedChart('tobaccoVariant');
               }}
-              className="no-print flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-slate-500 hover:text-blue-600 bg-slate-50 hover:bg-blue-50 rounded-lg border border-slate-200/90 transition-colors"
+              className="no-print flex items-center gap-1 px-2.5 py-2 min-h-[44px] sm:min-h-0 sm:px-2 sm:py-1 text-[11px] font-semibold text-slate-500 hover:text-blue-600 bg-slate-50 hover:bg-blue-50 rounded-lg border border-slate-200/90 transition-colors shrink-0"
             >
               <Maximize2 className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Perbesar</span>
@@ -351,7 +351,7 @@ export const RekapJenisViewRekapDataProsesTembakau: React.FC<RekapJenisViewProps
               <button
                 type="button"
                 onClick={() => setExpandedChart('trendJenis')}
-                className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-slate-500 hover:text-blue-600 bg-slate-50 hover:bg-blue-50 rounded-lg border border-slate-200/90 transition-colors"
+                className="flex items-center gap-1 px-2.5 py-2 min-h-[44px] sm:min-h-0 sm:px-2 sm:py-1 text-[11px] font-semibold text-slate-500 hover:text-blue-600 bg-slate-50 hover:bg-blue-50 rounded-lg border border-slate-200/90 transition-colors shrink-0"
               >
                 <Maximize2 className="w-3.5 h-3.5" />
               </button>
@@ -365,10 +365,10 @@ export const RekapJenisViewRekapDataProsesTembakau: React.FC<RekapJenisViewProps
       </div>
 
       {/* Full Variety Table with Search and Sorting */}
-      <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-sm space-y-4 print-section-table">
+      <div className="bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-sm space-y-4 print-section-table">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100 no-print">
           <div>
-            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+            <h3 className="text-sm font-bold text-slate-800 flex flex-wrap items-center gap-1.5">
               <span>Tabel Lengkap Rekapitulasi per Jenis Tembakau</span>
               <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600">
                 Klik varian untuk melihat grafik tren
@@ -427,4 +427,4 @@ export const RekapJenisViewRekapDataProsesTembakau: React.FC<RekapJenisViewProps
       />
     </div>
   );
-};
+});

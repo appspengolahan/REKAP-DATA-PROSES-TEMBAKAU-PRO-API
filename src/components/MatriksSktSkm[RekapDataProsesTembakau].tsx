@@ -1,61 +1,63 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { RawRowData } from '../types[RekapDataProsesTembakau]';
 import { formatKg, formatPct, formatTanggalCetakIndo } from '../api[RekapDataProsesTembakau]';
-import { GitCompare, Scale, Droplet, Wind, ArrowRight, ShieldCheck, CheckCircle2, Printer, Download } from 'lucide-react';
+import { GitCompare, Scale, Droplet, Wind, Printer, Download } from 'lucide-react';
 
 interface MatriksSktSkmProps {
   rows: RawRowData[];
   selectedTahun: string;
 }
 
-export const MatriksSktSkmRekapDataProsesTembakau: React.FC<MatriksSktSkmProps> = ({
+const computePathMetrics = (data: RawRowData[]) => {
+  let baku = 0;
+  let hasil = 0;
+  let susut = 0;
+  let gagang = 0;
+  let air = 0;
+  let debu = 0;
+
+  for (const r of data) {
+    baku += r.baku;
+    hasil += r.hasil;
+    susut += r.susutKg;
+    gagang += r.gagangKg;
+    air += r.airKg;
+    debu += r.debuKg;
+  }
+
+  const susutPct = baku > 0 ? (susut / baku) * 100 : 0;
+  const gagangPct = baku > 0 ? (gagang / baku) * 100 : 0;
+  const airPct = baku > 0 ? (air / baku) * 100 : 0;
+  const debuPct = baku > 0 ? (debu / baku) * 100 : 0;
+
+  return {
+    count: data.length,
+    baku,
+    hasil,
+    susut,
+    susutPct,
+    gagang,
+    gagangPct,
+    air,
+    airPct,
+    debu,
+    debuPct
+  };
+};
+
+export const MatriksSktSkmRekapDataProsesTembakau: React.FC<MatriksSktSkmProps> = React.memo(({
   rows,
   selectedTahun
 }) => {
-  const filtered = rows.filter(r => selectedTahun === 'Semua' || r.tahun === selectedTahun);
-
-  const sktRows = filtered.filter(r => r.jenisProses === 'SKT');
-  const skmRows = filtered.filter(r => r.jenisProses === 'SKM');
-
-  const computeMetrics = (data: RawRowData[]) => {
-    let baku = 0;
-    let hasil = 0;
-    let susut = 0;
-    let gagang = 0;
-    let air = 0;
-    let debu = 0;
-
-    for (const r of data) {
-      baku += r.baku;
-      hasil += r.hasil;
-      susut += r.susutKg;
-      gagang += r.gagangKg;
-      air += r.airKg;
-      debu += r.debuKg;
-    }
-
-    const susutPct = baku > 0 ? (susut / baku) * 100 : 0;
-    const gagangPct = baku > 0 ? (gagang / baku) * 100 : 0;
-    const airPct = baku > 0 ? (air / baku) * 100 : 0;
-    const debuPct = baku > 0 ? (debu / baku) * 100 : 0;
-
+  const { skt, skm } = useMemo(() => {
+    const filtered = rows.filter(r => selectedTahun === 'Semua' || r.tahun === selectedTahun);
+    const sktRows = filtered.filter(r => r.jenisProses === 'SKT');
+    const skmRows = filtered.filter(r => r.jenisProses === 'SKM');
     return {
-      count: data.length,
-      baku,
-      hasil,
-      susut,
-      susutPct,
-      gagang,
-      gagangPct,
-      air,
-      airPct,
-      debu,
-      debuPct
+      skt: computePathMetrics(sktRows),
+      skm: computePathMetrics(skmRows)
     };
-  };
-
-  const skt = computeMetrics(sktRows);
-  const skm = computeMetrics(skmRows);
+  }, [rows, selectedTahun]);
 
   const handleExportPdf = () => {
     const origTitle = document.title;
@@ -147,18 +149,18 @@ export const MatriksSktSkmRekapDataProsesTembakau: React.FC<MatriksSktSkmProps> 
             </span>
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
-            <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 min-w-0">
               <span className="text-[10px] text-slate-400 font-semibold uppercase">Netto Baku</span>
-              <div className="text-sm font-bold text-slate-800 font-mono mt-0.5">{formatKg(skt.baku)}</div>
+              <div className="text-sm font-bold text-slate-800 font-mono mt-0.5 truncate">{formatKg(skt.baku)}</div>
             </div>
-            <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+            <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 min-w-0">
               <span className="text-[10px] text-slate-400 font-semibold uppercase">Hasil Jadi</span>
-              <div className="text-sm font-bold text-emerald-700 font-mono mt-0.5">{formatKg(skt.hasil)}</div>
+              <div className="text-sm font-bold text-emerald-700 font-mono mt-0.5 truncate">{formatKg(skt.hasil)}</div>
             </div>
-            <div className="bg-amber-50/80 p-2.5 rounded-xl border border-amber-200">
+            <div className="bg-amber-50/80 p-2.5 rounded-xl border border-amber-200 min-w-0">
               <span className="text-[10px] text-amber-700 font-semibold uppercase">Susut (%)</span>
-              <div className="text-sm font-bold text-amber-800 font-mono mt-0.5">{formatPct(skt.susutPct)}</div>
+              <div className="text-sm font-bold text-amber-800 font-mono mt-0.5 truncate">{formatPct(skt.susutPct)}</div>
             </div>
           </div>
 
@@ -221,18 +223,18 @@ export const MatriksSktSkmRekapDataProsesTembakau: React.FC<MatriksSktSkmProps> 
             </span>
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
-            <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 min-w-0">
               <span className="text-[10px] text-slate-400 font-semibold uppercase">Netto Baku</span>
-              <div className="text-sm font-bold text-slate-800 font-mono mt-0.5">{formatKg(skm.baku)}</div>
+              <div className="text-sm font-bold text-slate-800 font-mono mt-0.5 truncate">{formatKg(skm.baku)}</div>
             </div>
-            <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+            <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 min-w-0">
               <span className="text-[10px] text-slate-400 font-semibold uppercase">Hasil Jadi</span>
-              <div className="text-sm font-bold text-emerald-700 font-mono mt-0.5">{formatKg(skm.hasil)}</div>
+              <div className="text-sm font-bold text-emerald-700 font-mono mt-0.5 truncate">{formatKg(skm.hasil)}</div>
             </div>
-            <div className="bg-blue-50/80 p-2.5 rounded-xl border border-blue-200">
+            <div className="bg-blue-50/80 p-2.5 rounded-xl border border-blue-200 min-w-0">
               <span className="text-[10px] text-blue-700 font-semibold uppercase">Susut (%)</span>
-              <div className="text-sm font-bold text-blue-800 font-mono mt-0.5">{formatPct(skm.susutPct)}</div>
+              <div className="text-sm font-bold text-blue-800 font-mono mt-0.5 truncate">{formatPct(skm.susutPct)}</div>
             </div>
           </div>
 
@@ -286,4 +288,4 @@ export const MatriksSktSkmRekapDataProsesTembakau: React.FC<MatriksSktSkmProps> 
       </div>
     </div>
   );
-};
+});

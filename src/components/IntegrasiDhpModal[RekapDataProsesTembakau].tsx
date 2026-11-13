@@ -1,5 +1,5 @@
 import { gasScriptCode } from '../services/gasScriptTemplate';
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   X,
   Database,
@@ -131,6 +131,8 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
   const [autoPullEnabled, setAutoPullEnabled] = useState<boolean>(true);
   const [countdown, setCountdown] = useState<number>(12);
   const [isAutoPulling, setIsAutoPulling] = useState<boolean>(false);
+  const dhpDataRef = useRef<DhpIntegrationData | null>(null);
+  dhpDataRef.current = dhpData;
 
   // Load data DHP with support for silent background refresh
   const loadDhpData = async (silent = false) => {
@@ -142,7 +144,18 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
     setErrorMsg(null);
     try {
       const data = await RekapDataProsesTembakauService.fetchDhpIntegrationData(existingRows);
-      setDhpData(data);
+      // Anti-kedip / anti-kosong: jika silent auto-pull mendapat payload kosong padahal sebelumnya ada data, tahan data sebelumnya
+      if (
+        silent &&
+        (!data || !data.items || data.items.length === 0) &&
+        dhpDataRef.current &&
+        dhpDataRef.current.items &&
+        dhpDataRef.current.items.length > 0
+      ) {
+        console.warn('[IntegrasiDHP] Silent auto-pull mengembalikan 0 baris; mempertahankan snapshot DHP aktif.');
+      } else {
+        setDhpData(data);
+      }
     } catch (err: any) {
       if (!silent) {
         setErrorMsg(err?.message || 'Gagal mengambil data dari Google Sheets DHP');
@@ -167,6 +180,7 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
     if (!isOpen || !autoPullEnabled) return;
 
     const timer = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return;
       setCountdown((prev) => {
         if (prev <= 1) {
           if (!loading && !isSyncingToRekap && !isAutoPulling) {
@@ -178,7 +192,17 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
       });
     }, 1000);
 
-    return () => clearInterval(timer);
+    const handleVisibility = () => {
+      if (typeof document !== 'undefined' && !document.hidden && !loading && !isSyncingToRekap && !isAutoPulling) {
+        loadDhpData(true);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, [isOpen, autoPullEnabled, loading, isSyncingToRekap, isAutoPulling]);
 
   // Handle synchronization from DHP to Sheet Rekap (Direct Automation with Smart In-Place Fill)
@@ -529,10 +553,10 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
           </div>
 
           {/* SISI TENGAH: Segmented Pill Toggles (Pratinjau vs Analisis Harian) */}
-          <div className="flex items-center p-0.5 sm:p-1 bg-slate-100 rounded-xl border border-slate-200/90 shadow-xs shrink-0">
+          <div className="flex items-center p-0.5 sm:p-1 bg-slate-100 rounded-xl border border-slate-200/90 shadow-xs shrink-0 max-w-full overflow-x-auto">
             <button
               onClick={() => { setActiveTab('transaksi'); setShowToolsDropdown(false); }}
-              className={`flex items-center gap-1.5 px-3 py-1 sm:py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 min-h-[44px] sm:min-h-0 sm:py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
                 activeTab === 'transaksi'
                   ? 'bg-white text-blue-700 shadow-xs border border-slate-200/80'
                   : 'text-slate-600 hover:text-slate-900'
@@ -544,7 +568,7 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
 
             <button
               onClick={() => { setActiveTab('analisis_harian'); setShowToolsDropdown(false); }}
-              className={`flex items-center gap-1.5 px-3 py-1 sm:py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 min-h-[44px] sm:min-h-0 sm:py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
                 activeTab === 'analisis_harian'
                   ? 'bg-white text-amber-800 shadow-xs border border-slate-200/80'
                   : 'text-slate-600 hover:text-slate-900'
@@ -559,13 +583,13 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
           </div>
 
           {/* SISI KANAN: Dropdown Menu Alat/Template + Saklar Auto-Tarik + Tombol Tarik Ulang */}
-          <div className="flex items-center gap-1.5 sm:gap-2 ml-auto sm:ml-0 shrink-0">
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 ml-auto sm:ml-0 shrink-0">
             
             {/* Dynamic Dropdown: Pemetaan, GAS & Template */}
             <div className="relative">
               <button
                 onClick={() => setShowToolsDropdown(!showToolsDropdown)}
-                className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg border text-xs font-semibold transition-all shadow-xs cursor-pointer ${
+                className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 min-h-[44px] sm:min-h-0 rounded-lg border text-xs font-semibold transition-all shadow-xs cursor-pointer ${
                   ['pemetaan', 'gas', 'template_dhp'].includes(activeTab)
                     ? 'bg-blue-50 border-blue-400 text-blue-800 font-bold ring-2 ring-blue-500/20'
                     : 'bg-white hover:bg-slate-50 border-slate-300 text-slate-700'
@@ -601,14 +625,14 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
                     className="fixed inset-0 z-30"
                     onClick={() => setShowToolsDropdown(false)}
                   />
-                  <div className="absolute right-0 mt-1.5 w-60 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-40 text-xs animate-in fade-in slide-in-from-top-2 duration-150">
+                  <div className="absolute right-0 mt-1.5 w-60 max-w-[calc(100vw-1rem)] bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-40 text-xs animate-in fade-in slide-in-from-top-2 duration-150">
                     <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100">
                       Konfigurasi &amp; Referensi DHP
                     </div>
 
                     <button
                       onClick={() => { setActiveTab('pemetaan'); setShowToolsDropdown(false); }}
-                      className={`w-full text-left px-3 py-2 flex items-center justify-between transition-colors cursor-pointer ${
+                      className={`w-full text-left px-3 py-2.5 min-h-[44px] sm:min-h-0 sm:py-2 flex items-center justify-between transition-colors cursor-pointer ${
                         activeTab === 'pemetaan' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-700 hover:bg-slate-50'
                       }`}
                     >
@@ -621,7 +645,7 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
 
                     <button
                       onClick={() => { setActiveTab('gas'); setShowToolsDropdown(false); }}
-                      className={`w-full text-left px-3 py-2 flex items-center justify-between transition-colors cursor-pointer ${
+                      className={`w-full text-left px-3 py-2.5 min-h-[44px] sm:min-h-0 sm:py-2 flex items-center justify-between transition-colors cursor-pointer ${
                         activeTab === 'gas' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-700 hover:bg-slate-50'
                       }`}
                     >
@@ -634,7 +658,7 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
 
                     <button
                       onClick={() => { setActiveTab('template_dhp'); setShowToolsDropdown(false); }}
-                      className={`w-full text-left px-3 py-2 flex items-center justify-between transition-colors cursor-pointer ${
+                      className={`w-full text-left px-3 py-2.5 min-h-[44px] sm:min-h-0 sm:py-2 flex items-center justify-between transition-colors cursor-pointer ${
                         activeTab === 'template_dhp' ? 'bg-emerald-50 text-emerald-700 font-bold' : 'text-slate-700 hover:bg-slate-50'
                       }`}
                     >
@@ -650,7 +674,7 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
                     <button
                       onClick={() => { setShowToolsDropdown(false); handleReconcileLive(); }}
                       disabled={isReconciling}
-                      className="w-full text-left px-3 py-2 flex items-center justify-between text-amber-800 hover:bg-amber-50 font-semibold transition-colors cursor-pointer text-xs"
+                      className="w-full text-left px-3 py-2.5 min-h-[44px] sm:min-h-0 sm:py-2 flex items-center justify-between text-amber-800 hover:bg-amber-50 font-semibold transition-colors cursor-pointer text-xs"
                       title="Bersihkan batch yang dibatalkan / duplikat dan selaraskan data riil DHP"
                     >
                       <div className="flex items-center gap-2">
@@ -666,7 +690,7 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
                       href="/TEMPLATE_DHP_TEMBAKAU_ADMIN_PROSES.xlsx"
                       download="TEMPLATE_DHP_TEMBAKAU_ADMIN_PROSES.xlsx"
                       onClick={() => setShowToolsDropdown(false)}
-                      className="px-3 py-2 flex items-center justify-between text-emerald-800 hover:bg-emerald-50 font-semibold transition-colors"
+                      className="px-3 py-2.5 min-h-[44px] sm:min-h-0 sm:py-2 flex items-center justify-between text-emerald-800 hover:bg-emerald-50 font-semibold transition-colors"
                     >
                       <div className="flex items-center gap-2">
                         <Download className="w-4 h-4 text-emerald-700" />
@@ -682,7 +706,7 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
             {/* Smart Live-Sync Saklar / Toggle Switch */}
             <button
               onClick={() => setAutoPullEnabled(!autoPullEnabled)}
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1 sm:py-1.5 rounded-lg border text-[11px] sm:text-xs font-semibold transition-all shadow-xs cursor-pointer ${
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 min-h-[44px] sm:min-h-0 rounded-lg border text-[11px] sm:text-xs font-semibold transition-all shadow-xs cursor-pointer ${
                 autoPullEnabled
                   ? 'bg-emerald-50 hover:bg-emerald-100 border-emerald-300 text-emerald-800'
                   : 'bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-600'
@@ -697,7 +721,7 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
             <button
               onClick={() => loadDhpData(false)}
               disabled={loading}
-              className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-[11px] sm:text-xs font-bold transition-all shadow-xs disabled:opacity-50 cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 min-h-[44px] sm:min-h-0 rounded-lg bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-[11px] sm:text-xs font-bold transition-all shadow-xs disabled:opacity-50 cursor-pointer"
               title="Perbarui pembacaan lembar DHP secara manual (< 1s)"
             >
               <RefreshCw className={`w-3 sm:w-3.5 h-3 sm:h-3.5 ${loading || isAutoPulling ? 'animate-spin' : ''}`} />
@@ -2203,7 +2227,7 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
           <div className="flex items-center gap-2">
             <button
               onClick={onClose}
-              className="px-5 py-1.5 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-semibold transition-colors shadow-xs cursor-pointer"
+              className="px-5 py-2 min-h-[44px] sm:min-h-0 sm:py-1.5 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-semibold transition-colors shadow-xs cursor-pointer"
             >
               Tutup
             </button>

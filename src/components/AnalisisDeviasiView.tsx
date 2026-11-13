@@ -40,7 +40,7 @@ interface AnalisisDeviasiViewProps {
   onExportPdf?: () => void;
 }
 
-export const AnalisisDeviasiView: React.FC<AnalisisDeviasiViewProps> = ({
+export const AnalisisDeviasiView: React.FC<AnalisisDeviasiViewProps> = React.memo(({
   rows,
   selectedTahun: initialTahun,
   selectedBulan: initialBulan,
@@ -269,12 +269,12 @@ export const AnalisisDeviasiView: React.FC<AnalisisDeviasiViewProps> = ({
         </div>
 
         {/* Action Buttons */}
-        <div className="flex items-center gap-2 self-start md:self-center shrink-0 no-print">
+        <div className="flex flex-wrap items-center gap-2 self-start md:self-center shrink-0 no-print">
           {/* Tombol Cetak Dokumen Langsung (Printer) */}
           <button
             type="button"
             onClick={() => setIsCetakModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-100 shadow-sm transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-2 min-h-[44px] sm:min-h-0 sm:py-1.5 rounded-xl text-xs font-bold border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-100 shadow-sm transition-all cursor-pointer"
             title="Cetak langsung ke printer fisik dengan Kop Resmi PT Batu Karang"
           >
             <Printer className="w-3.5 h-3.5 text-amber-400" />
@@ -285,7 +285,7 @@ export const AnalisisDeviasiView: React.FC<AnalisisDeviasiViewProps> = ({
           <button
             type="button"
             onClick={() => setIsCetakModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white shadow-sm transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-2 min-h-[44px] sm:min-h-0 sm:py-1.5 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white shadow-sm transition-all cursor-pointer"
             title="Pilih opsi cetak atau unduh file PDF Evaluasi Mutu & Deviasi"
           >
             <Download className="w-3.5 h-3.5" />
@@ -307,28 +307,28 @@ export const AnalisisDeviasiView: React.FC<AnalisisDeviasiViewProps> = ({
       )}
 
       {/* Navigation Sub-Tabs */}
-      <div className="flex items-center gap-1 border-b border-slate-200 bg-white p-1.5 rounded-xl shadow-xs">
+      <div className="flex flex-wrap items-center gap-1.5 border-b border-slate-200 bg-white p-1.5 rounded-xl shadow-xs">
         <button
           onClick={() => setSubTab('evaluasi-bulanan')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+          className={`flex items-center gap-2 px-4 py-2 min-h-[44px] sm:min-h-0 rounded-lg text-xs font-bold transition-all ${
             subTab === 'evaluasi-bulanan'
               ? 'bg-blue-600 text-white shadow-xs'
               : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
           }`}
         >
-          <TrendingUp className="w-4 h-4" />
+          <TrendingUp className="w-4 h-4 shrink-0" />
           <span>Evaluasi Bulanan Komparasi Seluruh Bahan</span>
         </button>
 
         <button
           onClick={() => setSubTab('manajemen-acuan')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+          className={`flex items-center gap-2 px-4 py-2 min-h-[44px] sm:min-h-0 rounded-lg text-xs font-bold transition-all ${
             subTab === 'manajemen-acuan'
               ? 'bg-blue-600 text-white shadow-xs'
               : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
           }`}
         >
-          <Sliders className="w-4 h-4" />
+          <Sliders className="w-4 h-4 shrink-0" />
           <span>Manajemen Standar Acuan Susut ({periodCalculatedStandards.length} Varian Terhitung)</span>
         </button>
       </div>
@@ -375,7 +375,7 @@ export const AnalisisDeviasiView: React.FC<AnalisisDeviasiViewProps> = ({
                 <select
                   value={filterBulan}
                   onChange={(e) => setFilterBulan(e.target.value)}
-                  className="px-2.5 py-1 rounded-lg border border-slate-300 bg-slate-50 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="px-2.5 py-1.5 min-h-[44px] sm:min-h-0 sm:py-1 rounded-lg border border-slate-300 bg-slate-50 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   {BULAN_LIST.map(b => (
                     <option key={b} value={b}>{b}</option>
@@ -388,7 +388,7 @@ export const AnalisisDeviasiView: React.FC<AnalisisDeviasiViewProps> = ({
                 <select
                   value={filterTahun}
                   onChange={(e) => setFilterTahun(e.target.value)}
-                  className="px-2.5 py-1 rounded-lg border border-slate-300 bg-slate-50 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="px-2.5 py-1.5 min-h-[44px] sm:min-h-0 sm:py-1 rounded-lg border border-slate-300 bg-slate-50 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   {availableTahun.map(t => (
                     <option key={t} value={t}>{t}</option>
@@ -732,7 +732,7 @@ export const AnalisisDeviasiView: React.FC<AnalisisDeviasiViewProps> = ({
               <div className="flex items-center gap-2 self-start md:self-auto">
                 <button
                   onClick={handleApplyPeriodAsActive}
-                  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold text-white shadow-xs transition-all cursor-pointer ${
+                  className={`flex items-center gap-1.5 px-3.5 py-2 min-h-[44px] sm:min-h-0 sm:py-1.5 rounded-xl text-xs font-bold text-white shadow-xs transition-all cursor-pointer ${
                     isCurrentPeriodActive
                       ? 'bg-emerald-600 hover:bg-emerald-700'
                       : 'bg-amber-600 hover:bg-amber-700'
@@ -761,7 +761,7 @@ export const AnalisisDeviasiView: React.FC<AnalisisDeviasiViewProps> = ({
                 <select
                   value={baselineBulanMulai}
                   onChange={(e) => setBaselineBulanMulai(e.target.value)}
-                  className="px-2.5 py-1 rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className="px-2.5 py-1.5 min-h-[44px] sm:min-h-0 sm:py-1 rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
                 >
                   {BULAN_LIST.filter(b => b !== 'Semua').map(b => (
                     <option key={b} value={b}>{b}</option>
@@ -774,7 +774,7 @@ export const AnalisisDeviasiView: React.FC<AnalisisDeviasiViewProps> = ({
                 <select
                   value={baselineBulanAkhir}
                   onChange={(e) => setBaselineBulanAkhir(e.target.value)}
-                  className="px-2.5 py-1 rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className="px-2.5 py-1.5 min-h-[44px] sm:min-h-0 sm:py-1 rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
                 >
                   {BULAN_LIST.filter(b => b !== 'Semua').map(b => (
                     <option key={b} value={b}>{b}</option>
@@ -787,7 +787,7 @@ export const AnalisisDeviasiView: React.FC<AnalisisDeviasiViewProps> = ({
                 <select
                   value={baselineTahun}
                   onChange={(e) => setBaselineTahun(e.target.value)}
-                  className="px-2.5 py-1 rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className="px-2.5 py-1.5 min-h-[44px] sm:min-h-0 sm:py-1 rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
                 >
                   {availableTahun.filter(t => t !== 'Semua').map(t => (
                     <option key={t} value={t}>{t}</option>
@@ -867,10 +867,10 @@ export const AnalisisDeviasiView: React.FC<AnalisisDeviasiViewProps> = ({
             <div className="px-4 py-3 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-3 bg-slate-50">
               
               {/* Switch View Mode */}
-              <div className="flex items-center gap-1 bg-slate-200/70 p-1 rounded-xl">
+              <div className="flex flex-wrap items-center gap-1 bg-slate-200/70 p-1 rounded-xl">
                 <button
                   onClick={() => setAcuanViewMode('periode-terpilih')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  className={`px-3 py-2 min-h-[44px] sm:min-h-0 sm:py-1.5 rounded-lg text-xs font-bold transition-all ${
                     acuanViewMode === 'periode-terpilih'
                       ? 'bg-white text-slate-900 shadow-xs'
                       : 'text-slate-600 hover:text-slate-900'
@@ -880,7 +880,7 @@ export const AnalisisDeviasiView: React.FC<AnalisisDeviasiViewProps> = ({
                 </button>
                 <button
                   onClick={() => setAcuanViewMode('acuan-aktif')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  className={`px-3 py-2 min-h-[44px] sm:min-h-0 sm:py-1.5 rounded-lg text-xs font-bold transition-all ${
                     acuanViewMode === 'acuan-aktif'
                       ? 'bg-white text-slate-900 shadow-xs'
                       : 'text-slate-600 hover:text-slate-900'
@@ -894,19 +894,19 @@ export const AnalisisDeviasiView: React.FC<AnalisisDeviasiViewProps> = ({
               <div className="flex flex-wrap items-center gap-2">
                 
                 {/* Search Bar */}
-                <div className="relative">
+                <div className="relative w-full sm:w-auto">
                   <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
                     type="text"
                     value={baselineSearchQuery}
                     onChange={(e) => setBaselineSearchQuery(e.target.value)}
                     placeholder="Cari jenis tembakau..."
-                    className="pl-8 pr-3 py-1 text-xs rounded-lg border border-slate-300 bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 w-44 sm:w-56"
+                    className="pl-8 pr-8 py-2 min-h-[44px] sm:min-h-0 sm:py-1 text-xs rounded-lg border border-slate-300 bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:w-56"
                   />
                   {baselineSearchQuery && (
                     <button
                       onClick={() => setBaselineSearchQuery('')}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold p-1"
                     >
                       ×
                     </button>
@@ -919,7 +919,7 @@ export const AnalisisDeviasiView: React.FC<AnalisisDeviasiViewProps> = ({
                     <button
                       key={j}
                       onClick={() => setBaselineJalurFilter(j)}
-                      className={`px-2 py-0.5 rounded text-[11px] font-bold transition-all ${
+                      className={`px-2.5 py-1.5 min-h-[40px] sm:min-h-0 sm:py-0.5 rounded text-[11px] font-bold transition-all ${
                         baselineJalurFilter === j
                           ? 'bg-slate-800 text-white'
                           : 'text-slate-600 hover:text-slate-900'
@@ -933,7 +933,7 @@ export const AnalisisDeviasiView: React.FC<AnalisisDeviasiViewProps> = ({
                 {/* Reset to Default */}
                 <button
                   onClick={handleResetStandar}
-                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 transition-colors cursor-pointer ml-auto"
+                  className="flex items-center gap-1 px-2.5 py-2 min-h-[44px] sm:min-h-0 sm:py-1 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 transition-colors cursor-pointer ml-auto"
                   title="Kembalikan ke standar acuan bawaan pabrik (Agustus - September 2026)"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
@@ -1020,7 +1020,7 @@ export const AnalisisDeviasiView: React.FC<AnalisisDeviasiViewProps> = ({
                         <td className="py-2.5 px-3 text-center">
                           <button
                             onClick={() => handleStartEdit(item)}
-                            className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-slate-100 hover:bg-blue-50 text-blue-600 border border-slate-200 hover:border-blue-300 transition-colors cursor-pointer"
+                            className="px-2.5 py-2 min-h-[44px] sm:min-h-0 sm:py-1 rounded-md text-[11px] font-semibold bg-slate-100 hover:bg-blue-50 text-blue-600 border border-slate-200 hover:border-blue-300 transition-colors cursor-pointer"
                           >
                             Ubah Standar
                           </button>
@@ -1149,4 +1149,4 @@ export const AnalisisDeviasiView: React.FC<AnalisisDeviasiViewProps> = ({
       />
     </div>
   );
-};
+});

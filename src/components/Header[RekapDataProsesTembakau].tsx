@@ -104,14 +104,14 @@ export const HeaderRekapDataProsesTembakau: React.FC<HeaderProps> = ({
       <div className="w-full px-3 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 gap-3">
           
-          {/* Logo & Main Title (Always full title without truncation on desktop) */}
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-shrink-0">
+          {/* Logo & Main Title (Truncates cleanly on phones/narrow tablets without horizontal overflow) */}
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
             {/* Mobile/Tablet Hamburger Menu Button */}
             {onOpenMobileSidebar && (
               <button
                 type="button"
                 onClick={onOpenMobileSidebar}
-                className="lg:hidden min-w-[44px] min-h-[44px] p-2 -ml-1 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-slate-600 transition-colors flex items-center justify-center shadow-sm"
+                className="lg:hidden min-w-[44px] min-h-[44px] p-2 -ml-1 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-slate-600 transition-colors flex items-center justify-center shadow-sm shrink-0"
                 title="Buka Navigasi Sidebar & Modul Lengkap"
                 aria-label="Buka Menu Sidebar"
               >
@@ -122,9 +122,9 @@ export const HeaderRekapDataProsesTembakau: React.FC<HeaderProps> = ({
             <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center font-bold text-white shadow-md flex-shrink-0 text-sm sm:text-base tracking-wider ring-1 ring-amber-400/30">
               PP1
             </div>
-            <div className="min-w-0 flex flex-col justify-center">
-              <div className="flex items-center gap-2">
-                <h1 className="text-sm sm:text-base lg:text-lg font-bold tracking-tight text-slate-100 whitespace-nowrap">
+            <div className="min-w-0 flex-1 flex flex-col justify-center">
+              <div className="flex items-center gap-2 min-w-0">
+                <h1 className="text-xs xs:text-sm sm:text-base lg:text-lg font-bold tracking-tight text-slate-100 truncate">
                   <span className="hidden sm:inline">Monitoring Board — </span>Rekap Data Proses Tembakau
                 </h1>
                 <span className="hidden 2xl:inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-950/80 text-emerald-400 border border-emerald-800/80 flex-shrink-0">
@@ -132,16 +132,16 @@ export const HeaderRekapDataProsesTembakau: React.FC<HeaderProps> = ({
                   {gasConfig.status === 'online' ? 'Headless GAS Online' : 'Offline Cache'}
                 </span>
               </div>
-              <div className="flex items-center gap-1.5 sm:gap-2 text-xs text-slate-400 mt-0.5 whitespace-nowrap">
-                <span className="text-slate-300 font-medium">PT Batu Karang</span>
-                <span className="text-slate-600 hidden sm:inline">·</span>
-                <span className="hidden sm:inline">Divisi Produksi I</span>
-                <span className="text-slate-600">·</span>
-                <span className="inline-flex items-center gap-1 text-amber-300/90 font-medium text-[11px]">
+              <div className="flex items-center gap-1.5 sm:gap-2 text-xs text-slate-400 mt-0.5 min-w-0 overflow-hidden">
+                <span className="text-slate-300 font-medium truncate">PT Batu Karang</span>
+                <span className="text-slate-600 hidden sm:inline shrink-0">·</span>
+                <span className="hidden sm:inline truncate">Divisi Produksi I</span>
+                <span className="text-slate-600 shrink-0">·</span>
+                <span className="inline-flex items-center gap-1 text-amber-300/90 font-medium text-[11px] truncate">
                   <Calendar className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
-                  <span>Entri: {entriTerkini}</span>
+                  <span className="truncate">Entri: {entriTerkini}</span>
                 </span>
-                <span className="hidden md:inline-flex 2xl:hidden items-center gap-1 text-[11px] text-emerald-400 font-medium">
+                <span className="hidden md:inline-flex 2xl:hidden items-center gap-1 text-[11px] text-emerald-400 font-medium shrink-0">
                   <span className="text-slate-600">·</span>
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
                   {gasConfig.status === 'online' ? 'GAS Online' : 'Offline'}
@@ -319,7 +319,7 @@ export const HeaderRekapDataProsesTembakau: React.FC<HeaderProps> = ({
 
               {/* Dropdown Menu Popover */}
               {isDropdownOpen && (
-                <div className="absolute right-0 mt-2 w-76 sm:w-84 bg-slate-900 border border-slate-700/90 rounded-2xl shadow-2xl z-50 overflow-hidden divide-y divide-slate-800 animate-in fade-in slide-in-from-top-2 duration-150">
+                <div className="absolute right-0 mt-2 w-76 sm:w-84 max-w-[calc(100vw-1.5rem)] bg-slate-900 border border-slate-700/90 rounded-2xl shadow-2xl z-50 overflow-hidden divide-y divide-slate-800 animate-in fade-in slide-in-from-top-2 duration-150">
                   
                   {/* Section 1: User Profile & Role Switcher */}
                   <div className="p-3.5 bg-slate-800/60 space-y-2.5">
@@ -339,7 +339,7 @@ export const HeaderRekapDataProsesTembakau: React.FC<HeaderProps> = ({
                         onChange={(e) => {
                           onRoleChange(e.target.value as UserRole);
                         }}
-                        className="w-full bg-slate-900 border border-slate-700 text-slate-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                        className="w-full min-h-[44px] sm:min-h-0 bg-slate-900 border border-slate-700 text-slate-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
                         title="Ganti Peran Pengguna"
                       >
                         <option value="Project Manager" className="bg-slate-900 text-white">PM: Lalu Mahendra</option>
@@ -375,7 +375,7 @@ export const HeaderRekapDataProsesTembakau: React.FC<HeaderProps> = ({
                             e.stopPropagation();
                             onToggleAutoSync();
                           }}
-                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold transition-all ${
+                          className={`min-h-[36px] sm:min-h-0 px-3 py-1 sm:py-0.5 rounded-full text-[10px] font-bold transition-all ${
                             isAutoSync 
                               ? 'bg-emerald-600 text-white shadow-sm' 
                               : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
