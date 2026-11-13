@@ -1,6 +1,6 @@
 import React from 'react';
 import { RawRowData } from '../types[RekapDataProsesTembakau]';
-import { formatKg, formatPct } from '../api[RekapDataProsesTembakau]';
+import { formatKg, formatPct, formatTanggalCetakIndo } from '../api[RekapDataProsesTembakau]';
 import { GitCompare, Scale, Droplet, Wind, ArrowRight, ShieldCheck, CheckCircle2, Printer, Download } from 'lucide-react';
 
 interface MatriksSktSkmProps {
@@ -85,7 +85,7 @@ export const MatriksSktSkmRekapDataProsesTembakau: React.FC<MatriksSktSkmProps> 
           </div>
           <div className="text-right text-[10px] text-slate-600">
             <div><strong>Tahun:</strong> {selectedTahun === 'Semua' ? 'Semua Tahun (2025–2026)' : selectedTahun}</div>
-            <div><strong>Tanggal Cetak:</strong> {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
+            <div><strong>Tanggal Cetak:</strong> {formatTanggalCetakIndo()}</div>
           </div>
         </div>
       </div>
@@ -115,7 +115,7 @@ export const MatriksSktSkmRekapDataProsesTembakau: React.FC<MatriksSktSkmProps> 
         <div className="no-print flex items-center gap-2 shrink-0 self-start md:self-center">
           <button
             onClick={() => window.print()}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-100 text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-2 min-h-[44px] sm:min-h-0 sm:py-1.5 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-100 text-xs font-semibold shadow-xs transition-colors cursor-pointer"
             title="Cetak langsung matriks ke printer fisik"
           >
             <Printer className="w-3.5 h-3.5 text-slate-300" />
@@ -123,7 +123,7 @@ export const MatriksSktSkmRekapDataProsesTembakau: React.FC<MatriksSktSkmProps> 
           </button>
           <button
             onClick={handleExportPdf}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-sm transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-2 min-h-[44px] sm:min-h-0 sm:py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-sm transition-colors cursor-pointer"
             title="Export matriks komparasi ke dokumen PDF"
           >
             <Download className="w-3.5 h-3.5" />

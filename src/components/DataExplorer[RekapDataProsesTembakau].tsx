@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { RawRowData, UserRole } from '../types[RekapDataProsesTembakau]';
-import { formatKg, formatPct, formatHariTanggalIndo, parseDateValue, RekapDataProsesTembakauService } from '../api[RekapDataProsesTembakau]';
+import { formatKg, formatPct, formatInt, formatTanggalCetakIndo, formatHariTanggalIndo, parseDateValue, RekapDataProsesTembakauService } from '../api[RekapDataProsesTembakau]';
 import {
   Search,
   Plus,
@@ -49,6 +49,7 @@ export const DataExplorerRekapDataProsesTembakau: React.FC<DataExplorerProps> = 
   const [formAir, setFormAir] = useState('');
   const [formDebu, setFormDebu] = useState('');
   const [formCatatan, setFormCatatan] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
 
   // Reset page to 1 when filters or sort change
   useEffect(() => {
@@ -129,10 +130,11 @@ export const DataExplorerRekapDataProsesTembakau: React.FC<DataExplorerProps> = 
     const airKg = parseFloat(formAir) || 0;
     const debuKg = parseFloat(formDebu) || 0;
 
-    if (!formTembakau || baku <= 0 || hasil <= 0) {
-      alert('Mohon isi jenis tembakau dan nilai netto bahan baku serta hasil dengan benar.');
+    if (!formTembakau.trim() || baku <= 0 || hasil <= 0) {
+      setFormError('Mohon isi jenis tembakau dan nilai netto bahan baku serta hasil dengan benar.');
       return;
     }
+    setFormError(null);
 
     const today = new Date();
     const dateStr = today.toISOString().split('T')[0];
@@ -221,7 +223,7 @@ export const DataExplorerRekapDataProsesTembakau: React.FC<DataExplorerProps> = 
           {/* Total data info badge */}
           <div className="hidden lg:flex items-center gap-1 px-2.5 py-1 rounded-xl bg-slate-100 text-slate-600 text-[11px] font-medium">
             <span>Total:</span>
-            <span className="font-bold text-slate-800">{totalItems.toLocaleString('id-ID')}</span>
+            <span className="font-bold text-slate-800">{formatInt(totalItems)}</span>
             <span>batch</span>
           </div>
         </div>
@@ -247,7 +249,7 @@ export const DataExplorerRekapDataProsesTembakau: React.FC<DataExplorerProps> = 
           <button
             type="button"
             onClick={() => setIsCetakModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-slate-800 text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-2 min-h-[44px] sm:min-h-0 sm:py-1.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-slate-800 text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
             title="Cetak langsung ke printer fisik dengan pilihan rentang baris"
           >
             <Printer className="w-3.5 h-3.5 text-slate-700" />
@@ -258,7 +260,7 @@ export const DataExplorerRekapDataProsesTembakau: React.FC<DataExplorerProps> = 
           <button
             type="button"
             onClick={() => setIsCetakModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-sm transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-2 min-h-[44px] sm:min-h-0 sm:py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-sm transition-colors cursor-pointer"
             title="Pilih opsi cetak atau unduh file PDF Log Data Harian"
           >
             <Download className="w-3.5 h-3.5" />
@@ -268,8 +270,8 @@ export const DataExplorerRekapDataProsesTembakau: React.FC<DataExplorerProps> = 
           {/* Add Button for PM & Admin */}
           {(userRole === 'Project Manager' || userRole === 'Admin' || userRole === 'Site Engineer') && (
             <button
-              onClick={() => setShowAddModal(true)}
-              className="flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-colors shadow-sm"
+              onClick={() => { setFormError(null); setShowAddModal(true); }}
+              className="flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-[44px] sm:min-h-0 sm:py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-colors shadow-sm"
             >
               <Plus className="w-4 h-4" />
               <span>Tambah Batch Baru</span>
@@ -296,7 +298,7 @@ export const DataExplorerRekapDataProsesTembakau: React.FC<DataExplorerProps> = 
           <div className="text-right text-[10px] text-slate-600">
             <div><strong>Jalur:</strong> {filterJalur === 'Semua' ? 'Semua Jalur (SKT & SKM)' : filterJalur}</div>
             <div><strong>Jumlah Terpilih:</strong> {rowsToRender.length} Batch</div>
-            <div><strong>Tanggal Cetak:</strong> {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
+            <div><strong>Tanggal Cetak:</strong> {formatTanggalCetakIndo()}</div>
           </div>
         </div>
       </div>
@@ -443,7 +445,7 @@ export const DataExplorerRekapDataProsesTembakau: React.FC<DataExplorerProps> = 
           <div className="text-slate-500 text-xs">
             Menampilkan <strong className="text-slate-800 font-semibold">{((safeCurrentPage - 1) * pageSize) + 1}</strong> -{' '}
             <strong className="text-slate-800 font-semibold">{Math.min(safeCurrentPage * pageSize, totalItems)}</strong> dari{' '}
-            <strong className="text-slate-800 font-semibold">{totalItems.toLocaleString('id-ID')}</strong> batch (
+            <strong className="text-slate-800 font-semibold">{formatInt(totalItems)}</strong> batch (
             <span className="text-blue-600 font-medium">
               {sortOrder === 'desc' ? 'Periode Terbaru di Atas' : 'Periode Terlama di Atas'}
             </span>
@@ -455,14 +457,14 @@ export const DataExplorerRekapDataProsesTembakau: React.FC<DataExplorerProps> = 
               type="button"
               onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
               disabled={safeCurrentPage <= 1}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-xs font-medium"
+              className="flex items-center gap-1 px-3 py-2 min-h-[44px] sm:min-h-0 sm:py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-xs font-medium"
             >
               <ChevronLeft className="w-3.5 h-3.5" />
               <span>Sebelumnya</span>
             </button>
 
             {/* Quick page indicator */}
-            <div className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 font-semibold text-xs">
+            <div className="px-3 py-2 sm:py-1 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 font-semibold text-xs">
               Halaman {safeCurrentPage} / {totalPages}
             </div>
 
@@ -470,7 +472,7 @@ export const DataExplorerRekapDataProsesTembakau: React.FC<DataExplorerProps> = 
               type="button"
               onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
               disabled={safeCurrentPage >= totalPages}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-xs font-medium"
+              className="flex items-center gap-1 px-3 py-2 min-h-[44px] sm:min-h-0 sm:py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-xs font-medium"
             >
               <span>Berikutnya</span>
               <ChevronRight className="w-3.5 h-3.5" />
@@ -481,14 +483,21 @@ export const DataExplorerRekapDataProsesTembakau: React.FC<DataExplorerProps> = 
 
       {/* Modal Add Batch */}
       {showAddModal && (
-        <div className="no-print fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-lg w-full p-6">
+        <div className="no-print fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/75 md:backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-lg w-full max-h-[90dvh] overflow-y-auto p-5 sm:p-6">
             <h3 className="text-base font-bold text-slate-800 mb-1">
               Input Batch Data Proses Tembakau
             </h3>
             <p className="text-xs text-slate-500 mb-4">
               Perhitungan Susut (Kg) dan Susut (%) akan dikalkulasikan secara otomatis.
             </p>
+
+            {formError && (
+              <div className="mb-3 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{formError}</span>
+              </div>
+            )}
 
             <form onSubmit={handleSaveNew} className="space-y-3">
               <div>
@@ -610,14 +619,14 @@ export const DataExplorerRekapDataProsesTembakau: React.FC<DataExplorerProps> = 
               <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
                 <button
                   type="button"
-                  onClick={() => setShowAddModal(false)}
-                  className="px-4 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-xl"
+                  onClick={() => { setFormError(null); setShowAddModal(false); }}
+                  className="px-4 py-2 min-h-[44px] sm:min-h-0 sm:py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-xl"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-sm"
+                  className="px-4 py-2 min-h-[44px] sm:min-h-0 sm:py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-sm"
                 >
                   Simpan Batch
                 </button>

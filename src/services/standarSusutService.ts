@@ -7,9 +7,12 @@ import {
   AnalisisBulananSummary 
 } from '../types[RekapDataProsesTembakau]';
 
+import { formatInt } from '../api[RekapDataProsesTembakau]';
+
 const STORAGE_KEY = 'PP1_STANDAR_SUSUT_REGISTRY_V1';
 
 export class StandarSusutService {
+  private static cachedStandarList: StandarSusutItem[] | null = null;
   /**
    * Daftar standar acuan default jika belum pernah diset secara manual
    */
@@ -98,6 +101,9 @@ export class StandarSusutService {
    * Mengambil daftar standar acuan yang tersimpan di LocalStorage atau default
    */
   public static getStandarList(rows?: RawRowData[]): StandarSusutItem[] {
+    if (this.cachedStandarList && this.cachedStandarList.length > 0) {
+      return this.cachedStandarList;
+    }
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
@@ -114,6 +120,7 @@ export class StandarSusutService {
           }
 
           if (cleansed.length > 0) {
+            this.cachedStandarList = cleansed;
             return cleansed;
           }
         }
@@ -149,6 +156,7 @@ export class StandarSusutService {
    * Menyimpan daftar standar acuan ke LocalStorage
    */
   public static saveStandarList(items: StandarSusutItem[]): void {
+    this.cachedStandarList = items;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
     } catch (e) {
@@ -160,6 +168,7 @@ export class StandarSusutService {
    * Reset standar ke hitungan otomatis atau preset pabrik
    */
   public static resetToDefault(rows?: RawRowData[]): StandarSusutItem[] {
+    this.cachedStandarList = null;
     try {
       localStorage.removeItem(STORAGE_KEY);
     } catch (e) {}
@@ -275,7 +284,7 @@ export class StandarSusutService {
           periodeAcuan: namaPeriodeLabel,
           totalBakuKg: Math.round(g.totalBaku * 10) / 10,
           batchCount: g.batchCount,
-          keterangan: `Dihitung otomatis dari ${g.batchCount} batch (Total olah ${Math.round(g.totalBaku).toLocaleString('id-ID')} Kg) periode ${namaPeriodeLabel}`,
+          keterangan: `Dihitung otomatis dari ${g.batchCount} batch (Total olah ${formatInt(g.totalBaku)} Kg) periode ${namaPeriodeLabel}`,
           updatedAt: new Date().toISOString().split('T')[0]
         });
       }
@@ -295,7 +304,7 @@ export class StandarSusutService {
         periodeAcuan: namaPeriodeLabel,
         totalBakuKg: Math.round(totalAllBaku * 10) / 10,
         batchCount: filtered.length,
-        keterangan: `Rata-rata agregat seluruh jenis (${filtered.length} batch, ${Math.round(totalAllBaku).toLocaleString('id-ID')} Kg) periode ${namaPeriodeLabel}`,
+        keterangan: `Rata-rata agregat seluruh jenis (${filtered.length} batch, ${formatInt(totalAllBaku)} Kg) periode ${namaPeriodeLabel}`,
         updatedAt: new Date().toISOString().split('T')[0]
       });
     }
@@ -703,7 +712,7 @@ export class StandarSusutService {
     const overLossItems = items.filter(it => it.deviasiPct > 0.8);
     const efficientItems = items.filter(it => it.deviasiPct <= 0);
 
-    let kesimpulanOtomatis = `Pada periode ${bulan} ${tahun}, total pengolahan tembakau mencapai ${Math.round(totalBaku).toLocaleString('id-ID')} Kg dengan susut riil rata-rata ${susutRiilWeightedPct.toFixed(2)}% terhadap acuan standar ${acuanWeightedPct.toFixed(2)}% (Deviasi ${deviasiAgregatPct >= 0 ? '+' : ''}${deviasiAgregatPct.toFixed(2)}%). `;
+    let kesimpulanOtomatis = `Pada periode ${bulan} ${tahun}, total pengolahan tembakau mencapai ${formatInt(totalBaku)} Kg dengan susut riil rata-rata ${susutRiilWeightedPct.toFixed(2)}% terhadap acuan standar ${acuanWeightedPct.toFixed(2)}% (Deviasi ${deviasiAgregatPct >= 0 ? '+' : ''}${deviasiAgregatPct.toFixed(2)}%). `;
     
     if (overLossItems.length > 0) {
       kesimpulanOtomatis += `Terdapat ${overLossItems.length} varian dengan lonjakan susut di atas standar toleransi (${overLossItems.map(o => o.jenisTembakau).slice(0, 2).join(', ')}). `;

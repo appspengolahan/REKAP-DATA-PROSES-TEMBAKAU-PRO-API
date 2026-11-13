@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { GroupSummary, PeriodeRange, JenisProsesType } from '../types[RekapDataProsesTembakau]';
-import { formatKg, formatPct } from '../api[RekapDataProsesTembakau]';
+import { formatKg, formatPct, isStaticHostingMode, markStaticHostingMode } from '../api[RekapDataProsesTembakau]';
 import { 
   Printer, 
   FileText, 
@@ -146,8 +146,12 @@ export const CetakDanExportJenisModal: React.FC<CetakDanExportJenisModalProps> =
     }, 250);
   };
 
-  // Aksi 2: UNDUH / EXPORT FILE PDF RESMI (Server-Engine)
+  // Aksi 2: UNDUH / EXPORT FILE PDF RESMI (Server-Engine dengan Deteksi Static Hosting Cloudflare)
   const handleDownloadServerPdf = async () => {
+    if (isStaticHostingMode()) {
+      handleDirectPrint();
+      return;
+    }
     setIsExportingServerPdf(true);
     setExportNotice('Menghasilkan dokumen PDF resmi beresolusi tinggi...');
     try {
@@ -186,8 +190,10 @@ export const CetakDanExportJenisModal: React.FC<CetakDanExportJenisModalProps> =
         })
       });
 
-      if (!response.ok) {
-        throw new Error(`Server PDF HTTP ${response.status}`);
+      const ct = (response.headers.get('content-type') || '').toLowerCase();
+      if (!response.ok || ct.includes('text/html')) {
+        if (ct.includes('text/html')) markStaticHostingMode();
+        throw new Error(`Endpoint PDF server tidak tersedia (${response.status})`);
       }
 
       const blob = await response.blob();
@@ -209,17 +215,18 @@ export const CetakDanExportJenisModal: React.FC<CetakDanExportJenisModalProps> =
       console.warn('Fallback ke browser print PDF:', err);
       setExportNotice('Mengalihkan ke dialog simpan PDF browser...');
       setTimeout(() => {
+        setExportNotice(null);
         handleDirectPrint();
-      }, 800);
+      }, 600);
     } finally {
       setIsExportingServerPdf(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/75 md:backdrop-blur-xs animate-in fade-in duration-200">
       <div 
-        className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
+        className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-2xl max-h-[90dvh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
@@ -519,12 +526,12 @@ export const CetakDanExportJenisModal: React.FC<CetakDanExportJenisModalProps> =
         </div>
 
         {/* Modal Footer: 2 Tindakan Utama (Direct Print vs Export PDF) */}
-        <div className="px-6 py-4 bg-slate-100/80 border-t border-slate-200 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-100/80 border-t border-slate-200 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-3">
           
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-200 rounded-xl transition-colors text-center order-3 sm:order-1"
+            className="min-h-[44px] px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-200 rounded-xl transition-colors text-center order-3 sm:order-1"
           >
             Batal
           </button>
@@ -534,7 +541,7 @@ export const CetakDanExportJenisModal: React.FC<CetakDanExportJenisModalProps> =
             <button
               type="button"
               onClick={handleDirectPrint}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold shadow-sm transition-all hover:shadow"
+              className="flex-1 sm:flex-none min-h-[44px] flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold shadow-sm transition-all hover:shadow"
               title="Kirim langsung ke printer fisik atau jendela dialog cetak"
             >
               <Printer className="w-4 h-4 text-blue-300" />
@@ -546,7 +553,7 @@ export const CetakDanExportJenisModal: React.FC<CetakDanExportJenisModalProps> =
               type="button"
               onClick={handleDownloadServerPdf}
               disabled={isExportingServerPdf}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-xs font-bold shadow-md shadow-blue-500/20 transition-all hover:shadow-lg hover:shadow-blue-500/30"
+              className="flex-1 sm:flex-none min-h-[44px] flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-xs font-bold shadow-md shadow-blue-500/20 transition-all hover:shadow-lg hover:shadow-blue-500/30"
               title="Unduh dokumen resmi dalam bentuk file PDF resolusi tinggi"
             >
               <Download className="w-4 h-4" />

@@ -193,9 +193,9 @@ export const SidebarRekapDataProsesTembakau: React.FC<SidebarProps> = ({
       {/* Mobile & Tablet Slide-Over Drawer (Screens < lg: HP & Tablet) */}
       {isMobileOpen && (
         <div className="no-print lg:hidden fixed inset-0 z-50 flex">
-          {/* Backdrop Dimmer */}
+          {/* Backdrop Dimmer (Tanpa backdrop-blur di HP agar scroll/animasi mulus) */}
           <div
-            className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm transition-opacity"
+            className="fixed inset-0 bg-slate-950/80 md:backdrop-blur-sm transition-opacity"
             onClick={onCloseMobile}
             aria-hidden="true"
           />
@@ -219,7 +219,7 @@ export const SidebarRekapDataProsesTembakau: React.FC<SidebarProps> = ({
               </div>
               <button
                 onClick={onCloseMobile}
-                className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
+                className="min-w-[44px] min-h-[44px] flex items-center justify-center p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
                 aria-label="Tutup Menu Sidebar"
               >
                 <X className="w-5 h-5" />
@@ -308,7 +308,7 @@ export const SidebarRekapDataProsesTembakau: React.FC<SidebarProps> = ({
             </nav>
 
             {/* Drawer Footer */}
-            <div className="p-3 border-t border-slate-800 bg-slate-950/80 text-center flex-shrink-0">
+            <div className="p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] border-t border-slate-800 bg-slate-950/80 text-center flex-shrink-0">
               <div className="text-[11px] font-semibold text-slate-400">
                 PT Batu Karang — Pabrik PP1
               </div>

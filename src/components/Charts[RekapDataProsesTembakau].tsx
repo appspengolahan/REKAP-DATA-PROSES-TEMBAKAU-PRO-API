@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { GroupSummary } from '../types[RekapDataProsesTembakau]';
-import { formatKg, formatPct } from '../api[RekapDataProsesTembakau]';
+import { formatKg, formatPct, formatInt } from '../api[RekapDataProsesTembakau]';
 
 // 1. Line Chart: Tren Susut (%) Bulanan
 export const MonthlyLossLineChart: React.FC<{ data: GroupSummary[]; isExpanded?: boolean }> = ({ data, isExpanded = false }) => {
@@ -98,6 +98,7 @@ export const MonthlyLossLineChart: React.FC<{ data: GroupSummary[]; isExpanded?:
               r={isExpanded ? 28 : 20}
               fill="transparent"
               className="cursor-pointer"
+              onClick={() => setHoveredIdx((prev) => (prev === i ? null : i))}
               onMouseEnter={() => setHoveredIdx(i)}
               onMouseLeave={() => setHoveredIdx(null)}
             />
@@ -180,7 +181,7 @@ export const BakuVsHasilBarChart: React.FC<{ data: GroupSummary[]; isExpanded?: 
             <g key={idx}>
               <line x1={paddingX} y1={y} x2={width - 20} y2={y} stroke="#e2e8f0" strokeDasharray="3 3" />
               <text x={paddingX - 8} y={y + 3} textAnchor="end" className={`${isExpanded ? 'text-xs' : 'text-[10px]'} fill-slate-400 font-mono`}>
-                {val.toLocaleString('id-ID')}
+                {formatInt(val)}
               </text>
             </g>
           );
@@ -202,21 +203,22 @@ export const BakuVsHasilBarChart: React.FC<{ data: GroupSummary[]; isExpanded?: 
 
           // Format labels: show full integer with thousand separator if <= 7 months, compact 'k' if cramped
           const labelBaku = isExpanded 
-            ? `${Math.round(d.baku).toLocaleString('id-ID')} Kg` 
+            ? `${formatInt(d.baku)} Kg` 
             : data.length <= 6 
-              ? Math.round(d.baku).toLocaleString('id-ID')
+              ? formatInt(d.baku)
               : `${(d.baku / 1000).toFixed(1)}k`;
 
           const labelHasil = isExpanded 
-            ? `${Math.round(d.hasil).toLocaleString('id-ID')} Kg` 
+            ? `${formatInt(d.hasil)} Kg` 
             : data.length <= 6 
-              ? Math.round(d.hasil).toLocaleString('id-ID')
+              ? formatInt(d.hasil)
               : `${(d.hasil / 1000).toFixed(1)}k`;
 
           return (
             <g 
               key={i} 
               className="cursor-pointer"
+              onClick={() => setHoveredIdx((prev) => (prev === i ? null : i))}
               onMouseEnter={() => setHoveredIdx(i)}
               onMouseLeave={() => setHoveredIdx(null)}
             >

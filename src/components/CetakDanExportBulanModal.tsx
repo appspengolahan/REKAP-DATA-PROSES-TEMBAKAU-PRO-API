@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { GroupSummary, JenisProsesType } from '../types[RekapDataProsesTembakau]';
-import { formatKg, formatPct } from '../api[RekapDataProsesTembakau]';
+import { formatKg, formatPct, isStaticHostingMode, markStaticHostingMode } from '../api[RekapDataProsesTembakau]';
 import { 
   Printer, 
   FileText, 
@@ -104,8 +104,12 @@ export const CetakDanExportBulanModal: React.FC<CetakDanExportBulanModalProps> =
     }, 250);
   };
 
-  // Aksi 2: UNDUH FILE PDF (Server-Engine PDF Generator)
+  // Aksi 2: UNDUH FILE PDF (Server-Engine PDF Generator dengan Deteksi Static Hosting Cloudflare)
   const handleDownloadServerPdf = async () => {
+    if (isStaticHostingMode()) {
+      handleDirectPrint();
+      return;
+    }
     setIsExportingServerPdf(true);
     setExportNotice('Menghasilkan dokumen PDF Rekap Bulanan resmi...');
     try {
@@ -144,8 +148,10 @@ export const CetakDanExportBulanModal: React.FC<CetakDanExportBulanModalProps> =
         })
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP Error ${response.status}`);
+      const ct = (response.headers.get('content-type') || '').toLowerCase();
+      if (!response.ok || ct.includes('text/html')) {
+        if (ct.includes('text/html')) markStaticHostingMode();
+        throw new Error(`Endpoint PDF server tidak tersedia (${response.status})`);
       }
 
       const blob = await response.blob();
@@ -164,21 +170,21 @@ export const CetakDanExportBulanModal: React.FC<CetakDanExportBulanModalProps> =
         onClose();
       }, 1500);
     } catch (err: any) {
-      console.error('Download Rekap Bulan PDF failed:', err);
-      setExportNotice('Gagal mengunduh PDF server, membuka dialog cetak browser sebagai alternatif...');
+      console.warn('Fallback cetak browser untuk PDF Rekap Bulan:', err);
+      setExportNotice('Mengalihkan ke dialog cetak/simpan PDF browser...');
       setTimeout(() => {
         setExportNotice(null);
         handleDirectPrint();
-      }, 1200);
+      }, 600);
     } finally {
       setIsExportingServerPdf(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/70 backdrop-blur-xs animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/75 md:backdrop-blur-xs animate-in fade-in duration-200">
       <div 
-        className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-2xl overflow-hidden flex flex-col max-h-[92vh] animate-in zoom-in-95 duration-200"
+        className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-2xl overflow-hidden flex flex-col max-h-[90dvh] animate-in zoom-in-95 duration-200"
         role="dialog"
         aria-modal="true"
         aria-labelledby="cetak-bulan-title"
@@ -431,11 +437,11 @@ export const CetakDanExportBulanModal: React.FC<CetakDanExportBulanModalProps> =
         </div>
 
         {/* Modal Footer: DUA PILIHAN AKSI TERPISAH */}
-        <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-2.5 sm:gap-3">
           <button
             type="button"
             onClick={onClose}
-            className="w-full sm:w-auto px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-200/60 transition-colors"
+            className="w-full sm:w-auto min-h-[44px] px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-200/60 transition-colors"
           >
             Batal
           </button>
@@ -446,7 +452,7 @@ export const CetakDanExportBulanModal: React.FC<CetakDanExportBulanModalProps> =
               type="button"
               onClick={handleDirectPrint}
               disabled={isExportingServerPdf}
-              className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-slate-800 text-xs font-bold transition-all shadow-xs cursor-pointer"
+              className="flex-1 sm:flex-initial min-h-[44px] flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-slate-800 text-xs font-bold transition-all shadow-xs cursor-pointer"
               title="Buka dialog cetak browser langsung ke printer fisik"
             >
               <Printer className="w-4 h-4 text-slate-700" />
@@ -458,7 +464,7 @@ export const CetakDanExportBulanModal: React.FC<CetakDanExportBulanModalProps> =
               type="button"
               onClick={handleDownloadServerPdf}
               disabled={isExportingServerPdf}
-              className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all shadow-sm cursor-pointer disabled:opacity-70"
+              className="flex-1 sm:flex-initial min-h-[44px] flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all shadow-sm cursor-pointer disabled:opacity-70"
               title="Unduh berkas PDF resmi berkualitas tinggi ke komputer/ponsel"
             >
               <Download className={`w-4 h-4 ${isExportingServerPdf ? 'animate-bounce' : ''}`} />

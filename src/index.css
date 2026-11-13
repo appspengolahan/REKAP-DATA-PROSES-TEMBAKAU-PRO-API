@@ -1,8 +1,39 @@
 @import "tailwindcss";
 
 /* =========================================================================
+ * OPTIMASI SENTUHAN (TOUCH), ANTI-DELAY & RESPONSIVITAS HP / TABLET (ANDROID & IOS)
+ * ========================================================================= */
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body,
+#root {
+  overscroll-behavior-y: contain;
+}
+
+button,
+[role="button"],
+a,
+select,
+input,
+textarea,
+label {
+  touch-action: manipulation;
+}
+
+@media (max-width: 767px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* =========================================================================
  * CETAK & EXPORT PDF PRINT STYLESHEET (PT BATU KARANG - DIVISI PRODUKSI I)
- * Mengatasi masalah table terpotong / hilang akibat overflow & h-screen.
+ * Mengatasi masalah table terpotong / hilang akibat overflow & h-screen / h-[100dvh].
  * Mendukung cetak multi-halaman dinamis, pemilihan halaman, dan layout presisi.
  * ========================================================================= */
 
@@ -17,6 +48,7 @@
   body, 
   #root, 
   .h-screen, 
+  .h-\[100dvh\],
   .main-content, 
   main, 
   .flex-1,

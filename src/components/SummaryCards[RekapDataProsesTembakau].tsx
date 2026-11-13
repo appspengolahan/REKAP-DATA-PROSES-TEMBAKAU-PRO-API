@@ -1,7 +1,7 @@
 import React from 'react';
 import { Calendar, CalendarRange, Filter, TrendingDown, ArrowDownRight, Scale, Droplet, Wind, Sparkles } from 'lucide-react';
 import { SummaryKPI, PeriodeRange } from '../types[RekapDataProsesTembakau]';
-import { formatKg, formatPct } from '../api[RekapDataProsesTembakau]';
+import { formatKg, formatPct, formatInt } from '../api[RekapDataProsesTembakau]';
 
 interface SummaryCardsProps {
   ringkasanTahunan: SummaryKPI;
@@ -56,7 +56,7 @@ export const SummaryCardsRekapDataProsesTembakau: React.FC<SummaryCardsProps> = 
             Jumlah Data
           </div>
           <div className="text-sm sm:text-base font-bold text-slate-800 mt-1 font-mono tracking-tight whitespace-nowrap truncate">
-            {kpi.jumlahData.toLocaleString('id-ID')}
+            {formatInt(kpi.jumlahData)}
           </div>
           <div className="text-[10px] text-slate-500 font-medium truncate mt-0.5">Batch terproses</div>
         </div>
@@ -280,7 +280,7 @@ export const SummaryCardsRekapDataProsesTembakau: React.FC<SummaryCardsProps> = 
 
             <button
               onClick={onApplyPeriode}
-              className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition-colors ml-1 shadow-sm"
+              className="px-3.5 py-2 min-h-[44px] sm:min-h-0 sm:py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition-colors ml-1 shadow-sm"
             >
               Terapkan
             </button>

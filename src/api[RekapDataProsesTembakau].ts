@@ -31,27 +31,64 @@ const CACHE_KEY_DASHBOARD = 'CACHE_PP1_REKAP_DATA_PROSES_TEMBAKAU_SERVER_DASH_V2
 export const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbw34wezcB4YC4N-n2nL0ll9jofM3i9s5OHYxLZJ4Xu32_AmCEDcIAYi9V1AdPg2iACM/exec';
 export const LEGACY_GAS_URL = 'https://script.google.com/macros/s/AKfycbxSN-YhfNR5dwYFBWKyT5A8FN7juS3AuahOitVpfr-UWNKhF5fUUUeQ6k8-_ORqy3mYGA/exec';
 
+// STATIC HOSTING DETECTION (Cloudflare Workers / Static Assets without Express /api/*)
+let staticHostingDetected = false;
+
+export function isStaticHostingMode(): boolean {
+  return staticHostingDetected;
+}
+
+export function markStaticHostingMode(): void {
+  staticHostingDetected = true;
+}
+
+export function isHtmlPayloadResponse(resp: Response, textSample?: string): boolean {
+  const ct = (resp.headers.get('content-type') || '').toLowerCase();
+  if (ct.includes('text/html')) {
+    staticHostingDetected = true;
+    return true;
+  }
+  if (textSample) {
+    const trimmed = textSample.trim();
+    if (trimmed.startsWith('<') || trimmed.includes('<!DOCTYPE html>') || trimmed.includes('<!doctype html>')) {
+      staticHostingDetected = true;
+      return true;
+    }
+  }
+  return false;
+}
+
+// MODULE-LEVEL SINGLETON NUMBER FORMATTERS (Mencegah CPU Freeze di HP/Tablet)
+const PCT_FORMATTER = new Intl.NumberFormat('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const KG_FORMATTER = new Intl.NumberFormat('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const INT_FORMATTER = new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 });
+
 // FORMATTING RULES:
 // 1. Persentase (%): Tepat 2 angka di belakang koma
 export function formatPct(val: number | null | undefined): string {
-  if (val === null || val === undefined || isNaN(val)) return '0.00%';
-  return val.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%';
+  if (val === null || val === undefined || isNaN(val)) return '0,00%';
+  return PCT_FORMATTER.format(val) + '%';
 }
 
 export function formatPctRaw(val: number | null | undefined): string {
-  if (val === null || val === undefined || isNaN(val)) return '0.00';
-  return val.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if (val === null || val === undefined || isNaN(val)) return '0,00';
+  return PCT_FORMATTER.format(val);
 }
 
 // 2. Non-persentase (Kg / berat): Tepat 1 angka di belakang koma
 export function formatKg(val: number | null | undefined): string {
-  if (val === null || val === undefined || isNaN(val)) return '0.0 Kg';
-  return val.toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' Kg';
+  if (val === null || val === undefined || isNaN(val)) return '0,0 Kg';
+  return KG_FORMATTER.format(val) + ' Kg';
 }
 
 export function formatKgRaw(val: number | null | undefined): string {
-  if (val === null || val === undefined || isNaN(val)) return '0.0';
-  return val.toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  if (val === null || val === undefined || isNaN(val)) return '0,0';
+  return KG_FORMATTER.format(val);
+}
+
+export function formatInt(val: number | null | undefined): string {
+  if (val === null || val === undefined || isNaN(val)) return '0';
+  return INT_FORMATTER.format(Math.round(val));
 }
 
 // 3. Formula spreadsheet: Gunakan titik koma (;)
@@ -90,6 +127,11 @@ export const BULAN_MAP_INDO: Record<string, number> = {
   desember: 11, des: 11, dec: 11
 };
 
+// Bounded Memoization Caches untuk mencegah re-parsing tanggal ribuan baris di loop UI
+const PARSED_DATE_CACHE = new Map<string, number | null>(); // maps trimmed string -> timestamp ms (null if invalid)
+const HARI_TANGGAL_CACHE = new Map<string, { full: string; hari: string; tanggal: string }>();
+const MAX_DATE_CACHE_SIZE = 4000;
+
 /**
  * Universal Indonesian Date Parser
  * Mampu membaca:
@@ -102,7 +144,17 @@ export const BULAN_MAP_INDO: Record<string, number> = {
 export function parseIndonesianDate(val: string | Date | null | undefined): Date | null {
   if (!val) return null;
   if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
-  const s = String(val).replace(/^[a-zA-Z]+,\s*/, '').trim();
+
+  const rawKey = String(val).trim();
+  if (!rawKey) return null;
+
+  if (PARSED_DATE_CACHE.has(rawKey)) {
+    const cachedTs = PARSED_DATE_CACHE.get(rawKey);
+    return cachedTs !== null && cachedTs !== undefined ? new Date(cachedTs) : null;
+  }
+
+  const s = rawKey.replace(/^[a-zA-Z]+,\s*/, '').trim();
+  let parsed: Date | null = null;
 
   // 1. Pola: "20 Okt 2026" atau "20 Oktober 2026"
   const textMonthMatch = s.match(/^(\d{1,2})\s+([a-zA-Z]+)\s+(\d{4})/);
@@ -111,37 +163,57 @@ export function parseIndonesianDate(val: string | Date | null | undefined): Date
     const mStr = textMonthMatch[2].toLowerCase();
     const year = parseInt(textMonthMatch[3], 10);
     if (mStr in BULAN_MAP_INDO) {
-      return new Date(year, BULAN_MAP_INDO[mStr], day);
+      parsed = new Date(year, BULAN_MAP_INDO[mStr], day);
     }
   }
 
   // 2. Pola: "2026-10-20" (ISO)
-  const isoMatch = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-  if (isoMatch) {
-    const year = parseInt(isoMatch[1], 10);
-    const month = parseInt(isoMatch[2], 10) - 1;
-    const day = parseInt(isoMatch[3], 10);
-    return new Date(year, month, day);
+  if (!parsed) {
+    const isoMatch = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (isoMatch) {
+      const year = parseInt(isoMatch[1], 10);
+      const month = parseInt(isoMatch[2], 10) - 1;
+      const day = parseInt(isoMatch[3], 10);
+      parsed = new Date(year, month, day);
+    }
   }
 
   // 3. Pola: "20/10/2026" atau "20-10-2026"
-  const slashMatch = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
-  if (slashMatch) {
-    const day = parseInt(slashMatch[1], 10);
-    const month = parseInt(slashMatch[2], 10) - 1;
-    const year = parseInt(slashMatch[3], 10);
-    return new Date(year, month, day);
+  if (!parsed) {
+    const slashMatch = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+    if (slashMatch) {
+      const day = parseInt(slashMatch[1], 10);
+      const month = parseInt(slashMatch[2], 10) - 1;
+      const year = parseInt(slashMatch[3], 10);
+      parsed = new Date(year, month, day);
+    }
   }
 
-  const standard = new Date(s);
-  return isNaN(standard.getTime()) ? null : standard;
+  if (!parsed) {
+    const standard = new Date(s);
+    parsed = isNaN(standard.getTime()) ? null : standard;
+  }
+
+  if (PARSED_DATE_CACHE.size >= MAX_DATE_CACHE_SIZE) {
+    PARSED_DATE_CACHE.clear();
+  }
+  PARSED_DATE_CACHE.set(rawKey, parsed ? parsed.getTime() : null);
+
+  return parsed;
 }
 
 /**
- * Parsing tanggal ke timestamp numerik untuk pengurutan presisi
+ * Parsing tanggal ke timestamp numerik untuk pengurutan presisi (Zero Date allocation on cache hit)
  */
 export function parseDateValue(val: string | Date | null | undefined): number {
-  const d = parseIndonesianDate(val);
+  if (!val) return 0;
+  if (val instanceof Date) return isNaN(val.getTime()) ? 0 : val.getTime();
+  const rawKey = String(val).trim();
+  if (!rawKey) return 0;
+  if (PARSED_DATE_CACHE.has(rawKey)) {
+    return PARSED_DATE_CACHE.get(rawKey) ?? 0;
+  }
+  const d = parseIndonesianDate(rawKey);
   return d ? d.getTime() : 0;
 }
 
@@ -159,19 +231,34 @@ export function formatTanggalRekap(val: string | Date | null | undefined): strin
 }
 
 /**
- * Format lengkap Hari & Tanggal berbasis Indonesia
+ * Format lengkap Hari & Tanggal berbasis Indonesia (Memoized O(1))
  * Contoh: { full: "Selasa, 20 Oktober 2026", hari: "Selasa", tanggal: "20 Oktober 2026" }
  */
 export function formatHariTanggalIndo(val: string | Date | null | undefined): { full: string; hari: string; tanggal: string } {
+  if (!val) return { full: '-', hari: '', tanggal: '-' };
+  if (typeof val === 'string') {
+    const key = val.trim();
+    const cached = HARI_TANGGAL_CACHE.get(key);
+    if (cached) return cached;
+  }
+
   const d = parseIndonesianDate(val);
   if (!d) return { full: String(val || '-'), hari: '', tanggal: String(val || '-') };
   const hari = HARI_INDONESIA[d.getDay()];
   const tglStr = `${d.getDate()} ${BULAN_INDONESIA_LENGKAP[d.getMonth()]} ${d.getFullYear()}`;
-  return {
+  const formatted = {
     hari,
     tanggal: tglStr,
     full: `${hari}, ${tglStr}`
   };
+
+  if (typeof val === 'string') {
+    if (HARI_TANGGAL_CACHE.size >= MAX_DATE_CACHE_SIZE) {
+      HARI_TANGGAL_CACHE.clear();
+    }
+    HARI_TANGGAL_CACHE.set(val.trim(), formatted);
+  }
+  return formatted;
 }
 
 export function formatIndonesianDate(val: string | Date | null | undefined): string {
@@ -181,48 +268,74 @@ export function formatIndonesianDate(val: string | Date | null | undefined): str
   return `${d.getDate()} ${BULAN_INDONESIA_LENGKAP[d.getMonth()]} ${d.getFullYear()}`;
 }
 
+/**
+ * Format tanggal cetak dokumen resmi tanpa Intl.DateTimeFormat berulang
+ */
+export function formatTanggalCetakIndo(d: Date = new Date()): string {
+  const wib = new Date(d.getTime() + 7 * 3600000);
+  return `${wib.getUTCDate()} ${BULAN_INDONESIA_LENGKAP[wib.getUTCMonth()]} ${wib.getUTCFullYear()}`;
+}
+
+/**
+ * Format jam WIB saat ini dengan aritmetika UTC+7 murni
+ */
+export function formatWibTimeNow(): string {
+  const wib = new Date(Date.now() + 7 * 3600000);
+  const hh = String(wib.getUTCHours()).padStart(2, '0');
+  const mm = String(wib.getUTCMinutes()).padStart(2, '0');
+  const ss = String(wib.getUTCSeconds()).padStart(2, '0');
+  return `${hh}.${mm}.${ss}`;
+}
+
+/**
+ * Format tanggal & waktu WIB permanen dengan aritmetika UTC+7 murni (Bebas Intl CPU spike)
+ */
 export function formatIndonesianDateTime(val: string | Date | null | undefined): string {
   if (!val) return '-';
   const d = parseIndonesianDate(val);
   if (!d) return String(val);
-  const dateStr = d.toLocaleDateString('id-ID', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    timeZone: 'Asia/Jakarta'
-  });
-  const timeStr = d.toLocaleTimeString('id-ID', {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-    timeZone: 'Asia/Jakarta'
-  }).replace(/:/g, '.');
-  return `${dateStr}, ${timeStr} WIB`;
+  const wib = new Date(d.getTime() + 7 * 3600000);
+  const day = String(wib.getUTCDate()).padStart(2, '0');
+  const month = String(wib.getUTCMonth() + 1).padStart(2, '0');
+  const year = wib.getUTCFullYear();
+  const hh = String(wib.getUTCHours()).padStart(2, '0');
+  const mm = String(wib.getUTCMinutes()).padStart(2, '0');
+  const ss = String(wib.getUTCSeconds()).padStart(2, '0');
+  return `${day}/${month}/${year}, ${hh}.${mm}.${ss} WIB`;
 }
 
 export class RekapDataProsesTembakauService {
   private static cachedRows: RawRowData[] | null = null;
+  private static cachedGasConfig: GasConfig | null = null;
+  private static cachedServerDashboard: ServerDashboardPayload | null = null;
+  private static dedupeWeakCache = new WeakMap<RawRowData[], RawRowData[]>();
 
   public static getGasConfig(): GasConfig {
+    if (this.cachedGasConfig) {
+      return this.cachedGasConfig;
+    }
     try {
       const stored = localStorage.getItem(CACHE_KEY_CONFIG);
       if (stored) {
-        return JSON.parse(stored);
+        this.cachedGasConfig = JSON.parse(stored);
+        return this.cachedGasConfig!;
       }
     } catch (e) {
       console.warn('Gagal membaca GAS config dari localStorage', e);
     }
-    return {
+    const fallback: GasConfig = {
       apiUrl: DEFAULT_GAS_URL,
       lastSync: new Date().toISOString(),
       status: 'online'
     };
+    this.cachedGasConfig = fallback;
+    return fallback;
   }
 
   public static saveGasConfig(cfg: Partial<GasConfig>): GasConfig {
     const current = this.getGasConfig();
     const updated: GasConfig = { ...current, ...cfg };
+    this.cachedGasConfig = updated;
     try {
       localStorage.setItem(CACHE_KEY_CONFIG, JSON.stringify(updated));
     } catch (e) {
@@ -232,15 +345,15 @@ export class RekapDataProsesTembakauService {
   }
 
   /**
-   * Sanitizer & Anti-Duplikasi Terintegrasi:
+   * Sanitizer & Anti-Duplikasi Terintegrasi (WeakMap memoized per referensi array):
    * 1. Menghilangkan baris hantu (ghost rows) seperti R-1557 yang tidak ada di sheet operasional riil.
    * 2. Menghilangkan duplikasi batch yang memiliki (tanggal + jenis tembakau + baku) sama.
-   *    Jika terdapat 2 baris kembar, pertahankan baris dengan Hasil riil terverifikasi (misal 3.642 Kg)
-   *    dan singkirkan baris dengan Hasil anomali/salah (misal 1.350 Kg atau 0 Kg).
    * 3. Menyingkirkan draft menggantung lintas tanggal (Hasil = 0) jika batch tersebut sudah memiliki baris selesai (Hasil > 0).
    */
   public static deduplicateAndCleanRows(rows: RawRowData[]): RawRowData[] {
     if (!rows || rows.length === 0) return [];
+    const memoized = this.dedupeWeakCache.get(rows);
+    if (memoized) return memoized;
 
     const cleanStr = (s: string) => (s || '').toLowerCase().replace(/\b(skt|skm)\b/gi, '').replace(/[^a-z0-9]/g, '');
 
@@ -361,20 +474,14 @@ export class RekapDataProsesTembakauService {
       finalCleaned.push(r);
     }
 
+    this.dedupeWeakCache.set(rows, finalCleaned);
+    this.dedupeWeakCache.set(finalCleaned, finalCleaned);
     return finalCleaned;
   }
 
   public static getRawData(): RawRowData[] {
     if (this.cachedRows && this.cachedRows.length >= INITIAL_DATA_RAW.length) {
-      const cleaned = this.deduplicateAndCleanRows(this.cachedRows);
-      if (cleaned.length !== this.cachedRows.length) {
-        this.cachedRows = cleaned;
-        this.saveRawData(cleaned);
-      }
-      const hasLatest = this.cachedRows.some(r => r.tanggal?.includes('2026-10-20') || r.tanggal?.includes('20 Okt'));
-      if (hasLatest) {
-        return this.cachedRows;
-      }
+      return this.cachedRows;
     }
     try {
       const stored = localStorage.getItem(CACHE_KEY_RAW);
@@ -427,24 +534,33 @@ export class RekapDataProsesTembakauService {
 
   public static clearCache() {
     this.cachedRows = [...INITIAL_DATA_RAW];
+    this.cachedServerDashboard = null;
+    this.cachedGasConfig = null;
     localStorage.removeItem(CACHE_KEY_RAW);
     localStorage.removeItem(CACHE_KEY_DASHBOARD);
     this.saveRawData(this.cachedRows);
   }
 
   public static getServerDashboardData(): ServerDashboardPayload | null {
+    if (this.cachedServerDashboard) {
+      return this.cachedServerDashboard;
+    }
     try {
       const stored = localStorage.getItem(CACHE_KEY_DASHBOARD);
       if (stored) {
-        return JSON.parse(stored);
+        this.cachedServerDashboard = JSON.parse(stored);
+        return this.cachedServerDashboard;
       }
     } catch (e) {
       console.warn('Gagal membaca cache server dashboard', e);
     }
-    return INITIAL_SERVER_DASHBOARD as any;
+    const fallback = INITIAL_SERVER_DASHBOARD as any;
+    this.cachedServerDashboard = fallback;
+    return fallback;
   }
 
   public static saveServerDashboardData(data: ServerDashboardPayload) {
+    this.cachedServerDashboard = data;
     try {
       localStorage.setItem(CACHE_KEY_DASHBOARD, JSON.stringify(data));
     } catch (e) {
@@ -514,16 +630,21 @@ export class RekapDataProsesTembakauService {
 
       let json: any = null;
 
-      // 1. First attempt: Try server-side proxy route (/api/sync-gas)
-      try {
-        const proxyResp = await fetch(`/api/sync-gas?url=${encodeURIComponent(urlWithAction)}`, {
-          method: 'GET'
-        });
-        if (proxyResp.ok) {
-          json = await proxyResp.json();
+      // 1. First attempt: Try server-side proxy route (/api/sync-gas) unless static hosting mode detected
+      if (!isStaticHostingMode()) {
+        try {
+          const proxyResp = await fetch(`/api/sync-gas?url=${encodeURIComponent(urlWithAction)}`, {
+            method: 'GET'
+          });
+          if (proxyResp.ok && !isHtmlPayloadResponse(proxyResp)) {
+            const rawText = await proxyResp.text();
+            if (!isHtmlPayloadResponse(proxyResp, rawText)) {
+              json = JSON.parse(rawText);
+            }
+          }
+        } catch (proxyErr) {
+          // Proxy not available in static mode, fallback to direct fetch
         }
-      } catch (proxyErr) {
-        // Proxy not available in static mode, fallback to direct fetch
       }
 
       // 2. Second attempt: Direct CORS fetch (if proxy not available)
@@ -639,21 +760,26 @@ export class RekapDataProsesTembakauService {
 
       // Mode 1: AUTO - Coba tab _CACHE_REKAP_TBK terlebih dahulu (dataset terlengkap 1.487 baris)
       if (preferredTab === 'AUTO' || preferredTab === '_CACHE_REKAP_TBK') {
-        // 1a. Try server-side proxy route first
-        try {
-          const proxyResp = await fetch(`/api/pull-sheet?spreadsheetId=${spreadsheetId}&sheet=_CACHE_REKAP_TBK`);
-          if (proxyResp.ok) {
-            const data = await proxyResp.json();
-            if (data?.success && data?.csv) {
-              const parsed = this.parseCSVText(data.csv);
-              if (parsed.length >= 100) {
-                rows = parsed;
-                tabUsed = '_CACHE_REKAP_TBK';
+        // 1a. Try server-side proxy route first unless static mode detected
+        if (!isStaticHostingMode()) {
+          try {
+            const proxyResp = await fetch(`/api/pull-sheet?spreadsheetId=${spreadsheetId}&sheet=_CACHE_REKAP_TBK`);
+            if (proxyResp.ok && !isHtmlPayloadResponse(proxyResp)) {
+              const rawText = await proxyResp.text();
+              if (!isHtmlPayloadResponse(proxyResp, rawText)) {
+                const data = JSON.parse(rawText);
+                if (data?.success && data?.csv) {
+                  const parsed = this.parseCSVText(data.csv);
+                  if (parsed.length >= 100) {
+                    rows = parsed;
+                    tabUsed = '_CACHE_REKAP_TBK';
+                  }
+                }
               }
             }
+          } catch (proxyErr) {
+            // Fall back to direct fetch
           }
-        } catch (proxyErr) {
-          // Fall back to direct fetch
         }
 
         // 1b. Direct fetch fallback if proxy not available
@@ -663,7 +789,7 @@ export class RekapDataProsesTembakauService {
             const resp = await fetch(cacheUrl, { method: 'GET' });
             if (resp.ok) {
               const text = await resp.text();
-              if (text && !text.includes('google-signin') && !text.includes('<!DOCTYPE html>')) {
+              if (text && !text.trim().startsWith('<') && !text.includes('google-signin') && !text.includes('<!DOCTYPE html>')) {
                 const parsed = this.parseCSVText(text);
                 if (parsed.length >= 100) {
                   rows = parsed;
@@ -679,21 +805,26 @@ export class RekapDataProsesTembakauService {
 
       // Mode 2: Jika belum dapat atau user minta REKAP SUSUT TEMBAKAU
       if (rows.length === 0 || preferredTab === 'REKAP SUSUT TEMBAKAU') {
-        // 2a. Try server proxy
-        try {
-          const proxyResp = await fetch(`/api/pull-sheet?spreadsheetId=${spreadsheetId}&sheet=REKAP%20SUSUT%20TEMBAKAU`);
-          if (proxyResp.ok) {
-            const data = await proxyResp.json();
-            if (data?.success && data?.csv) {
-              const parsed = this.parseRekapSusutTembakauCSV(data.csv);
-              if (parsed.length > 0) {
-                rows = parsed;
-                tabUsed = 'REKAP SUSUT TEMBAKAU';
+        // 2a. Try server proxy unless static mode detected
+        if (!isStaticHostingMode()) {
+          try {
+            const proxyResp = await fetch(`/api/pull-sheet?spreadsheetId=${spreadsheetId}&sheet=REKAP%20SUSUT%20TEMBAKAU`);
+            if (proxyResp.ok && !isHtmlPayloadResponse(proxyResp)) {
+              const rawText = await proxyResp.text();
+              if (!isHtmlPayloadResponse(proxyResp, rawText)) {
+                const data = JSON.parse(rawText);
+                if (data?.success && data?.csv) {
+                  const parsed = this.parseRekapSusutTembakauCSV(data.csv);
+                  if (parsed.length > 0) {
+                    rows = parsed;
+                    tabUsed = 'REKAP SUSUT TEMBAKAU';
+                  }
+                }
               }
             }
+          } catch (proxyErr) {
+            // Fall back to direct fetch
           }
-        } catch (proxyErr) {
-          // Fall back to direct fetch
         }
 
         // 2b. Direct fetch
@@ -703,7 +834,7 @@ export class RekapDataProsesTembakauService {
             const resp2 = await fetch(directUrl, { method: 'GET' });
             if (resp2.ok) {
               const text2 = await resp2.text();
-              if (!text2.includes('google-signin') && !text2.includes('<!DOCTYPE html>')) {
+              if (text2 && !text2.trim().startsWith('<') && !text2.includes('google-signin') && !text2.includes('<!DOCTYPE html>')) {
                 rows = this.parseRekapSusutTembakauCSV(text2);
                 tabUsed = 'REKAP SUSUT TEMBAKAU';
               }
@@ -718,22 +849,27 @@ export class RekapDataProsesTembakauService {
       // so any active transactions (e.g. from 7 Oktober to 20 Oktober 2026 and beyond) are ALWAYS merged!
       try {
         let activeCsv = '';
-        try {
-          const proxyResp = await fetch(`/api/pull-sheet?spreadsheetId=${spreadsheetId}&sheet=REKAP%20SUSUT%20TEMBAKAU&range=A1500:N1600`);
-          if (proxyResp.ok) {
-            const data = await proxyResp.json();
-            if (data?.success && data?.csv) {
-              activeCsv = data.csv;
+        if (!isStaticHostingMode()) {
+          try {
+            const proxyResp = await fetch(`/api/pull-sheet?spreadsheetId=${spreadsheetId}&sheet=REKAP%20SUSUT%20TEMBAKAU&range=A1500:N1600`);
+            if (proxyResp.ok && !isHtmlPayloadResponse(proxyResp)) {
+              const rawText = await proxyResp.text();
+              if (!isHtmlPayloadResponse(proxyResp, rawText)) {
+                const data = JSON.parse(rawText);
+                if (data?.success && data?.csv) {
+                  activeCsv = data.csv;
+                }
+              }
             }
-          }
-        } catch (e) {}
+          } catch (e) {}
+        }
 
         if (!activeCsv) {
           const directUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv&sheet=REKAP%20SUSUT%20TEMBAKAU&range=A1500:N1600`;
           const resp = await fetch(directUrl, { method: 'GET' });
           if (resp.ok) {
             const text = await resp.text();
-            if (text && !text.includes('google-signin') && !text.includes('<!DOCTYPE html>')) {
+            if (text && !text.trim().startsWith('<') && !text.includes('google-signin') && !text.includes('<!DOCTYPE html>')) {
               activeCsv = text;
             }
           }
@@ -1598,27 +1734,32 @@ export class RekapDataProsesTembakauService {
     });
 
     let csvText = '';
-    // 1. Coba lewat proxy server
-    try {
-      const resp = await fetch(`/api/pull-sheet?spreadsheetId=${dhpSpreadsheetId}&sheet=${encodeURIComponent(dhpSheetName)}`);
-      if (resp.ok) {
-        const json = await resp.json();
-        if (json?.success && json?.csv) {
-          csvText = json.csv;
+    // 1. Coba lewat proxy server kecuali sudah terdeteksi static hosting
+    if (!isStaticHostingMode()) {
+      try {
+        const resp = await fetch(`/api/pull-sheet?spreadsheetId=${dhpSpreadsheetId}&sheet=${encodeURIComponent(dhpSheetName)}`);
+        if (resp.ok && !isHtmlPayloadResponse(resp)) {
+          const rawText = await resp.text();
+          if (!isHtmlPayloadResponse(resp, rawText)) {
+            const json = JSON.parse(rawText);
+            if (json?.success && json?.csv) {
+              csvText = json.csv;
+            }
+          }
         }
+      } catch (e) {
+        // proxy fallback
       }
-    } catch (e) {
-      // proxy fallback
     }
 
-    // 2. Fallback fetch langsung jika proxy offline
+    // 2. Fallback fetch langsung jika proxy offline / static hosting
     if (!csvText) {
       try {
         const directUrl = `https://docs.google.com/spreadsheets/d/${dhpSpreadsheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(dhpSheetName)}`;
         const directResp = await fetch(directUrl);
         if (directResp.ok) {
           const text = await directResp.text();
-          if (text && !text.includes('google-signin') && !text.includes('<!DOCTYPE html>')) {
+          if (text && !text.trim().startsWith('<') && !text.includes('google-signin') && !text.includes('<!DOCTYPE html>')) {
             csvText = text;
           }
         }
@@ -1914,7 +2055,7 @@ export class RekapDataProsesTembakauService {
       mismatchCount,
       items,
       anomalousRekapRows,
-      fetchTimestamp: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+      fetchTimestamp: formatWibTimeNow()
     };
   }
 }

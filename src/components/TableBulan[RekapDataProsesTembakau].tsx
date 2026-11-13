@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { GroupSummary } from '../types[RekapDataProsesTembakau]';
-import { formatKg, formatPct } from '../api[RekapDataProsesTembakau]';
+import { formatKg, formatPct, formatTanggalCetakIndo } from '../api[RekapDataProsesTembakau]';
 import { MONTH_NAMES } from '../mockData[RekapDataProsesTembakau]';
 import { ArrowDown, ArrowUp } from 'lucide-react';
 
@@ -77,7 +77,7 @@ export const TableBulanRekapDataProsesTembakau: React.FC<TableBulanProps> = ({
           <div className="text-right text-[10px] text-slate-600">
             <div><strong>Jalur Operasional:</strong> {jenisProses || 'Semua Jalur (SKT & SKM)'}</div>
             <div><strong>Periode Terdata:</strong> {periodeLabel || `${sortedData.length} Bulan Terpilih`}</div>
-            <div><strong>Tanggal Cetak:</strong> {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
+            <div><strong>Tanggal Cetak:</strong> {formatTanggalCetakIndo()}</div>
           </div>
         </div>
       </div>

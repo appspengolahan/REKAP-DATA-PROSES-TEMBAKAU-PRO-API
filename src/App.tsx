@@ -31,6 +31,7 @@ import { GasCenterModalRekapDataProsesTembakau } from './components/GasCenterMod
 import { HelpModalRekapDataProsesTembakau } from './components/HelpModal[RekapDataProsesTembakau]';
 import { IntegrasiDhpModalRekapDataProsesTembakau } from './components/IntegrasiDhpModal[RekapDataProsesTembakau]';
 import { FooterRekapDataProsesTembakau } from './components/Footer[RekapDataProsesTembakau]';
+import { OfflineIndicator } from './components/OfflineIndicator';
 import { 
   LayoutDashboard, 
   CalendarDays, 
@@ -290,7 +291,7 @@ export default function App() {
   }, []);
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden bg-slate-50 font-sans text-slate-800 antialiased selection:bg-blue-600 selection:text-white">
+    <div className="h-[100dvh] flex flex-col overflow-hidden bg-slate-50 font-sans text-slate-800 antialiased selection:bg-blue-600 selection:text-white">
       
       {/* Floating Toast Notification */}
       {toastNotification && (
@@ -359,7 +360,7 @@ export default function App() {
         />
 
         {/* Dynamic Content Canvas */}
-        <main className="flex-1 overflow-y-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 pb-24 lg:pb-8 main-content min-h-0 w-full">
+        <main className="flex-1 overflow-y-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 pb-[calc(5.75rem+env(safe-area-inset-bottom))] lg:pb-8 main-content min-h-0 w-full">
           <div className="max-w-7xl mx-auto space-y-6">
             
             {/* View 1: Main Dashboard (Default) */}
@@ -496,13 +497,13 @@ export default function App() {
       </div>
 
       {/* Mobile Bottom Quick Navigation */}
-      <nav className="no-print lg:hidden fixed bottom-0 left-0 right-0 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 text-white px-1 pt-1.5 pb-2 flex items-center justify-around z-40 shadow-2xl">
+      <nav className="no-print lg:hidden fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 text-white px-1 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] flex items-center justify-around z-40 shadow-2xl">
         <button
           onClick={() => {
             setActiveTab('dashboard');
             setIsMobileSidebarOpen(false);
           }}
-          className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-xl text-[10px] font-medium transition-all ${
+          className={`flex flex-col items-center justify-center min-h-[44px] min-w-[44px] gap-0.5 px-2 py-1 rounded-xl text-[10px] font-medium transition-colors ${
             activeTab === 'dashboard' ? 'text-blue-400 font-bold bg-blue-500/10' : 'text-slate-400 hover:text-slate-200'
           }`}
         >
@@ -514,7 +515,7 @@ export default function App() {
             setActiveTab('rekap-bulan');
             setIsMobileSidebarOpen(false);
           }}
-          className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-xl text-[10px] font-medium transition-all ${
+          className={`flex flex-col items-center justify-center min-h-[44px] min-w-[44px] gap-0.5 px-2 py-1 rounded-xl text-[10px] font-medium transition-colors ${
             activeTab === 'rekap-bulan' ? 'text-blue-400 font-bold bg-blue-500/10' : 'text-slate-400 hover:text-slate-200'
           }`}
         >
@@ -526,7 +527,7 @@ export default function App() {
             setActiveTab('rekap-jenis');
             setIsMobileSidebarOpen(false);
           }}
-          className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-xl text-[10px] font-medium transition-all ${
+          className={`flex flex-col items-center justify-center min-h-[44px] min-w-[44px] gap-0.5 px-2 py-1 rounded-xl text-[10px] font-medium transition-colors ${
             activeTab === 'rekap-jenis' ? 'text-blue-400 font-bold bg-blue-500/10' : 'text-slate-400 hover:text-slate-200'
           }`}
         >
@@ -538,7 +539,7 @@ export default function App() {
             setActiveTab('data-explorer');
             setIsMobileSidebarOpen(false);
           }}
-          className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-xl text-[10px] font-medium transition-all ${
+          className={`flex flex-col items-center justify-center min-h-[44px] min-w-[44px] gap-0.5 px-2 py-1 rounded-xl text-[10px] font-medium transition-colors ${
             activeTab === 'data-explorer' ? 'text-blue-400 font-bold bg-blue-500/10' : 'text-slate-400 hover:text-slate-200'
           }`}
         >
@@ -550,7 +551,7 @@ export default function App() {
             setIsMobileSidebarOpen(false);
             setIsIntegrasiDhpOpen(true);
           }}
-          className="flex flex-col items-center gap-0.5 px-2 py-1 rounded-xl text-[10px] font-medium transition-all text-blue-300 hover:text-blue-200 relative"
+          className="flex flex-col items-center justify-center min-h-[44px] min-w-[44px] gap-0.5 px-2 py-1 rounded-xl text-[10px] font-medium transition-colors text-blue-300 hover:text-blue-200 relative"
           title="Buka Integrasi DHP Tembakau (100% Otomatis)"
         >
           <div className="relative">
@@ -561,7 +562,7 @@ export default function App() {
         </button>
         <button
           onClick={() => setIsMobileSidebarOpen(prev => !prev)}
-          className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-xl text-[10px] font-medium transition-all ${
+          className={`flex flex-col items-center justify-center min-h-[44px] min-w-[44px] gap-0.5 px-2 py-1 rounded-xl text-[10px] font-medium transition-colors ${
             isMobileSidebarOpen ? 'text-amber-400 font-bold bg-amber-500/15' : 'text-slate-400 hover:text-slate-200'
           }`}
           title="Buka Navigasi & Menu Sidebar Lengkap"
@@ -645,6 +646,8 @@ export default function App() {
         gasConfig={gasConfig}
       />
 
+      {/* PWA Offline Banner */}
+      <OfflineIndicator />
     </div>
   );
 }

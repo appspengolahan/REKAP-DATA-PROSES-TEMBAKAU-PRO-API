@@ -13,12 +13,19 @@ export interface SwitchAppItem {
 const STORAGE_KEY = 'PP1_SWITCH_APPS_REGISTRY_V1';
 const EVENT_NAME = 'pp1_switch_apps_updated';
 
+const getActiveAppUrl = (): string => {
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return `${window.location.origin}/`;
+  }
+  return 'https://rekap-data-proses-tembakau.workers.dev/';
+};
+
 export const DEFAULT_SWITCH_APPS: SwitchAppItem[] = [
   {
     id: 'app-tembakau',
     name: 'Rekap Proses Tembakau',
     desc: 'Dashboard Kesusutan Proses Tembakau (SKT & SKM) 54 Varian',
-    url: 'https://rekap-dataproses-tembakau-pro.vercel.app/',
+    url: getActiveAppUrl(),
     category: 'komoditas',
     status: 'active',
     badge: 'Aktif (Sedang Dibuka)',
@@ -97,24 +104,45 @@ export const DEFAULT_SWITCH_APPS: SwitchAppItem[] = [
 ];
 
 export class SwitchAppsService {
+  private static cachedApps: SwitchAppItem[] | null = null;
+
   public static getApps(): SwitchAppItem[] {
+    if (this.cachedApps) return this.cachedApps;
+    const activeOriginUrl = getActiveAppUrl();
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          let changed = false;
+          const normalized = parsed.map((item: SwitchAppItem) => {
+            if (item.id === 'app-tembakau' && item.url && item.url.includes('vercel.app')) {
+              changed = true;
+              return { ...item, url: activeOriginUrl };
+            }
+            return item;
+          });
+          this.cachedApps = normalized;
+          if (changed) {
+            this.saveApps(normalized, false);
+          }
+          return normalized;
         }
       }
     } catch (e) {
       console.warn('Gagal membaca switch apps dari storage:', e);
     }
     // Return default and save
-    this.saveApps(DEFAULT_SWITCH_APPS, false);
-    return DEFAULT_SWITCH_APPS;
+    const freshDefaults = DEFAULT_SWITCH_APPS.map((a) =>
+      a.id === 'app-tembakau' ? { ...a, url: activeOriginUrl } : a
+    );
+    this.cachedApps = freshDefaults;
+    this.saveApps(freshDefaults, false);
+    return freshDefaults;
   }
 
   public static saveApps(apps: SwitchAppItem[], triggerEvent = true): void {
+    this.cachedApps = apps;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(apps));
       if (triggerEvent && typeof window !== 'undefined') {

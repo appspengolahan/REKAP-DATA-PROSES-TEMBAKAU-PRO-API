@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { GroupSummary } from '../types[RekapDataProsesTembakau]';
-import { formatKg, formatPct } from '../api[RekapDataProsesTembakau]';
-import { Search, Layers, TrendingDown, ArrowUpDown } from 'lucide-react';
+import { formatKg, formatPct, formatTanggalCetakIndo } from '../api[RekapDataProsesTembakau]';
+import { Search, ArrowUpDown, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface TableJenisProps {
   data: GroupSummary[];
@@ -23,18 +23,28 @@ export const TableJenisRekapDataProsesTembakau: React.FC<TableJenisProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<'baku' | 'susutPct' | 'kapasitasPct'>('baku');
   const [sortAsc, setSortAsc] = useState(false);
+  const [pageSize, setPageSize] = useState<number>(25);
+  const [currentPage, setCurrentPage] = useState<number>(1);
 
-  const filtered = data.filter((d) =>
-    d.label.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, sortBy, sortAsc, pageSize]);
 
-  filtered.sort((a, b) => {
-    let diff = 0;
-    if (sortBy === 'baku') diff = b.baku - a.baku;
-    if (sortBy === 'susutPct') diff = b.susutPct - a.susutPct;
-    if (sortBy === 'kapasitasPct') diff = b.kapasitasPct - a.kapasitasPct;
-    return sortAsc ? -diff : diff;
-  });
+  const filtered = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    const list = q
+      ? data.filter((d) => d.label.toLowerCase().includes(q))
+      : [...data];
+
+    list.sort((a, b) => {
+      let diff = 0;
+      if (sortBy === 'baku') diff = b.baku - a.baku;
+      if (sortBy === 'susutPct') diff = b.susutPct - a.susutPct;
+      if (sortBy === 'kapasitasPct') diff = b.kapasitasPct - a.kapasitasPct;
+      return sortAsc ? -diff : diff;
+    });
+    return list;
+  }, [data, searchTerm, sortBy, sortAsc]);
 
   const toggleSort = (col: 'baku' | 'susutPct' | 'kapasitasPct') => {
     if (sortBy === col) {
@@ -45,8 +55,19 @@ export const TableJenisRekapDataProsesTembakau: React.FC<TableJenisProps> = ({
     }
   };
 
+  // Pagination calculation (otomatis non-aktif saat printRange sedang diterapkan untuk cetak)
+  const isAll = pageSize === -1 || Boolean(printRange);
+  const totalPages = isAll ? 1 : Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const pageOffset = isAll ? 0 : (safeCurrentPage - 1) * pageSize;
+
+  const displayedRows = useMemo(() => {
+    if (isAll) return filtered;
+    return filtered.slice(pageOffset, pageOffset + pageSize);
+  }, [filtered, isAll, pageOffset, pageSize]);
+
   // Compute table totals
-  const totals = React.useMemo(() => {
+  const totals = useMemo(() => {
     const totalData = filtered.reduce((acc, r) => acc + (r.jumlahData || 0), 0);
     const totalBaku = filtered.reduce((acc, r) => acc + (r.baku || 0), 0);
     const totalHasil = filtered.reduce((acc, r) => acc + (r.hasil || 0), 0);
@@ -63,25 +84,39 @@ export const TableJenisRekapDataProsesTembakau: React.FC<TableJenisProps> = ({
 
   return (
     <div className="space-y-3">
-      {/* Search Bar */}
-      <div className="flex items-center justify-between gap-3 flex-wrap no-print">
-        <div className="relative flex-1 max-w-xs">
-          <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
+      {/* Search Bar & Page Size */}
+      <div className="flex items-center justify-between gap-2.5 flex-wrap no-print">
+        <div className="relative flex-1 min-w-[200px] max-w-xs">
+          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
             placeholder="Cari varian tembakau (dari 54 varian)..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="w-full pl-8 pr-3 py-2 sm:py-1.5 text-xs border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
         </div>
-        <div className="text-xs text-slate-500">
-          Menampilkan <span className="font-bold text-slate-800">{filtered.length}</span> dari {data.length} varian
+        <div className="flex items-center gap-2.5 text-xs text-slate-500 ml-auto">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px]">Baris:</span>
+            <select
+              value={pageSize}
+              onChange={(e) => setPageSize(parseInt(e.target.value, 10))}
+              className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 sm:py-1 bg-white text-slate-700 font-medium focus:outline-none"
+            >
+              <option value="25">25</option>
+              <option value="50">50</option>
+              <option value="-1">Semua</option>
+            </select>
+          </div>
+          <span>
+            Menampilkan <span className="font-bold text-slate-800">{displayedRows.length}</span> dari {filtered.length} varian
+          </span>
         </div>
       </div>
 
       {/* Mobile Swipe Hint */}
-      <div className="sm:hidden text-[11px] text-slate-400 italic flex items-center gap-1.5 px-1">
+      <div className="no-print sm:hidden text-[11px] text-slate-400 italic flex items-center gap-1.5 px-1">
         <span>👉</span>
         <span>Geser tabel ke samping untuk melihat kolom lengkap</span>
       </div>
@@ -97,13 +132,13 @@ export const TableJenisRekapDataProsesTembakau: React.FC<TableJenisProps> = ({
           <div className="text-right text-[9px] text-slate-600 space-y-0.5">
             <p><strong>Periode:</strong> {periodeLabel || 'Semua Periode'}</p>
             <p><strong>Jalur:</strong> {jenisProses || 'Semua Jalur'}</p>
-            <p><strong>Dicetak:</strong> {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+            <p><strong>Dicetak:</strong> {formatTanggalCetakIndo()}</p>
           </div>
         </div>
       </div>
 
       {/* Table Container */}
-      <div className="overflow-x-auto border border-slate-200 rounded-xl bg-white shadow-sm">
+      <div className="overflow-x-auto print:overflow-visible border border-slate-200 rounded-xl bg-white shadow-sm">
         <table className="w-full text-xs text-left border-collapse min-w-[700px]">
           <thead>
             <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
@@ -144,8 +179,8 @@ export const TableJenisRekapDataProsesTembakau: React.FC<TableJenisProps> = ({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {filtered.map((row, idx) => {
-              const rowNo = idx + 1;
+            {displayedRows.map((row, idx) => {
+              const rowNo = pageOffset + idx + 1;
               const isSelected = selectedJenisTrend === row.label;
               const isHigh = row.susutPct >= 8.5;
               const isLow = row.susutPct <= 5.5;
@@ -157,7 +192,7 @@ export const TableJenisRekapDataProsesTembakau: React.FC<TableJenisProps> = ({
 
               return (
                 <tr 
-                  key={idx} 
+                  key={row.label} 
                   className={`hover:bg-slate-50/80 transition-colors ${
                     isSelected ? 'bg-amber-50/70' : ''
                   } ${isOutOfPrintRange ? 'print-hidden-row' : ''}`}
@@ -199,10 +234,10 @@ export const TableJenisRekapDataProsesTembakau: React.FC<TableJenisProps> = ({
                     {formatPct(row.kapasitasPct)}
                   </td>
                   {onSelectJenisTrend && (
-                    <td className="py-2.5 px-3 text-center no-print">
+                    <td className="py-2 px-3 text-center no-print">
                       <button
                         onClick={() => onSelectJenisTrend(row.label)}
-                        className="px-2 py-1 text-[11px] rounded bg-slate-100 hover:bg-amber-100 text-slate-700 hover:text-amber-900 transition-colors font-medium"
+                        className="px-3 py-2 min-h-[44px] sm:min-h-0 sm:py-1 text-[11px] rounded-lg bg-slate-100 hover:bg-amber-100 text-slate-700 hover:text-amber-900 transition-colors font-medium whitespace-nowrap"
                       >
                         Pilih Trend
                       </button>
@@ -240,6 +275,38 @@ export const TableJenisRekapDataProsesTembakau: React.FC<TableJenisProps> = ({
           </tfoot>
         </table>
       </div>
+
+      {/* Pagination Controls */}
+      {totalPages > 1 && !isAll && (
+        <div className="no-print flex flex-col sm:flex-row items-center justify-between gap-2.5 bg-white p-3 rounded-xl border border-slate-200 text-xs">
+          <span className="text-slate-500">
+            Varian <strong className="text-slate-800">{pageOffset + 1}</strong> - <strong className="text-slate-800">{Math.min(pageOffset + pageSize, filtered.length)}</strong> dari <strong className="text-slate-800">{filtered.length}</strong>
+          </span>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={safeCurrentPage <= 1}
+              className="flex items-center gap-1 px-3 py-2 min-h-[44px] sm:min-h-0 sm:py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed font-medium"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+              <span>Sebelumnya</span>
+            </button>
+            <div className="px-3 py-2 sm:py-1 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 font-semibold">
+              {safeCurrentPage} / {totalPages}
+            </div>
+            <button
+              type="button"
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={safeCurrentPage >= totalPages}
+              className="flex items-center gap-1 px-3 py-2 min-h-[44px] sm:min-h-0 sm:py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed font-medium"
+            >
+              <span>Berikutnya</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

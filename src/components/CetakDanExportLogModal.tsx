@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { RawRowData } from '../types[RekapDataProsesTembakau]';
-import { formatKg, formatPct } from '../api[RekapDataProsesTembakau]';
+import { formatKg, formatPct, formatInt } from '../api[RekapDataProsesTembakau]';
 import { 
   Printer, 
   FileText, 
@@ -110,9 +110,9 @@ export const CetakDanExportLogModal: React.FC<CetakDanExportLogModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/70 backdrop-blur-xs animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/75 md:backdrop-blur-xs animate-in fade-in duration-200">
       <div 
-        className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-2xl overflow-hidden flex flex-col max-h-[92vh] animate-in zoom-in-95 duration-200"
+        className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-2xl overflow-hidden flex flex-col max-h-[90dvh] animate-in zoom-in-95 duration-200"
         role="dialog"
         aria-modal="true"
         aria-labelledby="cetak-log-title"
@@ -155,7 +155,7 @@ export const CetakDanExportLogModal: React.FC<CetakDanExportLogModalProps> = ({
                 <span>1. Pilih Rentang Baris Batch untuk Dicetak</span>
               </label>
               <span className="text-[11px] text-slate-500">
-                Total Arsip: <strong>{allRows.length.toLocaleString('id-ID')} batch</strong>
+                Total Arsip: <strong>{formatInt(allRows.length)} batch</strong>
               </span>
             </div>
 
@@ -342,11 +342,11 @@ export const CetakDanExportLogModal: React.FC<CetakDanExportLogModalProps> = ({
         </div>
 
         {/* Modal Footer: DUA PILIHAN AKSI TERPISAH */}
-        <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-2.5 sm:gap-3">
           <button
             type="button"
             onClick={onClose}
-            className="w-full sm:w-auto px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-200/60 transition-colors cursor-pointer"
+            className="w-full sm:w-auto min-h-[44px] px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-200/60 transition-colors cursor-pointer"
           >
             Batal
           </button>
@@ -356,7 +356,7 @@ export const CetakDanExportLogModal: React.FC<CetakDanExportLogModalProps> = ({
             <button
               type="button"
               onClick={handleDirectPrint}
-              className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-slate-800 text-xs font-bold transition-all shadow-xs cursor-pointer"
+              className="flex-1 sm:flex-initial min-h-[44px] flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-slate-800 text-xs font-bold transition-all shadow-xs cursor-pointer"
               title="Cetak langsung ke printer fisik melalui dialog print browser"
             >
               <Printer className="w-4 h-4 text-slate-700" />
@@ -367,7 +367,7 @@ export const CetakDanExportLogModal: React.FC<CetakDanExportLogModalProps> = ({
             <button
               type="button"
               onClick={handleDownloadPdf}
-              className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all shadow-sm cursor-pointer"
+              className="flex-1 sm:flex-initial min-h-[44px] flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all shadow-sm cursor-pointer"
               title="Unduh berkas PDF log data harian"
             >
               <Download className="w-4 h-4" />

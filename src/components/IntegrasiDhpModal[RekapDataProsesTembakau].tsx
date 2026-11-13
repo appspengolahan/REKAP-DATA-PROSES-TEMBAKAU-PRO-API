@@ -53,7 +53,9 @@ import {
   formatPct,
   parseIndonesianDate,
   formatTanggalRekap,
-  BULAN_INDONESIA_LENGKAP
+  BULAN_INDONESIA_LENGKAP,
+  isStaticHostingMode,
+  markStaticHostingMode
 } from '../api[RekapDataProsesTembakau]';
 
 interface IntegrasiDhpModalProps {
@@ -226,21 +228,25 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
       // 1. Post to backend proxy / GAS Web App (dengan fallback langsung ke GAS CORS jika di Cloudflare)
       const gasUrl = gasConfig?.apiUrl || 'https://script.google.com/macros/s/AKfycbw34wezcB4YC4N-n2nL0ll9jofM3i9s5OHYxLZJ4Xu32_AmCEDcIAYi9V1AdPg2iACM/exec';
       let postedViaProxy = false;
-      try {
-        const proxyResp = await fetch('/api/sync-gas', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'syncDhpToRekap',
-            records: newRecords
-          })
-        });
-        const contentType = proxyResp.headers.get('content-type') || '';
-        if (proxyResp.ok && !contentType.includes('text/html')) {
-          postedViaProxy = true;
+      if (!isStaticHostingMode()) {
+        try {
+          const proxyResp = await fetch('/api/sync-gas', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'syncDhpToRekap',
+              records: newRecords
+            })
+          });
+          const contentType = proxyResp.headers.get('content-type') || '';
+          if (contentType.includes('text/html')) {
+            markStaticHostingMode();
+          } else if (proxyResp.ok) {
+            postedViaProxy = true;
+          }
+        } catch (postErr) {
+          // Fallback to direct GAS call
         }
-      } catch (postErr) {
-        // Fallback to direct GAS call
       }
 
       if (!postedViaProxy) {
@@ -339,22 +345,26 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
       const gasUrl = gasConfig?.apiUrl || 'https://script.google.com/macros/s/AKfycbw34wezcB4YC4N-n2nL0ll9jofM3i9s5OHYxLZJ4Xu32_AmCEDcIAYi9V1AdPg2iACM/exec';
       let data: any = null;
       let reconciledViaProxy = false;
-      try {
-        const resp = await fetch('/api/sync-gas', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'cleanCancelled' })
-        });
-        const contentType = resp.headers.get('content-type') || '';
-        if (resp.ok && !contentType.includes('text/html')) {
-          const text = await resp.text();
-          if (text && text.trim() && !text.includes('<!DOCTYPE') && !text.includes('<html')) {
-            data = JSON.parse(text);
-            reconciledViaProxy = true;
+      if (!isStaticHostingMode()) {
+        try {
+          const resp = await fetch('/api/sync-gas', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'cleanCancelled' })
+          });
+          const contentType = resp.headers.get('content-type') || '';
+          if (contentType.includes('text/html')) {
+            markStaticHostingMode();
+          } else if (resp.ok) {
+            const text = await resp.text();
+            if (text && text.trim() && !text.includes('<!DOCTYPE') && !text.includes('<html')) {
+              data = JSON.parse(text);
+              reconciledViaProxy = true;
+            }
           }
+        } catch (pErr) {
+          console.warn('Fallback response parsing:', pErr);
         }
-      } catch (pErr) {
-        console.warn('Fallback response parsing:', pErr);
       }
 
       if (!reconciledViaProxy) {
@@ -408,18 +418,23 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
     setIsDownloadingPdf(true);
     try {
       let blob: Blob | null = null;
-      try {
-        const response = await fetch('/api/download-panduan-pdf');
-        const ct = response.headers.get('content-type') || '';
-        if (response.ok && !ct.includes('text/html')) {
-          blob = await response.blob();
-        }
-      } catch (e) {}
+      if (!isStaticHostingMode()) {
+        try {
+          const response = await fetch('/api/download-panduan-pdf');
+          const ct = response.headers.get('content-type') || '';
+          if (ct.includes('text/html')) {
+            markStaticHostingMode();
+          } else if (response.ok) {
+            blob = await response.blob();
+          }
+        } catch (e) {}
+      }
 
-      // Fallback ke file PDF statis di dist / public jika proxy tidak ada (misal di Cloudflare Pages)
+      // Fallback ke file PDF statis di dist / public jika proxy tidak ada (misal di Cloudflare Workers Static Assets)
       if (!blob) {
         const directResp = await fetch('/PANDUAN_TEKNIS_AUTO_PUSH_GAS.pdf');
-        if (directResp.ok) {
+        const directCt = (directResp.headers.get('content-type') || '').toLowerCase();
+        if (directResp.ok && !directCt.includes('text/html')) {
           blob = await directResp.blob();
         }
       }
@@ -458,8 +473,8 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-1 sm:p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-slate-50 border border-slate-300 rounded-xl sm:rounded-2xl shadow-2xl max-w-7xl w-full h-[98vh] sm:h-[94vh] max-h-[98vh] sm:max-h-[94vh] flex flex-col overflow-hidden text-slate-800">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-1 sm:p-4 bg-slate-950/80 md:backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-slate-50 border border-slate-300 rounded-xl sm:rounded-2xl shadow-2xl max-w-7xl w-full h-[96dvh] sm:h-[94dvh] max-h-[96dvh] sm:max-h-[94dvh] flex flex-col overflow-hidden text-slate-800">
         
         {/* Modal Top Header (Matching Reference Gambar 2) */}
         <div className="px-3.5 sm:px-5 py-2 sm:py-3 border-b border-slate-800 flex items-center justify-between gap-2.5 bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 text-white shrink-0">
@@ -484,10 +499,10 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
 
           <button
             onClick={onClose}
-            className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors flex-shrink-0 cursor-pointer"
+            className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors flex-shrink-0 cursor-pointer"
             title="Tutup Modal"
           >
-            <X className="w-4 h-4 sm:w-5 sm:h-5" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
@@ -868,7 +883,7 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
                 ) : (
                   <div className="overflow-x-auto overflow-y-auto flex-1 min-h-0">
                     <table className="w-full text-left text-xs border-collapse">
-                      <thead className="bg-slate-100/90 text-slate-600 uppercase text-[10px] font-bold tracking-wider border-b border-slate-200 sticky top-0 z-10 backdrop-blur">
+                      <thead className="bg-slate-100 text-slate-600 uppercase text-[10px] font-bold tracking-wider border-b border-slate-200 sticky top-0 z-10 md:bg-slate-100/90 md:backdrop-blur">
                         <tr>
                           <th className="py-2.5 px-3">ROW</th>
                           <th className="py-2.5 px-3">TANGGAL</th>
@@ -995,7 +1010,7 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
                       </tbody>
 
                       {/* Sticky Footer tfoot: Total Neraca Permanen */}
-                      <tfoot className="bg-slate-100/95 text-slate-800 border-t-2 border-slate-300 sticky bottom-0 z-10 backdrop-blur font-bold text-xs shadow-xs">
+                      <tfoot className="bg-slate-100 text-slate-800 border-t-2 border-slate-300 sticky bottom-0 z-10 md:bg-slate-100/95 md:backdrop-blur font-bold text-xs shadow-xs">
                         <tr className="divide-x divide-slate-200">
                           <td className="py-2.5 px-3 font-mono text-[11px] text-slate-500">Σ</td>
                           <td className="py-2.5 px-3 whitespace-nowrap text-xs font-bold text-slate-700">

@@ -143,11 +143,11 @@ export const ChartExpandedModalRekapDataProsesTembakau: React.FC<ChartExpandedMo
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/75 backdrop-blur-md animate-in fade-in duration-200"
+      className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-6 bg-slate-950/75 md:backdrop-blur-md animate-in fade-in duration-200"
       onClick={onClose}
     >
       <div 
-        className="w-full max-w-5xl max-h-[92vh] bg-white rounded-3xl shadow-2xl border border-slate-200/90 overflow-hidden flex flex-col animate-in zoom-in-95 duration-200"
+        className="w-full max-w-5xl max-h-[90dvh] bg-white rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-200/90 overflow-hidden flex flex-col animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Top Header */}
@@ -194,7 +194,7 @@ export const ChartExpandedModalRekapDataProsesTembakau: React.FC<ChartExpandedMo
 
             <button
               onClick={onClose}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold transition-colors border border-slate-700"
+              className="flex items-center gap-1.5 px-3 py-2 min-h-[44px] sm:min-h-0 sm:py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold transition-colors border border-slate-700"
               title="Tutup (ESC)"
             >
               <Minimize2 className="w-3.5 h-3.5" />
@@ -482,7 +482,7 @@ export const ChartExpandedModalRekapDataProsesTembakau: React.FC<ChartExpandedMo
 
           <button
             onClick={onClose}
-            className="px-4 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold transition-colors"
+            className="px-4 py-2 min-h-[44px] sm:min-h-0 sm:py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold transition-colors"
           >
             Tutup Tampilan
           </button>

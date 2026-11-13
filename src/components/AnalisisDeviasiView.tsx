@@ -6,7 +6,7 @@ import {
   AnalisisDeviasiItem 
 } from '../types[RekapDataProsesTembakau]';
 import { StandarSusutService } from '../services/standarSusutService';
-import { formatKg, formatPct } from '../api[RekapDataProsesTembakau]';
+import { formatKg, formatPct, formatTanggalCetakIndo } from '../api[RekapDataProsesTembakau]';
 import { 
   TrendingUp, 
   Scale, 
@@ -75,6 +75,7 @@ export const AnalisisDeviasiView: React.FC<AnalisisDeviasiViewProps> = ({
   const [baselineJalurFilter, setBaselineJalurFilter] = useState<'Semua' | 'SKT' | 'SKM'>('Semua');
   const [acuanViewMode, setAcuanViewMode] = useState<'periode-terpilih' | 'acuan-aktif'>('periode-terpilih');
   const [noticeMessage, setNoticeMessage] = useState<{ text: string; type: 'success' | 'info' } | null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
 
   // Kumpulan Bulan & Tahun unik dari rows
   const availableTahun = useMemo(() => {
@@ -190,6 +191,7 @@ export const AnalisisDeviasiView: React.FC<AnalisisDeviasiViewProps> = ({
     setEditStandarPct(String(item.standarSusutPct));
     setEditToleransiPct(String(item.toleransiPct));
     setEditKeterangan(item.keterangan || '');
+    setEditError(null);
   };
 
   // Handler: Simpan Edit Standar
@@ -199,9 +201,10 @@ export const AnalisisDeviasiView: React.FC<AnalisisDeviasiViewProps> = ({
     const numTol = parseFloat(editToleransiPct.replace(',', '.'));
 
     if (isNaN(numStd) || numStd < 0) {
-      alert('Harap masukkan angka standar susut yang valid');
+      setEditError('Harap masukkan angka standar susut yang valid (minimal 0).');
       return;
     }
+    setEditError(null);
 
     let updated = standarList.map(s => {
       if (s.id === editingItem.id || (s.jenisTembakau === editingItem.jenisTembakau && s.jenisProses === editingItem.jenisProses)) {
@@ -354,7 +357,7 @@ export const AnalisisDeviasiView: React.FC<AnalisisDeviasiViewProps> = ({
               <div className="text-right text-[10px] text-slate-600">
                 <div><strong>Periode Evaluasi:</strong> {filterBulan} {filterTahun}</div>
                 <div><strong>Status Mutu:</strong> <span className="uppercase font-bold">{analisisBulanan.statusAgregat}</span></div>
-                <div><strong>Tanggal Cetak:</strong> {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
+                <div><strong>Tanggal Cetak:</strong> {formatTanggalCetakIndo()}</div>
               </div>
             </div>
           </div>
@@ -1044,8 +1047,8 @@ export const AnalisisDeviasiView: React.FC<AnalisisDeviasiViewProps> = ({
 
           {/* Modal Edit Standar */}
           {editingItem && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
-              <div className="bg-white rounded-2xl shadow-xl border border-slate-200 max-w-md w-full p-5 space-y-4">
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 md:backdrop-blur-xs">
+              <div className="bg-white rounded-2xl shadow-xl border border-slate-200 max-w-md w-full max-h-[90dvh] overflow-y-auto p-5 space-y-4">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                   <div>
                     <h3 className="text-sm font-bold text-slate-900">Ubah Standar Acuan Susut</h3>
@@ -1055,11 +1058,17 @@ export const AnalisisDeviasiView: React.FC<AnalisisDeviasiViewProps> = ({
                   </div>
                   <button
                     onClick={() => setEditingItem(null)}
-                    className="p-1 rounded-lg text-slate-400 hover:text-slate-600"
+                    className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 text-lg font-bold"
                   >
                     ×
                   </button>
                 </div>
+
+                {editError && (
+                  <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium">
+                    {editError}
+                  </div>
+                )}
 
                 <div className="space-y-3 text-xs">
                   <div>
@@ -1105,13 +1114,13 @@ export const AnalisisDeviasiView: React.FC<AnalisisDeviasiViewProps> = ({
                 <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
                   <button
                     onClick={() => setEditingItem(null)}
-                    className="px-3.5 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100"
+                    className="px-4 py-2 min-h-[44px] sm:min-h-0 sm:py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100"
                   >
                     Batal
                   </button>
                   <button
                     onClick={handleSaveEdit}
-                    className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs cursor-pointer"
+                    className="flex items-center gap-1.5 px-4 py-2 min-h-[44px] sm:min-h-0 sm:py-1.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs cursor-pointer"
                   >
                     <Save className="w-3.5 h-3.5" />
                     <span>Simpan Standar</span>

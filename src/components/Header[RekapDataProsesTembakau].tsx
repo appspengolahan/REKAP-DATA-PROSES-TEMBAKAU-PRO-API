@@ -21,6 +21,7 @@ import {
   Printer
 } from 'lucide-react';
 import { UserRole, JenisProsesType, GasConfig } from '../types[RekapDataProsesTembakau]';
+import { PWAInstallButton } from './PWAInstallButton';
 
 interface HeaderProps {
   entriTerkini: string;
@@ -68,9 +69,9 @@ export const HeaderRekapDataProsesTembakau: React.FC<HeaderProps> = ({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const jalurDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Close dropdown on click outside
+  // Close dropdown on click/tap outside (pointerdown supports touch + stylus + mouse)
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
+    const handleClickOutside = (event: PointerEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsDropdownOpen(false);
       }
@@ -79,10 +80,10 @@ export const HeaderRekapDataProsesTembakau: React.FC<HeaderProps> = ({
       }
     };
     if (isDropdownOpen || isJalurOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('pointerdown', handleClickOutside);
     }
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('pointerdown', handleClickOutside);
     };
   }, [isDropdownOpen, isJalurOpen]);
 
@@ -110,7 +111,7 @@ export const HeaderRekapDataProsesTembakau: React.FC<HeaderProps> = ({
               <button
                 type="button"
                 onClick={onOpenMobileSidebar}
-                className="lg:hidden p-1.5 sm:p-2 -ml-1 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-slate-600 transition-colors flex items-center justify-center shadow-sm"
+                className="lg:hidden min-w-[44px] min-h-[44px] p-2 -ml-1 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-slate-600 transition-colors flex items-center justify-center shadow-sm"
                 title="Buka Navigasi Sidebar & Modul Lengkap"
                 aria-label="Buka Menu Sidebar"
               >
@@ -152,12 +153,15 @@ export const HeaderRekapDataProsesTembakau: React.FC<HeaderProps> = ({
           {/* Action Center */}
           <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
             
+            {/* PWA Install Button (Automatic Chromium native install / iOS Safari instruction) */}
+            <PWAInstallButton />
+
             {/* Jalur Toggle Dropdown (Clean, compact replacement for wide segmented buttons) */}
             <div className="relative hidden md:block" ref={jalurDropdownRef}>
               <button
                 type="button"
                 onClick={() => setIsJalurOpen(prev => !prev)}
-                className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all select-none shadow-sm ${
+                className={`flex items-center gap-1.5 min-h-[44px] px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all select-none shadow-sm ${
                   jenisProses === 'SKT'
                     ? 'bg-amber-950/70 border-amber-600/80 text-amber-300 ring-1 ring-amber-500/30'
                     : jenisProses === 'SKM'
@@ -191,7 +195,7 @@ export const HeaderRekapDataProsesTembakau: React.FC<HeaderProps> = ({
                           onJenisProsesChange(jp);
                           setIsJalurOpen(false);
                         }}
-                        className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+                        className={`w-full min-h-[44px] flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
                           isSelected
                             ? jp === 'SKT'
                               ? 'bg-amber-600 text-white shadow-sm'
@@ -219,7 +223,7 @@ export const HeaderRekapDataProsesTembakau: React.FC<HeaderProps> = ({
             {onOpenIntegrasiDhp && (
               <button
                 onClick={onOpenIntegrasiDhp}
-                className="hidden sm:flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-blue-600/90 hover:bg-blue-600 text-white text-xs font-semibold shadow-sm border border-blue-500/40 transition-colors"
+                className="hidden sm:flex items-center gap-1.5 min-h-[44px] px-2.5 sm:px-3 py-1.5 rounded-xl bg-blue-600/90 hover:bg-blue-600 text-white text-xs font-semibold shadow-sm border border-blue-500/40 transition-colors"
                 title="Integrasi & Sinkronisasi DHP Tembakau (Presisi 100%)"
               >
                 <Cable className="w-3.5 h-3.5 text-blue-200" />
@@ -235,7 +239,7 @@ export const HeaderRekapDataProsesTembakau: React.FC<HeaderProps> = ({
               <button
                 onClick={onPullDatasheet}
                 disabled={isPullingDatasheet}
-                className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-sm transition-colors ${
+                className={`flex items-center justify-center gap-1.5 min-h-[44px] min-w-[44px] px-2.5 sm:px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-sm transition-colors ${
                   isPullingDatasheet ? 'opacity-70 cursor-not-allowed' : ''
                 }`}
                 title="Tarik Data Langsung dari Datasheet Google Sheet (1.493 baris riil)"
@@ -245,10 +249,10 @@ export const HeaderRekapDataProsesTembakau: React.FC<HeaderProps> = ({
               </button>
             )}
 
-            {/* Auto Sync / Auto Refresh Toggle Button (Circled in Red by User) */}
+            {/* Auto Sync / Auto Refresh Toggle Button */}
             <button
               onClick={onToggleAutoSync || onRefresh}
-              className={`relative flex items-center gap-1.5 p-1.5 sm:px-3 sm:py-1.5 rounded-xl border transition-all shadow-sm select-none ${
+              className={`relative flex items-center justify-center gap-1.5 min-h-[44px] min-w-[44px] p-2 sm:px-3 sm:py-1.5 rounded-xl border transition-all shadow-sm select-none ${
                 isAutoSync
                   ? 'bg-emerald-950/80 border-emerald-500/70 text-emerald-300 ring-1 ring-emerald-500/40 hover:bg-emerald-900/90'
                   : 'bg-slate-800/90 hover:bg-slate-700/90 text-slate-400 hover:text-slate-200 border-slate-700'
@@ -260,7 +264,7 @@ export const HeaderRekapDataProsesTembakau: React.FC<HeaderProps> = ({
               }
               aria-label="Toggle Auto Sync"
             >
-              <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isAutoSync || isSyncing ? 'animate-spin text-emerald-400' : 'text-slate-400'}`} />
+              <RefreshCw className={`w-4 h-4 ${isAutoSync || isSyncing ? 'animate-spin text-emerald-400' : 'text-slate-400'}`} />
               <span className="hidden xl:inline text-xs font-semibold">
                 {isAutoSync ? 'Auto Sync' : 'Sync'}
               </span>
@@ -275,7 +279,7 @@ export const HeaderRekapDataProsesTembakau: React.FC<HeaderProps> = ({
             {/* Cetak Langsung Button */}
             <button
               onClick={() => window.print()}
-              className="hidden lg:flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border border-slate-700 bg-slate-800/90 hover:bg-slate-700 text-slate-200 text-xs font-semibold shadow-sm transition-colors cursor-pointer"
+              className="hidden lg:flex items-center gap-1.5 min-h-[44px] px-2.5 sm:px-3 py-1.5 rounded-xl border border-slate-700 bg-slate-800/90 hover:bg-slate-700 text-slate-200 text-xs font-semibold shadow-sm transition-colors cursor-pointer"
               title="Cetak langsung dokumen halaman aktif ke printer fisik"
             >
               <Printer className="w-3.5 h-3.5 text-slate-400" />
@@ -285,7 +289,7 @@ export const HeaderRekapDataProsesTembakau: React.FC<HeaderProps> = ({
             {/* Export PDF Button */}
             <button
               onClick={onExportPdf}
-              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-sm transition-colors cursor-pointer"
+              className="flex items-center justify-center gap-1.5 min-h-[44px] min-w-[44px] px-2.5 sm:px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-sm transition-colors cursor-pointer"
               title="Cetak / Unduh Laporan PDF Resmi"
             >
               <FileText className="w-3.5 h-3.5" />
@@ -297,7 +301,7 @@ export const HeaderRekapDataProsesTembakau: React.FC<HeaderProps> = ({
               <button
                 type="button"
                 onClick={() => setIsDropdownOpen(prev => !prev)}
-                className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all select-none shadow-sm ${
+                className={`flex items-center gap-1.5 sm:gap-2 min-h-[44px] px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all select-none shadow-sm ${
                   isDropdownOpen
                     ? 'bg-slate-800 text-white border-blue-500 shadow-blue-900/40 ring-2 ring-blue-500/30'
                     : 'bg-slate-800/90 hover:bg-slate-700/90 text-slate-200 border-slate-700 hover:border-slate-600'
@@ -307,7 +311,7 @@ export const HeaderRekapDataProsesTembakau: React.FC<HeaderProps> = ({
                 aria-expanded={isDropdownOpen}
               >
                 <ShieldCheck className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
-                <span className="font-medium text-slate-100 truncate max-w-[90px] sm:max-w-none">
+                <span className="font-medium text-slate-100 truncate max-w-[76px] sm:max-w-none">
                   {role === 'Project Manager' ? 'PM: Lalu M.' : role}
                 </span>
                 <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isDropdownOpen ? 'rotate-180 text-blue-400' : 'text-slate-400'}`} />
