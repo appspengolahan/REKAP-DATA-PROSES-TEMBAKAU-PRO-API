@@ -18,19 +18,23 @@
  *   tertunda hari lampau secara Bottom-Up tanpa merusak formula C, D, E, J, K.
  * - Layer 5 (Resilient Error Boundary & Fast Row Scanner): Menggunakan findActualLastRow_()
  *   sejak awal untuk melewati ratusan baris rumus kosong (bebas timeout / JSON selalu utuh).
+ * - Layer 6 (Stale-Date Append Guard): Menolak penambahan baris baru jika tanggal DHP tertinggal
+ *   > 3 hari dari transaksi terbaru di Rekap (mencegah sisa tanggal template lama nyelip di bawah).
+ * - Layer 7 (Out-of-Order Sandwiched Duplicate Purge): Menghapus otomatis baris duplikat salah-tanggal
+ *   yang terjepit di antara tanggal lebih baru dan memiliki kembaran (Varian + Jalur + Baku sama).
  * ============================================================================
  */
 
 export const gasScriptCode = `/**
  * ============================================================================
- * GOOGLE APPS SCRIPT: INTEGRASI 2 ARAH, 5-LAYER DEFENSE & AUTO-PURGE DHP TEMBAKAU
+ * GOOGLE APPS SCRIPT: INTEGRASI 2 ARAH, 7-LAYER DEFENSE & AUTO-PURGE DHP TEMBAKAU
  * File Target di Google Apps Script: IntegrasiDHP.gs
  * Divisi Produksi I - PT Batu Karang
  *
  * Sheet Sumber : DHP TEMBAKAU (1NDS55VchAgNAeJJbY12ANA8HyJDeNNhAZ33zbojpH5I) [Tab: INTEGRASI DATA]
  * Sheet Tujuan : REKAP SUSUT TEMBAKAU (1LnixFRQXFjDaR_LYoOUvsj84Y_Lb5W8samFOPWrDSC0) [Tab: REKAP SUSUT TEMBAKAU]
  *
- * STANDAR ARSITEKTUR 5-LAYER DEFENSE & OPTIMASI KECEPATAN:
+ * STANDAR ARSITEKTUR 7-LAYER DEFENSE & OPTIMASI KECEPATAN:
  * - Layer 1 (Non-Destructive Zero Guard): Menolak mutlak penimpaan Netto Hasil > 0 dengan 0
  *   serta melindungi data Gagang/Air/Debu sah agar tidak tertimpa 0.
  * - Layer 2 (Physics & Mass-Balance Boundary): Mengabaikan baris TOTAL/ringkasan DHP dan
@@ -41,6 +45,10 @@ export const gasScriptCode = `/**
  *   tertunda hari lampau secara Bottom-Up tanpa merusak formula C, D, E, J, K.
  * - Layer 5 (Resilient Error Boundary & Fast Row Scanner): Menggunakan findActualLastRow_()
  *   sejak awal untuk melewati ratusan baris rumus kosong (bebas timeout / JSON selalu utuh).
+ * - Layer 6 (Stale-Date Append Guard): Menolak append baris baru jika tanggal DHP tertinggal > 3 hari
+ *   dari tanggal terbaru di Rekap agar sisa tanggal template lama tidak menyelip di bawah.
+ * - Layer 7 (Out-of-Order Sandwiched Duplicate Purge): Membersihkan otomatis baris salah-tanggal
+ *   yang terjepit setelah tanggal lebih baru dan memiliki kembaran (Varian + Jalur + Baku sama).
  * ============================================================================
  */
 
@@ -188,7 +196,7 @@ function notifikasiUiAman_(pesan, judul) {
 }
 
 /**
- * 1. FUNGSI UTAMA SINKRONISASI DHP KE REKAP (5-Layer Defense & Auto-Purge)
+ * 1. FUNGSI UTAMA SINKRONISASI DHP KE REKAP (7-Layer Defense & Auto-Purge)
  */
 function sinkronkanDhpKeRekap(isManual) {
   if (isManual === undefined) isManual = false;
@@ -404,13 +412,58 @@ function sinkronkanDhpKeRekap(isManual) {
         }
       }
 
-      // 🧹 PURGE SISA DRAFT BATAL / TERTUNDA DARI HARI LAMPAU (Bottom-Up)
-      // Mencari baris pada tanggal lampau (< targetActiveIsoDate) yang memiliki rHasil === 0
-      // dan variannya dijadwalkan ulang di lembar DHP hari ini (misal sisa 4 Nov yang dijadwalkan ke 9 Nov)
+      // 🧹 PURGE SISA DRAFT BATAL / TERTUNDA DARI HARI LAMPAU + DUPLIKAT TERJEPIT SALAH-TANGGAL (Bottom-Up)
+      // 1) Baris pada tanggal lampau (pIso !== targetActiveIsoDate) dengan pHasil === 0 yang dijadwalkan ulang hari ini.
+      // 2) Layer 7: Baris pada ekor kronologis (>= baris 600) yang tanggalnya terjepit/mundur > 3 hari di bawah
+      //    tanggal lebih baru di atasnya DAN memiliki kembaran (Varian + Jalur + Baku sama) pada tanggal lebih baru.
       var maxFresh = findActualLastRow_(shRekap);
       if (maxFresh >= CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW) {
         var freshCount = maxFresh - CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW + 1;
         var rekapValuesFresh = shRekap.getRange(CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW, 1, freshCount, 14).getValues();
+
+        // Hitung tanggal maksimum untuk setiap kombinasi (normJenis|jalur|bakuRound) pada ekor kronologis & active DHP
+        var maxDateByBatchSig = {};
+        for (var dSigIdx = 0; dSigIdx < allActiveDhp.length; dSigIdx++) {
+          var dItem = allActiveDhp[dSigIdx];
+          var dBakuKey = Math.round(dItem.baku * 10) / 10;
+          var dSigKey = dItem.normJenis + '|' + dItem.jalur.toLowerCase() + '|' + dBakuKey;
+          var dMs = dItem.dateObj.getTime();
+          if (!(dSigKey in maxDateByBatchSig) || dMs > maxDateByBatchSig[dSigKey]) {
+            maxDateByBatchSig[dSigKey] = dMs;
+          }
+        }
+
+        // Lacak runningMaxDateMs khusus ekor kronologis (mulai baris >= 600 agar arsip 2025 yang dikelompokkan per jenis tidak tersentuh)
+        var runningMaxChronoMs = 0;
+        var outOfOrderByRow = {};
+        for (var fScan = 0; fScan < rekapValuesFresh.length; fScan++) {
+          var sRowNum = CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW + fScan;
+          var sTglRaw = rekapValuesFresh[fScan][1];
+          if (!sTglRaw) continue;
+          var sDObj = parseTanggalIndo(sTglRaw);
+          if (!sDObj) continue;
+          var sMs = sDObj.getTime();
+          var sJenis = String(rekapValuesFresh[fScan][5] || '').trim();
+          var sJalur = String(rekapValuesFresh[fScan][6] || 'SKT').trim().toLowerCase();
+          var sBaku = parseDecimalNumber(rekapValuesFresh[fScan][7]);
+          var sNorm = normalisasiVarian_(sJenis);
+          if (sNorm && sBaku > 0) {
+            var sBakuKey = Math.round(sBaku * 10) / 10;
+            var sSigKey = sNorm + '|' + sJalur + '|' + sBakuKey;
+            if (!(sSigKey in maxDateByBatchSig) || sMs > maxDateByBatchSig[sSigKey]) {
+              maxDateByBatchSig[sSigKey] = sMs;
+            }
+          }
+          if (sRowNum >= 600) {
+            if (runningMaxChronoMs > 0 && (runningMaxChronoMs - sMs) > 3 * 86400000) {
+              outOfOrderByRow[sRowNum] = true;
+            }
+            if (sMs > runningMaxChronoMs) {
+              runningMaxChronoMs = sMs;
+            }
+          }
+        }
+
         for (var pIdx = rekapValuesFresh.length - 1; pIdx >= 0; pIdx--) {
           var pRowVal = rekapValuesFresh[pIdx];
           var pActualRow = CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW + pIdx;
@@ -419,33 +472,48 @@ function sinkronkanDhpKeRekap(isManual) {
           var pDObj = parseTanggalIndo(pTglRaw);
           var pIso = pDObj ? formatIsoDateStr(pDObj) : String(pTglRaw).trim();
           var pJenis = String(pRowVal[5] || '').trim();
+          var pJalur = String(pRowVal[6] || 'SKT').trim().toLowerCase();
           var pBaku = parseDecimalNumber(pRowVal[7]);
           var pHasil = parseDecimalNumber(pRowVal[8]);
 
-          // Syarat mutlak pembersihan draft lampau:
-          // 1. Tanggal sebelum tanggal aktif (pIso !== targetActiveIsoDate)
-          // 2. Netto Hasil MUTLAK 0 (tidak pernah ada timbangan hasil riil)
-          // 3. Varian tersebut saat ini ada di lembar DHP tanggal aktif (dijadwalkan ulang)
+          var shouldPurge = false;
+          var purgeReason = '';
+
+          // Syarat A: Draft tertunda lampau (Hasil === 0) yang dijadwalkan ulang hari ini
           if (pIso && pIso !== targetActiveIsoDate && pHasil === 0 && pBaku > 0 && pJenis) {
             var pNorm = normalisasiVarian_(pJenis);
-            var isReScheduledToday = false;
             for (var da = 0; da < allActiveDhp.length; da++) {
               if (allActiveDhp[da].normJenis === pNorm) {
-                isReScheduledToday = true;
+                shouldPurge = true;
+                purgeReason = 'Draft tertunda lampau (' + pJenis + ' [' + pIso + '], Hasil: 0 Kg) -> Dijadwalkan ke ' + targetActiveDateLabel;
                 break;
               }
             }
-            if (isReScheduledToday) {
-              Logger.log('🗑️ Auto-Purge draft tertunda lampau #' + pActualRow + ' (' + pJenis + ' [' + pIso + '], Hasil: 0 Kg) -> Dijadwalkan ke ' + targetActiveDateLabel);
-              if (pActualRow === 12 && findActualLastRow_(shRekap) <= 12) {
-                shRekap.getRange(12, 2).clearContent();
-                shRekap.getRange(12, 6, 1, 4).clearContent();
-                shRekap.getRange(12, 12, 1, 3).clearContent();
-              } else {
-                shRekap.deleteRow(pActualRow);
-              }
-              purgedCount++;
+          }
+
+          // Syarat B (Layer 7): Baris terjepit salah-tanggal (> 3 hari mundur di bawah tanggal lebih baru)
+          // DAN memiliki kembaran (Varian + Jalur + Baku sama) pada tanggal lebih baru di Rekap / DHP
+          if (!shouldPurge && outOfOrderByRow[pActualRow] && pDObj && pJenis && pBaku > 0) {
+            var pNormDup = normalisasiVarian_(pJenis);
+            var pSigDup = pNormDup + '|' + pJalur + '|' + (Math.round(pBaku * 10) / 10);
+            var pMs = pDObj.getTime();
+            var newestSameSigMs = maxDateByBatchSig[pSigDup] || 0;
+            if (newestSameSigMs > pMs) {
+              shouldPurge = true;
+              purgeReason = 'Duplikat salah-tanggal terjepit (' + pJenis + ' ' + pJalur.toUpperCase() + ' ' + pBaku + ' Kg [' + pIso + ']) sudah ada pada tanggal lebih baru';
             }
+          }
+
+          if (shouldPurge) {
+            Logger.log('🗑️ Auto-Purge #' + pActualRow + ': ' + purgeReason);
+            if (pActualRow === 12 && findActualLastRow_(shRekap) <= 12) {
+              shRekap.getRange(12, 2).clearContent();
+              shRekap.getRange(12, 6, 1, 4).clearContent();
+              shRekap.getRange(12, 12, 1, 3).clearContent();
+            } else {
+              shRekap.deleteRow(pActualRow);
+            }
+            purgedCount++;
           }
         }
       }
@@ -454,6 +522,7 @@ function sinkronkanDhpKeRekap(isManual) {
     // --- TAHAP C: PEMBUKUAN & UPDATE BATCH SELESAI DENGAN 5-LAYER DEFENSE ---
     var lastRowLive = findActualLastRow_(shRekap);
     var rekapEntriesLive = [];
+    var latestRekapDateMs = 0;
     if (lastRowLive >= CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW) {
       var liveCount = lastRowLive - CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW + 1;
       var liveValues = shRekap.getRange(CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW, 1, liveCount, 14).getValues();
@@ -462,8 +531,12 @@ function sinkronkanDhpKeRekap(isManual) {
         if (!lvTgl) continue;
         var lvDateObj = parseTanggalIndo(lvTgl);
         var lvIso = lvDateObj ? formatIsoDateStr(lvDateObj) : String(lvTgl).trim();
+        var lvRowNum = CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW + lv;
+        if (lvDateObj && lvRowNum >= 600 && lvDateObj.getTime() > latestRekapDateMs) {
+          latestRekapDateMs = lvDateObj.getTime();
+        }
         rekapEntriesLive.push({
-          rowNum: CONFIG_INTEGRASI_TEMBAKAU.REKAP_DATA_START_ROW + lv,
+          rowNum: lvRowNum,
           isoDate: lvIso,
           normJenis: normalisasiVarian_(liveValues[lv][5]),
           curBaku: parseDecimalNumber(liveValues[lv][7]),
@@ -478,6 +551,7 @@ function sinkronkanDhpKeRekap(isManual) {
 
     var updatedCount = 0;
     var appendedCount = 0;
+    var staleDateBlockedCount = 0;
     var currentRow = lastRowLive;
 
     for (var c = 0; c < completedDhp.length; c++) {
@@ -507,6 +581,17 @@ function sinkronkanDhpKeRekap(isManual) {
       }
 
       if (!matchEntry) {
+        // Layer 6 — Stale-Date Append Guard:
+        // Tolak append baru jika tanggal DHP tertinggal > 3 hari dari tanggal terbaru yang sudah ada di Rekap
+        if (latestRekapDateMs > 0 && dBatch.dateObj) {
+          var daysBehind = (latestRekapDateMs - dBatch.dateObj.getTime()) / 86400000;
+          if (daysBehind > 3) {
+            staleDateBlockedCount++;
+            Logger.log('⛔ Layer 6 BLOKIR TANGGAL MUNDUR: ' + dBatch.dateLabel + ' | ' + dBatch.jenis + ' (' + dBatch.baku + ' Kg) tertinggal ' + Math.round(daysBehind) + ' hari dari tanggal Rekap terbaru. Periksa tanggal di DHP!');
+            continue;
+          }
+        }
+
         // Tambah baris baru untuk tanggal ini (Mendukung produksi ulang varian yang sama pada hari yang berbeda)
         currentRow++;
         shRekap.getRange(currentRow, 2).setValue(dBatch.dateLabel); // B: Tanggal
@@ -590,7 +675,7 @@ function sinkronkanDhpKeRekap(isManual) {
       }
     }
 
-    var summaryMsg = 'Sinkronisasi Selesai: ' + updatedCount + ' baris diselaraskan, ' + appendedCount + ' baris baru ditambahkan' + (purgedCount > 0 ? ', ' + purgedCount + ' baris batal/klon dibersihkan' : '') + (quarantinedCount > 0 ? ', ' + quarantinedCount + ' batch dikarantina fisika' : '') + '. Formula C, D, E, J, K aman 100%.';
+    var summaryMsg = 'Sinkronisasi Selesai: ' + updatedCount + ' baris diselaraskan, ' + appendedCount + ' baris baru ditambahkan' + (purgedCount > 0 ? ', ' + purgedCount + ' baris batal/duplikat dibersihkan' : '') + (staleDateBlockedCount > 0 ? ', ' + staleDateBlockedCount + ' baris tanggal mundur diblokir' : '') + (quarantinedCount > 0 ? ', ' + quarantinedCount + ' batch dikarantina fisika' : '') + '. Formula C, D, E, J, K aman 100%.';
     Logger.log(summaryMsg);
 
     if (isManual) {
@@ -602,6 +687,7 @@ function sinkronkanDhpKeRekap(isManual) {
       updatedCount: updatedCount,
       appendedCount: appendedCount,
       purgedCount: purgedCount,
+      staleDateBlockedCount: staleDateBlockedCount,
       quarantinedCount: quarantinedCount,
       message: summaryMsg
     };
@@ -685,7 +771,7 @@ function AKTIFKAN_AUTO_PUSH_5_MENIT() {
     .timeBased()
     .everyMinutes(5)
     .create();
-  notifikasiUiAman_('Auto-Push 5 Menit AKTIF (5-Layer Defense & Auto-Purge berjalan otomatis).', 'Auto-Push DHP Tembakau');
+  notifikasiUiAman_('Auto-Push 5 Menit AKTIF (7-Layer Defense & Auto-Purge berjalan otomatis).', 'Auto-Push DHP Tembakau');
 }
 
 function MATIKAN_AUTO_PUSH() {
@@ -701,7 +787,7 @@ function CEK_STATUS_PEMICU() {
     if (fn === 'sinkronkanDhpKeRekap' || fn === 'sinkronkanDhpKeRekapOtomatis') count++;
   }
   var msg = count > 0
-    ? 'AKTIF (' + count + ' pemicu berjalan otomatis setiap 5 menit dengan 5-Layer Defense).'
+    ? 'AKTIF (' + count + ' pemicu berjalan otomatis setiap 5 menit dengan 7-Layer Defense).'
     : 'NONAKTIF (Belum ada pemicu waktu aktif. Jalankan "AKTIFKAN_AUTO_PUSH_5_MENIT").';
   notifikasiUiAman_(msg, 'Status Pemicu DHP Tembakau');
 }
@@ -844,7 +930,7 @@ function doGet(e) {
     res = sinkronkanDhpKeRekap(false);
   } else {
     return ContentService.createTextOutput(JSON.stringify({
-      status: 'GAS Integrasi DHP Tembakau Aktif (5-Layer Defense)',
+      status: 'GAS Integrasi DHP Tembakau Aktif (7-Layer Defense)',
       instruction: 'Panggil dengan action=syncDhp atau jalankan fungsi sinkronkanDhpKeRekap()'
     })).setMimeType(ContentService.MimeType.JSON);
   }

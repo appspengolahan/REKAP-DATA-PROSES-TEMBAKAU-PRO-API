@@ -493,9 +493,54 @@ export class RekapDataProsesTembakauService {
       finalCleaned.push(r);
     }
 
-    this.dedupeWeakCache.set(rows, finalCleaned);
-    this.dedupeWeakCache.set(finalCleaned, finalCleaned);
-    return finalCleaned;
+    // Langkah 5: Anti-Duplikat Salah-Tanggal Terjepit (Out-of-Order Sandwiched Duplicate)
+    // Jika pada ekor kronologis (srcRow >= 600) ada baris yang tanggalnya mundur > 3 hari di bawah baris
+    // lebih baru di atasnya DAN memiliki kembaran (jenis + jalur + baku sama) pada tanggal yang lebih baru
+    // (contoh: baris 1593 "21 Okt 2026" terjepit antara 17 Nov dan 18 Nov), singkirkan baris terjepit tsb.
+    const maxDateByBatchSig = new Map<string, number>();
+    for (const r of finalCleaned) {
+      const rMs = parseIndonesianDate(r.tanggal)?.getTime() || 0;
+      if (rMs <= 0) continue;
+      const jalurClean = (r.jenisProses || 'SKT').trim().toLowerCase();
+      const bakuRound = Math.round((r.baku || 0) * 10) / 10;
+      const batchSig = `${cleanStr(r.jenisTembakau)}|${jalurClean}|${bakuRound}`;
+      const prevMax = maxDateByBatchSig.get(batchSig) || 0;
+      if (rMs > prevMax) {
+        maxDateByBatchSig.set(batchSig, rMs);
+      }
+    }
+
+    const bySheetOrder = [...finalCleaned].sort((a, b) => (a.srcRow || 0) - (b.srcRow || 0));
+    const sandwichedIds = new Set<RawRowData>();
+    let runningChronoMaxMs = 0;
+    for (const r of bySheetOrder) {
+      if ((r.srcRow || 0) >= 600) {
+        const rMs = parseIndonesianDate(r.tanggal)?.getTime() || 0;
+        if (rMs > 0) {
+          if (runningChronoMaxMs > 0 && (runningChronoMaxMs - rMs) > 3 * 86400000) {
+            const jalurClean = (r.jenisProses || 'SKT').trim().toLowerCase();
+            const bakuRound = Math.round((r.baku || 0) * 10) / 10;
+            const batchSig = `${cleanStr(r.jenisTembakau)}|${jalurClean}|${bakuRound}`;
+            const newestSameSigMs = maxDateByBatchSig.get(batchSig) || 0;
+            if (newestSameSigMs > rMs) {
+              sandwichedIds.add(r);
+              continue;
+            }
+          }
+          if (rMs > runningChronoMaxMs) {
+            runningChronoMaxMs = rMs;
+          }
+        }
+      }
+    }
+
+    const dedupedFinal = sandwichedIds.size > 0
+      ? finalCleaned.filter(r => !sandwichedIds.has(r))
+      : finalCleaned;
+
+    this.dedupeWeakCache.set(rows, dedupedFinal);
+    this.dedupeWeakCache.set(dedupedFinal, dedupedFinal);
+    return dedupedFinal;
   }
 
   public static getRawData(): RawRowData[] {
@@ -2086,23 +2131,41 @@ export class RekapDataProsesTembakauService {
     }
 
     // Deteksi baris di Rekap pada tanggal aktif yang TIDAK ADA di lembar DHP (Duplikat / Ghost Rows)
+    // serta baris terjepit salah-tanggal pada ekor kronologis (srcRow >= 600)
     const activeIsoDate = items.length > 0 ? (parseToIsoDate(items[0].tanggalRaw) || items[0].tanggalFormatted) : '';
     const activeJenisSet = new Set(items.map(it => it.jenisTembakau.toLowerCase().replace(/[^a-z0-9]/g, '')));
+    const activeBatchSigs = new Set(items.map(it => {
+      const cJenis = it.jenisTembakau.toLowerCase().replace(/\b(skt|skm)\b/gi, '').replace(/[^a-z0-9]/g, '');
+      const cJalur = (it.jalur || 'SKT').toLowerCase();
+      return `${cJenis}|${cJalur}|${Math.round((it.nettoBaku || 0) * 10) / 10}`;
+    }));
     
     const anomalousRekapRows: RawRowData[] = [];
     if (activeIsoDate && currentRows && currentRows.length > 0) {
-      currentRows.forEach(r => {
+      let runningMaxMs = 0;
+      const orderedCurrent = [...currentRows].sort((a, b) => (a.srcRow || 0) - (b.srcRow || 0));
+      orderedCurrent.forEach(r => {
         if (!r.tanggal || !r.jenisTembakau) return;
         const rIso = parseToIsoDate(r.tanggal) || r.tanggal;
+        const rMs = parseIndonesianDate(r.tanggal)?.getTime() || 0;
         const rClean = r.jenisTembakau.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const rNorm = r.jenisTembakau.toLowerCase().replace(/\b(skt|skm)\b/gi, '').replace(/[^a-z0-9]/g, '');
+        const rSig = `${rNorm}|${(r.jenisProses || 'SKT').toLowerCase()}|${Math.round((r.baku || 0) * 10) / 10}`;
 
         if (rIso === activeIsoDate) {
           if (!activeJenisSet.has(rClean)) {
             anomalousRekapRows.push(r);
           }
         } else if ((r.hasil === 0 || !r.hasil) && activeJenisSet.has(rClean)) {
-          // Baris orphan draft / reschedule dari tanggal sebelumnya (misal Madura 2024 di baris 1556)
+          // Baris orphan draft / reschedule dari tanggal sebelumnya
           anomalousRekapRows.push(r);
+        } else if ((r.srcRow || 0) >= 600 && runningMaxMs > 0 && rMs > 0 && (runningMaxMs - rMs) > 3 * 86400000 && activeBatchSigs.has(rSig)) {
+          // Baris duplikat salah-tanggal terjepit yang cocok dengan batch aktif DHP hari ini
+          anomalousRekapRows.push(r);
+        }
+
+        if ((r.srcRow || 0) >= 600 && rMs > runningMaxMs) {
+          runningMaxMs = rMs;
         }
       });
     }

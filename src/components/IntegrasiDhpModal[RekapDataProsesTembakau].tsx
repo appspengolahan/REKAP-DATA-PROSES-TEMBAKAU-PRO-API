@@ -215,16 +215,15 @@ export const IntegrasiDhpModalRekapDataProsesTembakau: React.FC<IntegrasiDhpModa
       const itemsToSync = dhpData.items;
       const currentYear = new Date().getFullYear().toString();
 
+      const nowDate = new Date();
       const newRecords: RawRowData[] = itemsToSync.map((item, idx) => {
         const nextSrcRow = item.matchedRow || (existingRows.length + 12 + idx);
         const rawDateStr = item.tanggal || item.tanggalFormatted || item.tanggalRaw;
-        const dObj = parseIndonesianDate(rawDateStr);
-        const isoDate = dObj 
-          ? `${dObj.getFullYear()}-${String(dObj.getMonth() + 1).padStart(2, '0')}-${String(dObj.getDate()).padStart(2, '0')}`
-          : '2026-10-20';
-        const tglDisplay = dObj ? formatTanggalRekap(dObj) : (item.tanggalFormatted || '20 Okt 2026');
-        const bulanName = dObj ? BULAN_INDONESIA_LENGKAP[dObj.getMonth()] : 'Oktober';
-        const tahunVal = dObj ? dObj.getFullYear().toString() : currentYear;
+        const dObj = parseIndonesianDate(rawDateStr) || nowDate;
+        const isoDate = `${dObj.getFullYear()}-${String(dObj.getMonth() + 1).padStart(2, '0')}-${String(dObj.getDate()).padStart(2, '0')}`;
+        const tglDisplay = formatTanggalRekap(dObj);
+        const bulanName = BULAN_INDONESIA_LENGKAP[dObj.getMonth()] || BULAN_INDONESIA_LENGKAP[nowDate.getMonth()];
+        const tahunVal = dObj.getFullYear().toString();
 
         return {
           batchNo: `DHP-${item.rowNumber}-${Date.now().toString().slice(-4)}`,
